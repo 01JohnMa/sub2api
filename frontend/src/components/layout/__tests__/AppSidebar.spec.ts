@@ -43,6 +43,12 @@ describe('AppSidebar scroll position persistence', () => {
 })
 
 describe('AppSidebar header styles', () => {
+  it('uses the pixel coconut mark as the default logo fallback', () => {
+    expect(componentSource).toContain('PixelCoconutMark')
+    expect(componentSource).toContain('variant="mono"')
+    expect(componentSource).toContain('coconut mark')
+  })
+
   it('does not clip the version badge dropdown', () => {
     const sidebarHeaderBlockMatch = styleSource.match(/\.sidebar-header\s*\{[\s\S]*?\n {2}\}/)
     const sidebarBrandBlockMatch = componentSource.match(/\.sidebar-brand\s*\{[\s\S]*?\n\}/)

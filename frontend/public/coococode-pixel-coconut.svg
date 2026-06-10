@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" shape-rendering="crispEdges" role="img" aria-label="coococode coconut mark">
+  <rect width="64" height="64" fill="#071a16"/>
+  <path d="M22 18h20v4h6v8h4v16h-4v6h-8v4H24v-4h-8v-6h-4V30h4v-8h6z" fill="#3d2d24"/>
+  <path d="M23 22h18v4h6v8h4v11h-4v5h-8v4H25v-4h-8v-5h-4V34h4v-8h6z" fill="#8a6a4f"/>
+  <path d="M17 34h6v-8h8v-4h-8v4h-6z" fill="#6f523d"/>
+  <rect x="25" y="29" width="15" height="4" fill="#c6aa8f"/>
+  <rect x="25" y="39" width="4" height="4" fill="#17231f"/>
+  <rect x="38" y="39" width="4" height="4" fill="#17231f"/>
+  <rect x="31" y="48" width="10" height="3" fill="#0f7d73"/>
+  <rect x="30" y="12" width="4" height="7" fill="#0b6a62"/>
+  <rect x="34" y="10" width="12" height="5" fill="#47a79d"/>
+  <rect x="42" y="15" width="5" height="4" fill="#47a79d"/>
+</svg>

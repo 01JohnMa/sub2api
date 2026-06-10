@@ -29,14 +29,6 @@
             <span class="wordmark"><BrandWordmark :text="siteName" size="inherit" /></span>
           </div>
 
-          <div class="nav-links" aria-label="页面锚点">
-            <a href="#home">首页</a>
-            <a href="#models">模型</a>
-            <a href="#usage">用量</a>
-            <a href="#pricing">价格</a>
-            <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer">文档</a>
-          </div>
-
           <div class="nav-actions">
             <LocaleSwitcher />
             <router-link class="nav-cta" :to="entryPath">开始畅饮</router-link>
@@ -127,24 +119,6 @@
             <strong>真用量看板</strong>
             <span>请求、token、余额、错误日志，一张台账说清楚</span>
           </div>
-          <div class="model-grid" id="models">
-            <article class="model dark">
-              <h3>生产 Key</h3>
-              <p>按用户、项目、环境分开管理；别把一把 key 塞进所有地方。</p>
-            </article>
-            <article class="model hot">
-              <h3>Token 明细</h3>
-              <p>输入、输出、缓存、失败请求分开看，账单争议先看证据。</p>
-            </article>
-            <article class="model">
-              <h3>模型路由</h3>
-              <p>统一入口承接多模型调用；具体线路后续按真实能力展示。</p>
-            </article>
-            <article class="model blue">
-              <h3>开发文档</h3>
-              <p>curl、Node、Python 示例放首页，接入路径短一点，排障快一点。</p>
-            </article>
-          </div>
         </section>
 
         <footer id="pricing" class="ticker" aria-label="底部能力条">
@@ -179,7 +153,6 @@ const siteSubtitle = computed(
     appStore.cachedPublicSettings?.site_subtitle ||
     'OpenAI-compatible API 网关，按真实请求返回、真实 token 用量、真实日志记录来对账。base URL 一换就能跑，账单别靠玄学。'
 )
-const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
 
 const isHomeContentUrl = computed(() => {
@@ -214,13 +187,13 @@ onMounted(() => {
 }
 
 .coconut-browser {
-  width: min(1540px, calc(100vw - 28px));
+  width: min(1540px, 100vw);
   margin: 0 auto;
   overflow: hidden;
-  border: 4px solid #050505;
-  border-radius: 26px;
+  border: 0;
+  border-radius: 0;
   background: #ffe500;
-  box-shadow: 12px 14px 0 rgba(0, 0, 0, 0.24);
+  box-shadow: none;
 }
 
 .page-shell {
@@ -229,7 +202,7 @@ onMounted(() => {
 
 .main-nav {
   display: grid;
-  grid-template-columns: minmax(260px, 0.8fr) minmax(280px, 1fr) auto;
+  grid-template-columns: minmax(260px, 1fr) auto;
   align-items: center;
   gap: 18px;
   margin-bottom: 18px;
@@ -265,32 +238,6 @@ onMounted(() => {
   font-weight: 1000;
   letter-spacing: 0;
   line-height: 0.9;
-}
-
-.nav-links {
-  display: flex;
-  justify-content: center;
-  gap: clamp(16px, 4vw, 60px);
-  font-size: 19px;
-  font-weight: 900;
-}
-
-.nav-links a {
-  position: relative;
-  padding: 9px 0;
-  color: #050505;
-  text-decoration: none;
-}
-
-.nav-links a:first-child::after {
-  position: absolute;
-  right: 4px;
-  bottom: 0;
-  left: 4px;
-  height: 5px;
-  border-radius: 99px;
-  background: #e51912;
-  content: "";
 }
 
 .nav-actions {
@@ -776,6 +723,9 @@ h1 span {
   height: 30px;
   border-radius: 99px;
   background: #fff;
+  animation: cloud-drift 11s cubic-bezier(0.46, 0.03, 0.52, 0.96) infinite;
+  box-shadow: 8px 10px 0 rgba(0, 57, 160, 0.18);
+  will-change: transform;
 }
 
 .cloud::before,
@@ -797,6 +747,36 @@ h1 span {
   left: 45px;
   width: 48px;
   height: 48px;
+}
+
+@keyframes cloud-drift {
+  0% {
+    transform: translate3d(-58px, 6px, 0);
+  }
+  17% {
+    transform: translate3d(-18px, -11px, 0);
+  }
+  34% {
+    transform: translate3d(42px, 4px, 0);
+  }
+  50% {
+    transform: translate3d(72px, -15px, 0);
+  }
+  67% {
+    transform: translate3d(24px, -3px, 0);
+  }
+  84% {
+    transform: translate3d(-36px, -18px, 0);
+  }
+  100% {
+    transform: translate3d(-58px, 6px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloud {
+    animation: none;
+  }
 }
 
 .proof-row {
@@ -880,49 +860,6 @@ h1 span {
   content: "";
 }
 
-.model-grid {
-  display: grid;
-  grid-template-columns: 1.1fr 1fr 1fr 1fr;
-  gap: 12px;
-  padding: 16px;
-}
-
-.model {
-  min-height: 132px;
-  border: 3px solid #050505;
-  border-radius: 7px;
-  background:
-    linear-gradient(135deg, rgba(255, 229, 0, 0.18), transparent 52%),
-    #f8fbff;
-  padding: 18px;
-}
-
-.model.dark {
-  background: #080808;
-  color: #fff;
-}
-
-.model.hot {
-  background: linear-gradient(135deg, #fff5c5, #fff);
-}
-
-.model.blue {
-  background: linear-gradient(135deg, #dfeaff, #fff);
-}
-
-.model h3 {
-  margin: 0 0 8px;
-  font-size: 22px;
-  line-height: 1.15;
-}
-
-.model p {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 760;
-  line-height: 1.45;
-}
-
 .ticker {
   display: grid;
   grid-template-columns: repeat(4, auto);
@@ -970,8 +907,7 @@ h1 span {
     padding-top: 150px;
   }
 
-  .proof-row,
-  .model-grid {
+  .proof-row {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -979,9 +915,6 @@ h1 span {
     grid-template-columns: 1fr auto;
   }
 
-  .nav-links {
-    display: none;
-  }
 }
 
 @media (max-width: 720px) {
@@ -990,10 +923,7 @@ h1 span {
   }
 
   .coconut-browser {
-    width: calc(100vw - 14px);
-    border-width: 3px;
-    border-radius: 18px;
-    box-shadow: 6px 8px 0 rgba(0, 0, 0, 0.24);
+    width: 100vw;
   }
 
   .page-shell {
@@ -1081,7 +1011,6 @@ h1 span {
   }
 
   .proof-row,
-  .model-grid,
   .ticker {
     grid-template-columns: 1fr;
   }

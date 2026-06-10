@@ -9,12 +9,18 @@
     <!-- Logo/Brand -->
     <div class="sidebar-header" :class="{ 'sidebar-header-collapsed': sidebarCollapsed }">
       <!-- Custom Logo or Default Logo -->
-      <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-glow">
-        <img v-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+      <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg">
+        <img
+          v-if="settingsLoaded && siteLogo"
+          :src="siteLogo"
+          alt="Logo"
+          class="h-full w-full rounded-lg border border-primary-200 bg-white object-contain shadow-sm dark:border-primary-800 dark:bg-dark-900"
+        />
+        <PixelCoconutMark v-else size="xs" variant="mono" :label="`${siteName} coconut mark`" />
       </div>
       <div class="sidebar-brand" :class="{ 'sidebar-brand-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
-        <span class="sidebar-brand-title text-lg font-bold text-gray-900 dark:text-white">
-          {{ siteName }}
+        <span class="sidebar-brand-title text-lg font-semibold text-accent-950 dark:text-white">
+          <BrandWordmark :text="siteName" size="inherit" />
         </span>
         <!-- Version Badge -->
         <VersionBadge :version="siteVersion" />
@@ -184,6 +190,8 @@ import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
+import BrandWordmark from '@/components/brand/BrandWordmark.vue'
+import PixelCoconutMark from '@/components/brand/PixelCoconutMark.vue'
 import VersionBadge from '@/components/common/VersionBadge.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
@@ -242,7 +250,10 @@ const isDark = ref(document.documentElement.classList.contains('dark'))
 const expandedGroups = ref<Set<string>>(new Set())
 
 // Site settings from appStore (cached, no flicker)
-const siteName = computed(() => appStore.siteName)
+const siteName = computed(() => {
+  const name = appStore.siteName || ''
+  return name && name !== 'Sub2API' ? name : 'coococode'
+})
 const siteLogo = computed(() => appStore.siteLogo)
 const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)

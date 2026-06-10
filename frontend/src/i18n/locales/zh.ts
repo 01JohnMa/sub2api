@@ -250,6 +250,7 @@ export default {
   // Common
   common: {
     loading: '加载中...',
+    login: '登录',
     submitting: '提交中...',
     justNow: '刚刚',
     save: '保存',
@@ -397,7 +398,7 @@ export default {
     signIn: '登录',
     signingIn: '登录中...',
     createAccount: '创建账户',
-    signUpToStart: '注册以开始使用 {siteName}',
+    signUpToStart: '注册以开始使用{siteName}',
     signUp: '注册',
     processing: '处理中...',
     continue: '继续',
@@ -6831,10 +6832,10 @@ export default {
     // Admin tour steps
     admin: {
       welcome: {
-        title: '👋 欢迎使用 Sub2API',
+        title: '欢迎使用 coococode',
         description:
-          '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">Sub2API 是一个强大的 AI 服务中转平台，让您轻松管理和分发 AI 服务。</p><p style="margin-bottom: 12px;"><b>🎯 核心功能：</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>📦 <b>分组管理</b> - 创建不同的服务套餐（VIP、免费试用等）</li><li>🔗 <b>账号池</b> - 连接多个上游 AI 服务商账号</li><li>🔑 <b>密钥分发</b> - 为用户生成独立的 API Key</li><li>💰 <b>计费管理</b> - 灵活的费率和配额控制</li></ul><p style="color: #10b981; font-weight: 600;">接下来，我们将用 3 分钟带您完成首次配置 →</p></div>',
-        nextBtn: '开始配置 🚀',
+          '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">coococode 是面向 AI 网关运营的控制台，帮助您管理账号池、密钥、分组和计费策略。</p><p style="margin-bottom: 12px;"><b>核心功能：</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li><b>分组管理</b> - 创建不同的服务套餐（VIP、免费试用等）</li><li><b>账号池</b> - 连接多个上游 AI 服务商账号</li><li><b>密钥分发</b> - 为用户生成独立的 API Key</li><li><b>计费管理</b> - 灵活的费率和配额控制</li></ul><p style="color: #0f7d73; font-weight: 600;">接下来，我们将用 3 分钟带您完成首次配置 →</p></div>',
+        nextBtn: '开始配置',
         prevBtn: '跳过'
       },
       groupManage: {
@@ -6952,10 +6953,10 @@ export default {
     // User tour steps
     user: {
       welcome: {
-        title: '👋 欢迎使用 Sub2API',
+        title: '欢迎使用 coococode',
         description:
-          '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">您好！欢迎来到 Sub2API AI 服务平台。</p><p style="margin-bottom: 12px;"><b>🎯 快速开始：</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>🔑 创建 API 密钥</li><li>📋 复制密钥到您的应用</li><li>🚀 开始使用 AI 服务</li></ul><p style="color: #10b981; font-weight: 600;">只需 1 分钟，让我们开始吧 →</p></div>',
-        nextBtn: '开始 🚀',
+          '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">您好，欢迎来到 coococode AI 网关平台。</p><p style="margin-bottom: 12px;"><b>快速开始：</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>创建 API 密钥</li><li>复制密钥到您的应用</li><li>开始使用 AI 服务</li></ul><p style="color: #0f7d73; font-weight: 600;">只需 1 分钟，让我们开始吧 →</p></div>',
+        nextBtn: '开始',
         prevBtn: '跳过'
       },
       keyManage: {

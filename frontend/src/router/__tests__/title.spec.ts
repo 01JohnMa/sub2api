@@ -15,6 +15,11 @@ describe('resolveDocumentTitle', () => {
     expect(resolveDocumentTitle(undefined, '   ')).toBe('coococode')
   })
 
+  it('站点名仍为上游默认 Sub2API 时，标题使用 coococode', () => {
+    expect(resolveDocumentTitle('Home', 'Sub2API')).toBe('Home - coococode')
+    expect(resolveDocumentTitle(undefined, 'Sub2API')).toBe('coococode')
+  })
+
   it('站点名变更时仅影响后续路由标题计算', () => {
     const before = resolveDocumentTitle('Admin Dashboard', 'Alpha')
     const after = resolveDocumentTitle('Admin Dashboard', 'Beta')

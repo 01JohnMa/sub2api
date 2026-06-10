@@ -14,18 +14,6 @@
 
   <div v-else class="coconut-page">
     <div class="coconut-browser" aria-label="coococode true token landing page">
-      <div class="browser-chrome" aria-hidden="true">
-        <div class="browser-lights">
-          <span class="light red"></span>
-          <span class="light yellow"></span>
-          <span class="light green"></span>
-          <span class="chev">‹</span>
-          <span class="chev">›</span>
-        </div>
-        <div class="address">coococode.com</div>
-        <div class="chrome-actions">↻ ⤴</div>
-      </div>
-
       <main class="page-shell">
         <nav class="main-nav" aria-label="主导航">
           <div class="brand-lockup">
@@ -233,68 +221,6 @@ onMounted(() => {
   border-radius: 26px;
   background: #ffe500;
   box-shadow: 12px 14px 0 rgba(0, 0, 0, 0.24);
-}
-
-.browser-chrome {
-  display: grid;
-  grid-template-columns: 170px minmax(160px, 1fr) 150px;
-  align-items: center;
-  gap: 18px;
-  padding: 12px 22px;
-  border-bottom: 4px solid #050505;
-  background: #0b0d10;
-  color: #fff;
-}
-
-.browser-lights {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.light {
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-}
-
-.light.red {
-  background: #ff4b41;
-}
-
-.light.yellow {
-  background: #ffd54a;
-}
-
-.light.green {
-  background: #31cf55;
-}
-
-.chev {
-  margin-left: 16px;
-  font-size: 28px;
-  color: #aeb4bd;
-  line-height: 1;
-}
-
-.address {
-  justify-self: center;
-  width: min(620px, 100%);
-  border: 1px solid #2f343b;
-  border-radius: 11px;
-  background: #24282e;
-  color: #e9eef6;
-  text-align: center;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  padding: 8px 20px;
-}
-
-.chrome-actions {
-  justify-self: end;
-  color: #d8dde6;
-  font-size: 20px;
 }
 
 .page-shell {
@@ -1068,17 +994,6 @@ h1 span {
     border-width: 3px;
     border-radius: 18px;
     box-shadow: 6px 8px 0 rgba(0, 0, 0, 0.24);
-  }
-
-  .browser-chrome {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    padding: 10px 14px;
-  }
-
-  .address,
-  .chrome-actions {
-    display: none;
   }
 
   .page-shell {

@@ -28,6 +28,14 @@ describe('useAppStore', () => {
 
   // --- Toast 消息管理 ---
 
+  describe('默认品牌', () => {
+    it('默认站点名为 coococode', () => {
+      const store = useAppStore()
+
+      expect(store.siteName).toBe('coococode')
+    })
+  })
+
   describe('Toast 消息管理', () => {
     it('showSuccess 创建 success 类型 toast', () => {
       const store = useAppStore()

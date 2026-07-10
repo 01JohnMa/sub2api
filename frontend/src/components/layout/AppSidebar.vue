@@ -11,18 +11,24 @@
       <!-- Custom Logo or Default Logo -->
       <router-link
         :to="homePath"
-        class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-glow transition-opacity hover:opacity-80"
+        class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg transition-opacity hover:opacity-80"
         @click="handleMenuItemClick(homePath)"
       >
-        <img v-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+        <img
+          v-if="settingsLoaded && siteLogo"
+          :src="siteLogo"
+          alt="Logo"
+          class="h-full w-full rounded-lg border border-primary-200 bg-white object-contain shadow-sm dark:border-primary-800 dark:bg-dark-900"
+        />
+        <PixelCoconutMark v-else size="xs" variant="mono" :label="`${siteName} coconut mark`" />
       </router-link>
       <div class="sidebar-brand" :class="{ 'sidebar-brand-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
         <router-link
           :to="homePath"
-          class="sidebar-brand-title text-lg font-bold text-gray-900 transition-colors hover:text-primary-600 dark:text-white dark:hover:text-primary-400"
+          class="sidebar-brand-title text-lg font-semibold text-accent-950 transition-colors hover:text-primary-700 dark:text-white dark:hover:text-primary-400"
           @click="handleMenuItemClick(homePath)"
         >
-          {{ siteName }}
+          <BrandWordmark :text="siteName" size="inherit" />
         </router-link>
         <!-- Version Badge -->
         <VersionBadge :version="siteVersion" />
@@ -192,6 +198,8 @@ import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'v
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
+import BrandWordmark from '@/components/brand/BrandWordmark.vue'
+import PixelCoconutMark from '@/components/brand/PixelCoconutMark.vue'
 import VersionBadge from '@/components/common/VersionBadge.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
@@ -256,7 +264,10 @@ const homePath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboar
 const expandedGroups = ref<Set<string>>(new Set())
 
 // Site settings from appStore (cached, no flicker)
-const siteName = computed(() => appStore.siteName)
+const siteName = computed(() => {
+  const name = appStore.siteName || ''
+  return name && name !== 'Sub2API' ? name : 'coococode'
+})
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)

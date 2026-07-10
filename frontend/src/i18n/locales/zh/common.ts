@@ -199,7 +199,7 @@ export default {
     signIn: '登录',
     signingIn: '登录中...',
     createAccount: '创建账户',
-    signUpToStart: '注册以开始使用 {siteName}',
+    signUpToStart: '注册以开始使用{siteName}',
     signUp: '注册',
     processing: '处理中...',
     continue: '继续',

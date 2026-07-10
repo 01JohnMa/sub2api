@@ -1,51 +1,40 @@
 <template>
-  <div class="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+  <div class="auth-shell relative min-h-screen overflow-hidden bg-[#F8FFF6] text-accent-950">
     <!-- Background -->
     <div
-      class="absolute inset-0 bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950"
+      class="absolute inset-0 bg-[linear-gradient(rgba(47,128,116,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(47,128,116,0.08)_1px,transparent_1px)] bg-[size:72px_72px]"
     ></div>
 
-    <!-- Decorative Elements -->
-    <div class="pointer-events-none absolute inset-0 overflow-hidden">
-      <!-- Gradient Orbs -->
-      <div
-        class="absolute -right-40 -top-40 h-80 w-80 rounded-full bg-primary-400/20 blur-3xl"
-      ></div>
-      <div
-        class="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-primary-500/15 blur-3xl"
-      ></div>
-      <div
-        class="absolute left-1/2 top-1/2 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary-300/10 blur-3xl"
-      ></div>
-
-      <!-- Grid Pattern -->
-      <div
-        class="absolute inset-0 bg-[linear-gradient(rgba(20,184,166,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(20,184,166,0.03)_1px,transparent_1px)] bg-[size:64px_64px]"
-      ></div>
-    </div>
+    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#9fd8cb] to-transparent"></div>
 
     <!-- Content Container -->
-    <div class="relative z-10 w-full max-w-md">
+    <div class="relative z-10 flex min-h-screen items-center justify-center px-5 py-8">
+      <section class="w-full max-w-md">
       <!-- Logo/Brand -->
       <div class="mb-8 text-center">
         <!-- Custom Logo or Default Logo -->
         <template v-if="settingsLoaded">
           <div
-            class="mb-4 inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-primary-500/30"
+            v-if="siteLogo"
+            class="mb-5 inline-flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg border border-primary-200 bg-white shadow-sm"
           >
-            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+            <img :src="siteLogo" alt="Logo" class="h-full w-full object-contain" />
           </div>
-          <h1 class="text-gradient mb-2 text-3xl font-bold">
-            {{ siteName }}
+          <PixelCoconutMark v-else class="mb-5" size="lg" variant="sprout" :label="`${siteName} young coconut mark`" />
+          <div class="text-xs font-medium uppercase tracking-[0.22em] text-primary-700">
+            Pixel coconut gateway
+          </div>
+          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-accent-950">
+            <BrandWordmark :text="siteName" size="inherit" />
           </h1>
-          <p class="text-sm text-gray-500 dark:text-dark-400">
+          <p class="mt-3 text-sm leading-6 text-accent-600">
             {{ siteSubtitle }}
           </p>
         </template>
       </div>
 
       <!-- Card Container -->
-      <div class="card-glass rounded-2xl p-8 shadow-glass">
+      <div class="card-glass rounded-lg p-6 shadow-glass sm:p-8">
         <slot />
       </div>
 
@@ -55,9 +44,10 @@
       </div>
 
       <!-- Copyright -->
-      <div class="mt-8 text-center text-xs text-gray-400 dark:text-dark-500">
-        &copy; {{ currentYear }} {{ siteName }}. All rights reserved.
+      <div class="mt-8 text-center text-xs text-accent-500">
+        &copy; {{ currentYear }} <BrandWordmark :text="siteName" size="inline" />. All rights reserved.
       </div>
+      </section>
     </div>
   </div>
 </template>
@@ -66,12 +56,17 @@
 import { computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
+import BrandWordmark from '@/components/brand/BrandWordmark.vue'
+import PixelCoconutMark from '@/components/brand/PixelCoconutMark.vue'
 
 const appStore = useAppStore()
 
-const siteName = computed(() => appStore.siteName || 'Sub2API')
+const siteName = computed(() => {
+  const name = appStore.siteName || ''
+  return name && name !== 'Sub2API' ? name : 'coococode'
+})
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
-const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'Subscription to API Conversion Platform')
+const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'Minimal pixel coconut access with calm operational control.')
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
 const currentYear = computed(() => new Date().getFullYear())
@@ -84,5 +79,55 @@ onMounted(() => {
 <style scoped>
 .text-gradient {
   @apply bg-gradient-to-r from-primary-600 to-primary-500 bg-clip-text text-transparent;
+}
+
+.auth-shell :deep(.card-glass) {
+  border-color: rgba(159, 216, 203, 0.78) !important;
+  background: rgba(255, 255, 255, 0.86) !important;
+  box-shadow:
+    0 18px 42px rgba(47, 128, 116, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.88) inset !important;
+}
+
+.auth-shell :deep(h2) {
+  color: #17231f !important;
+}
+
+.auth-shell :deep(p),
+.auth-shell :deep(.input-label) {
+  color: #5c6c66 !important;
+}
+
+.auth-shell :deep(.input) {
+  border-color: #bdded4 !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: #17231f !important;
+}
+
+.auth-shell :deep(.input::placeholder) {
+  color: #7b9690 !important;
+}
+
+.auth-shell :deep(.input:focus) {
+  border-color: #0f7d73 !important;
+  box-shadow: 0 0 0 3px rgba(15, 125, 115, 0.16) !important;
+}
+
+.auth-shell :deep(.btn-primary) {
+  background: #0f8f83 !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(15, 125, 115, 0.18) !important;
+}
+
+.auth-shell :deep(.btn-primary:hover) {
+  background: #0b6f66 !important;
+}
+
+.auth-shell :deep(a) {
+  color: #0f7d73 !important;
+}
+
+.auth-shell :deep(svg) {
+  color: currentColor;
 }
 </style>

@@ -7,7 +7,9 @@
           {{ t('auth.createAccount') }}
         </h2>
         <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-          {{ t('auth.signUpToStart', { siteName }) }}
+          <template v-for="(part, index) in signUpToStartParts" :key="`${part}-${index}`">
+            {{ part }}<BrandWordmark v-if="index < signUpToStartParts.length - 1" :text="siteName" size="inline" />
+          </template>
         </p>
       </div>
 
@@ -307,6 +309,7 @@ import OidcOAuthSection from '@/components/auth/OidcOAuthSection.vue'
 import WechatOAuthSection from '@/components/auth/WechatOAuthSection.vue'
 import EmailOAuthButtons from '@/components/auth/EmailOAuthButtons.vue'
 import LoginAgreementPrompt from '@/components/auth/LoginAgreementPrompt.vue'
+import BrandWordmark from '@/components/brand/BrandWordmark.vue'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
@@ -353,7 +356,7 @@ const promoCodeEnabled = ref<boolean>(true)
 const invitationCodeEnabled = ref<boolean>(false)
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
-const siteName = ref<string>('Sub2API')
+const siteName = ref<string>('coococode')
 const linuxdoOAuthEnabled = ref<boolean>(false)
 const wechatOAuthEnabled = ref<boolean>(false)
 const oidcOAuthEnabled = ref<boolean>(false)
@@ -434,6 +437,10 @@ const registrationActionDisabled = computed(
   () => isLoading.value || !settingsLoaded.value || agreementGateActive.value
 )
 
+const signUpToStartParts = computed(() =>
+  t('auth.signUpToStart', { siteName: '__SITE_NAME__' }).split('__SITE_NAME__')
+)
+
 watch(validationToastMessage, (value, previousValue) => {
   if (value && value !== previousValue) {
     appStore.showError(value)
@@ -461,7 +468,7 @@ onMounted(async () => {
     invitationCodeEnabled.value = settings.invitation_code_enabled
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
-    siteName.value = settings.site_name || 'Sub2API'
+    siteName.value = settings.site_name && settings.site_name !== 'Sub2API' ? settings.site_name : 'coococode'
     linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
     wechatOAuthEnabled.value = isWeChatWebOAuthEnabled(settings)
     oidcOAuthEnabled.value = settings.oidc_oauth_enabled

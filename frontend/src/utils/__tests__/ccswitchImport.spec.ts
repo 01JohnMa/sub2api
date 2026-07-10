@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CC_SWITCH_USAGE_SCRIPT,
   OPENAI_CC_SWITCH_CODEX_MODEL,
-  buildCcSwitchImportDeeplink
+  buildCcSwitchImportDeeplink,
+  resolveCcSwitchUsageBaseUrl
 } from '@/utils/ccswitchImport'
 import type { GroupPlatform } from '@/types'
 
@@ -12,14 +14,14 @@ function paramsFromDeeplink(deeplink: string): URLSearchParams {
 
 describe('ccswitchImport utils', () => {
   it('defaults OpenAI CC Switch imports to the current Codex model', () => {
-    expect(OPENAI_CC_SWITCH_CODEX_MODEL).toBe('gpt-5.5')
+    expect(OPENAI_CC_SWITCH_CODEX_MODEL).toBe('gpt-5.6-sol')
   })
 
   const baseInput = {
-    baseUrl: 'https://api.example.com',
+    baseUrl: 'https://api.example.com/v1',
     providerName: 'Sub2API',
     apiKey: 'sk-test',
-    usageScript: 'return true'
+    usageScript: CC_SWITCH_USAGE_SCRIPT
   }
 
   it('adds the Codex model parameter for OpenAI imports', () => {
@@ -35,7 +37,25 @@ describe('ccswitchImport utils', () => {
     expect(params.get('app')).toBe('codex')
     expect(params.get('endpoint')).toBe(baseInput.baseUrl)
     expect(params.get('model')).toBe(OPENAI_CC_SWITCH_CODEX_MODEL)
+    expect(params.get('usageBaseUrl')).toBe('https://api.example.com')
     expect(atob(params.get('usageScript') || '')).toBe(baseInput.usageScript)
+
+    const resolvedUsageScript = baseInput.usageScript.replace(
+      '{{baseUrl}}',
+      params.get('usageBaseUrl') || ''
+    )
+    expect(resolvedUsageScript).toContain('url: "https://api.example.com/v1/usage"')
+    expect(resolvedUsageScript).not.toContain('/v1/v1/usage')
+  })
+
+  it.each([
+    ['https://api.example.com', 'https://api.example.com'],
+    ['https://api.example.com/', 'https://api.example.com'],
+    ['https://api.example.com/v1', 'https://api.example.com'],
+    ['https://api.example.com/v1/', 'https://api.example.com'],
+    ['  https://api.example.com/v1/  ', 'https://api.example.com']
+  ])('resolves the usage base URL from %s', (baseUrl, expected) => {
+    expect(resolveCcSwitchUsageBaseUrl(baseUrl)).toBe(expected)
   })
 
   it.each([
@@ -53,6 +73,7 @@ describe('ccswitchImport utils', () => {
     expect(params.get('app')).toBe(app)
     expect(params.get('endpoint')).toBe(baseInput.baseUrl)
     expect(params.has('model')).toBe(false)
+    expect(params.has('usageBaseUrl')).toBe(false)
   })
 
   it('keeps Antigravity imports on the selected client endpoint without a model parameter', () => {

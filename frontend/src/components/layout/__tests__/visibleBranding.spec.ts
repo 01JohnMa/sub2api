@@ -101,5 +101,6 @@ describe('visible Coococode branding', () => {
 
     expect(complianceSource).toContain('replaceVisibleUpstreamBrand')
     expect(complianceSource).toContain('rawExpectedPhrase.value')
+    expect(complianceSource).toContain('RAW_FALLBACK_ZH_PHRASE')
   })
 })

@@ -60,4 +60,24 @@ describe('useAdminComplianceStore visible branding', () => {
       language: 'zh'
     })
   })
+
+  it('keeps the backend phrase contract when acknowledgement is forced from metadata only', async () => {
+    const store = useAdminComplianceStore()
+
+    store.requireAcknowledgement({
+      version: upstreamStatus.version,
+      document_path_zh: upstreamStatus.document_path_zh,
+      document_path_en: upstreamStatus.document_path_en,
+      document_url_zh: upstreamStatus.document_url_zh,
+      document_url_en: upstreamStatus.document_url_en
+    })
+    expect(store.expectedPhrase).toBe('我已阅读、理解并同意 coococode 部署与运营合规承诺')
+
+    await store.accept(store.expectedPhrase)
+
+    expect(acceptMock).toHaveBeenCalledWith({
+      phrase: upstreamStatus.ack_phrase_zh,
+      language: 'zh'
+    })
+  })
 })

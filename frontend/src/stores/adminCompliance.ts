@@ -6,6 +6,8 @@ import { replaceVisibleUpstreamBrand } from '@/utils/siteBrand'
 
 const FALLBACK_ZH_PHRASE = '我已阅读、理解并同意 coococode 部署与运营合规承诺'
 const FALLBACK_EN_PHRASE = 'I have read, understood, and agree to the coococode Deployment and Operation Compliance Commitment'
+const RAW_FALLBACK_ZH_PHRASE = '我已阅读、理解并同意 Sub2API 部署与运营合规承诺'
+const RAW_FALLBACK_EN_PHRASE = 'I have read, understood, and agree to the Sub2API Deployment and Operation Compliance Commitment'
 
 export const useAdminComplianceStore = defineStore('adminCompliance', () => {
   const status = ref<AdminComplianceStatus | null>(null)
@@ -19,9 +21,9 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
   const currentLocale = computed(() => getLocale())
   const rawExpectedPhrase = computed(() => {
     if (currentLocale.value === 'zh') {
-      return status.value?.ack_phrase_zh || FALLBACK_ZH_PHRASE
+      return status.value?.ack_phrase_zh || RAW_FALLBACK_ZH_PHRASE
     }
-    return status.value?.ack_phrase_en || FALLBACK_EN_PHRASE
+    return status.value?.ack_phrase_en || RAW_FALLBACK_EN_PHRASE
   })
   const expectedPhrase = computed(() =>
     replaceVisibleUpstreamBrand(
@@ -68,8 +70,8 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
       document_path_en: partialStatus?.document_path_en || status.value?.document_path_en || 'docs/legal/admin-compliance.en.md',
       document_url_zh: partialStatus?.document_url_zh || status.value?.document_url_zh || '/legal/admin-compliance',
       document_url_en: partialStatus?.document_url_en || status.value?.document_url_en || '/legal/admin-compliance',
-      ack_phrase_zh: partialStatus?.ack_phrase_zh || status.value?.ack_phrase_zh || FALLBACK_ZH_PHRASE,
-      ack_phrase_en: partialStatus?.ack_phrase_en || status.value?.ack_phrase_en || FALLBACK_EN_PHRASE,
+      ack_phrase_zh: partialStatus?.ack_phrase_zh || status.value?.ack_phrase_zh || RAW_FALLBACK_ZH_PHRASE,
+      ack_phrase_en: partialStatus?.ack_phrase_en || status.value?.ack_phrase_en || RAW_FALLBACK_EN_PHRASE,
       acknowledgement: status.value?.acknowledgement
     }
     initialized.value = true

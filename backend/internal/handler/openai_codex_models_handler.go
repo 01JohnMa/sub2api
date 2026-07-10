@@ -15,11 +15,14 @@ import (
 // Codex CLI and the Codex desktop app refresh their model picker from
 // GET {base_url}/models?client_version=... (custom provider mode) or
 // GET /backend-api/codex/models (chatgpt_base_url mode). Both routes land
-// here. The manifest is proxied verbatim from the ChatGPT backend with a
-// schedulable OAuth account's credentials, so clients pointed at the gateway
-// see the account's real, always-current model entitlements instead of a
-// frozen local cache.
+// here. OAuth accounts fetch the ChatGPT backend manifest directly; API-key
+// accounts fetch their configured upstream manifest, which supports local CPA
+// relays without making Sub2API authenticate to ChatGPT itself.
 func (h *OpenAIGatewayHandler) CodexModels(c *gin.Context) {
+	if c.GetHeader(service.CodexModelsManifestHopHeader) != "" {
+		h.errorResponse(c, http.StatusLoopDetected, "upstream_error", "Codex models manifest relay loop detected")
+		return
+	}
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok || apiKey.Group == nil {
 		h.errorResponse(c, http.StatusUnauthorized, "invalid_request_error", "API key group is required")

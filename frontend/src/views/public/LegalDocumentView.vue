@@ -93,6 +93,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { getPublicSettings } from '@/api/auth'
 import { getLocale } from '@/i18n'
 import { sanitizeUrl } from '@/utils/url'
+import { normalizeVisibleSiteName } from '@/utils/siteBrand'
 import type { LoginAgreementDocument, PublicSettings } from '@/types'
 import zhAdminCompliance from '../../../../docs/legal/admin-compliance.zh.md?raw'
 import enAdminCompliance from '../../../../docs/legal/admin-compliance.en.md?raw'
@@ -113,10 +114,7 @@ marked.setOptions({
 const documentId = computed(() => String(route.params.documentId || ''))
 const isAdminComplianceDocument = computed(() => documentId.value === 'admin-compliance')
 const documents = computed(() => settings.value?.login_agreement_documents ?? [])
-const siteName = computed(() => {
-  const name = settings.value?.site_name || ''
-  return name && name !== 'Sub2API' ? name : 'coococode'
-})
+const siteName = computed(() => normalizeVisibleSiteName(settings.value?.site_name))
 const siteLogo = computed(() => sanitizeUrl(settings.value?.site_logo || '', {
   allowRelative: true,
   allowDataUrl: true,

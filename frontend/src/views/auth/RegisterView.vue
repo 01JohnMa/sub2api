@@ -320,6 +320,7 @@ import {
   validateInvitationCode
 } from '@/api/auth'
 import { buildAuthErrorMessage } from '@/utils/authError'
+import { normalizeVisibleSiteName } from '@/utils/siteBrand'
 import {
   formatRegistrationEmailSuffixWhitelistForMessage,
   isRegistrationEmailSuffixAllowed,
@@ -468,7 +469,7 @@ onMounted(async () => {
     invitationCodeEnabled.value = settings.invitation_code_enabled
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
-    siteName.value = settings.site_name && settings.site_name !== 'Sub2API' ? settings.site_name : 'coococode'
+    siteName.value = normalizeVisibleSiteName(settings.site_name)
     linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
     wechatOAuthEnabled.value = isWeChatWebOAuthEnabled(settings)
     oidcOAuthEnabled.value = settings.oidc_oauth_enabled

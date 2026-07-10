@@ -13,6 +13,7 @@ import {
   type ReleaseInfo
 } from '@/api/admin/system'
 import { getPublicSettings as fetchPublicSettingsAPI } from '@/api/auth'
+import { normalizeVisibleSiteName } from '@/utils/siteBrand'
 
 export const useAppStore = defineStore('app', () => {
   // ==================== State ====================
@@ -293,7 +294,7 @@ export const useAppStore = defineStore('app', () => {
       window.__APP_CONFIG__ = { ...config }
     }
     cachedPublicSettings.value = config
-    siteName.value = config.site_name && config.site_name !== 'Sub2API' ? config.site_name : 'coococode'
+    siteName.value = normalizeVisibleSiteName(config.site_name)
     siteLogo.value = config.site_logo || ''
     siteVersion.value = config.version || ''
     contactInfo.value = config.contact_info || ''

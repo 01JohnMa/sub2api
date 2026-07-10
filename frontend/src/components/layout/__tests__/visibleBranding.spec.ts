@@ -15,6 +15,8 @@ const forbiddenVisibleLiterals = [
   'href="https://github.com/Wei-Shaw/sub2api"',
   "const githubUrl = 'https://github.com/Wei-Shaw/sub2api'",
   'href="https://sub2api.io/proxyip"',
+  'https://tls.sub2api.org',
+  'https://github.com/Wei-Shaw/sub2api',
   'releaseInfo?.html_url',
   "const GITHUB_REPO = 'Wei-Shaw/sub2api'",
   "const DOCKER_IMAGE = 'weishaw/sub2api'",
@@ -48,11 +50,27 @@ const visibleCopyFiles = [
   'frontend/src/i18n/locales/zh/admin/settings.ts'
 ]
 
+const dynamicSiteNameFiles = [
+  'frontend/src/router/title.ts',
+  'frontend/src/stores/app.ts',
+  'frontend/src/views/HomeView.vue',
+  'frontend/src/components/layout/AppSidebar.vue',
+  'frontend/src/components/layout/AuthLayout.vue',
+  'frontend/src/views/auth/RegisterView.vue',
+  'frontend/src/views/auth/EmailVerifyView.vue',
+  'frontend/src/views/public/LegalDocumentView.vue',
+  'frontend/src/views/KeyUsageView.vue',
+  'frontend/src/views/user/KeysView.vue',
+  'frontend/src/views/admin/SettingsView.vue'
+]
+
 describe('visible Coococode branding', () => {
   it('removes known visible Sub2API links and literals', () => {
     const runtimeSource =
       source('frontend/src/components/layout/AppHeader.vue') +
       source('frontend/src/components/common/VersionBadge.vue') +
+      source('frontend/src/components/admin/AdminComplianceDialog.vue') +
+      source('frontend/src/components/admin/TLSFingerprintProfilesModal.vue') +
       source('frontend/src/views/KeyUsageView.vue') +
       source('frontend/src/views/public/LegalDocumentView.vue') +
       source('frontend/src/views/auth/EmailVerifyView.vue') +
@@ -72,5 +90,16 @@ describe('visible Coococode branding', () => {
 
   it.each(visibleCopyFiles)('%s contains no visible upstream brand name', (path) => {
     expect(source(path)).not.toMatch(/sub2api|su2api/i)
+  })
+
+  it.each(dynamicSiteNameFiles)('%s normalizes dynamic site names', (path) => {
+    expect(source(path)).toContain('normalizeVisibleSiteName')
+  })
+
+  it('rebrands dynamic compliance phrases while preserving the backend contract', () => {
+    const complianceSource = source('frontend/src/stores/adminCompliance.ts')
+
+    expect(complianceSource).toContain('replaceVisibleUpstreamBrand')
+    expect(complianceSource).toContain('rawExpectedPhrase.value')
   })
 })

@@ -56,15 +56,13 @@
 import { computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
+import { normalizeVisibleSiteName } from '@/utils/siteBrand'
 import BrandWordmark from '@/components/brand/BrandWordmark.vue'
 import PixelCoconutMark from '@/components/brand/PixelCoconutMark.vue'
 
 const appStore = useAppStore()
 
-const siteName = computed(() => {
-  const name = appStore.siteName || ''
-  return name && name !== 'Sub2API' ? name : 'coococode'
-})
+const siteName = computed(() => normalizeVisibleSiteName(appStore.siteName))
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'Minimal pixel coconut access with calm operational control.')
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)

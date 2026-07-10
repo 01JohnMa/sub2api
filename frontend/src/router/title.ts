@@ -1,10 +1,10 @@
 import { i18n } from '@/i18n'
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
 import type { CustomMenuItem } from '@/types'
+import { normalizeVisibleSiteName } from '@/utils/siteBrand'
 
 export function normalizeDocumentSiteName(siteName?: string): string {
-  const normalized = typeof siteName === 'string' && siteName.trim() ? siteName.trim() : 'coococode'
-  return normalized === 'Sub2API' ? 'coococode' : normalized
+  return normalizeVisibleSiteName(siteName)
 }
 
 /**

@@ -125,12 +125,7 @@ const visible = computed(() => authStore.isAuthenticated && authStore.isAdmin &&
 const expectedPhrase = computed(() => complianceStore.expectedPhrase)
 const canSubmit = computed(() => typedPhrase.value.trim() === expectedPhrase.value)
 const currentDocument = computed(() => getLocale() === 'zh' ? zhDocument : enDocument)
-const documentUrl = computed(() => {
-  if (getLocale() === 'zh') {
-    return complianceStore.status?.document_url_zh || 'https://github.com/Wei-Shaw/sub2api/blob/main/docs/legal/admin-compliance.zh.md'
-  }
-  return complianceStore.status?.document_url_en || 'https://github.com/Wei-Shaw/sub2api/blob/main/docs/legal/admin-compliance.en.md'
-})
+const documentUrl = '/legal/admin-compliance'
 const inputError = computed(() => {
   if (!attemptedSubmit.value || canSubmit.value) {
     return ''

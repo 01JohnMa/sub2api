@@ -139,15 +139,15 @@ import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import BrandWordmark from '@/components/brand/BrandWordmark.vue'
 import PixelCoconutMark from '@/components/brand/PixelCoconutMark.vue'
 import { sanitizeUrl } from '@/utils/url'
+import { normalizeVisibleSiteName } from '@/utils/siteBrand'
 
 const authStore = useAuthStore()
 const appStore = useAppStore()
 
 // Site settings - directly from appStore (already initialized from injected config)
-const siteName = computed(() => {
-  const name = appStore.cachedPublicSettings?.site_name || appStore.siteName || ''
-  return name && name !== 'Sub2API' ? name : 'coococode'
-})
+const siteName = computed(() =>
+  normalizeVisibleSiteName(appStore.cachedPublicSettings?.site_name || appStore.siteName)
+)
 const siteLogo = computed(() =>
   sanitizeUrl(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '', {
     allowRelative: true,

@@ -5,11 +5,14 @@
     <iframe
       v-if="isHomeContentUrl"
       :src="homeContent.trim()"
+      :title="t('home.coococode.customContentFrameTitle', { siteName })"
       class="h-screen w-full border-0"
+      sandbox="allow-forms allow-popups allow-scripts"
+      referrerpolicy="strict-origin-when-cross-origin"
       allowfullscreen
     ></iframe>
-    <!-- HTML mode - SECURITY: homeContent is admin-only setting, XSS risk is acceptable -->
-    <div v-else v-html="homeContent"></div>
+    <!-- HTML mode -->
+    <div v-else v-html="sanitizedHomeContent"></div>
   </div>
 
   <!-- Compact Home Page -->
@@ -82,46 +85,50 @@
   </div>
 
   <div v-else class="coconut-page">
-    <div class="coconut-browser" aria-label="coococode true token landing page">
+    <div class="coconut-browser" :aria-label="t('home.coococode.pageLabel')">
       <main class="page-shell">
-        <nav class="main-nav" aria-label="主导航">
+        <nav class="main-nav" :aria-label="t('home.coococode.navigationLabel')">
           <div class="brand-lockup">
             <img
               v-if="siteLogo"
               :src="siteLogo"
-              alt="Logo"
+              :alt="t('home.coococode.siteLogoAlt', { siteName })"
               class="brand-logo"
             />
             <span v-else class="brand-logo-mark">
-              <PixelCoconutMark size="sm" variant="mono" :label="`${siteName} coconut mark`" />
+              <PixelCoconutMark
+                size="sm"
+                variant="mono"
+                :label="t('home.coococode.siteMarkLabel', { siteName })"
+              />
             </span>
             <span class="wordmark"><BrandWordmark :text="siteName" size="inherit" /></span>
           </div>
 
           <div class="nav-actions">
-            <LocaleSwitcher />
-            <router-link class="nav-cta" :to="entryPath">开始畅饮</router-link>
+            <LocaleSwitcher fixed-light />
+            <router-link class="nav-cta" :to="entryPath">{{ t('home.coococode.start') }}</router-link>
           </div>
         </nav>
 
         <section id="home" class="hero-wrap" aria-labelledby="hero-title">
           <aside class="side-banner">
-            <span>真 Token · 真用量 · 真结算</span>
+            <span>{{ t('home.coococode.sideBanner') }}</span>
           </aside>
 
           <div class="hero">
             <div class="hero-copy">
               <span class="stamp">coococode.com/v1</span>
               <h1 id="hero-title">
-                正宗海岛中转站
-                <span>不用假 Token 掺水</span>
+                {{ t('home.coococode.heroTitle') }}
+                <span>{{ t('home.coococode.heroEmphasis') }}</span>
               </h1>
               <p class="lead">
                 {{ siteSubtitle }}
               </p>
               <div class="actions">
                 <router-link class="button primary" :to="entryPath">
-                  开始畅饮 <span class="arrow">→</span>
+                  {{ t('home.coococode.start') }} <span class="arrow">→</span>
                 </router-link>
               </div>
             </div>
@@ -130,17 +137,17 @@
               <div class="terminal-card">
                 <div class="terminal-top">
                   <span class="terminal-dots"><i></i><i></i><i></i></span>
-                  <strong>coococode live token</strong>
+                  <strong>{{ t('home.coococode.terminalTitle') }}</strong>
                 </div>
                 <div class="terminal-lines">
                   <p class="typing-line">$ curl /v1/responses -H "key=***"</p>
-                  <p class="typing-line">200 OK · real usage returned</p>
+                  <p class="typing-line">{{ t('home.coococode.terminalOk') }}</p>
                   <p class="typing-line">input 1,248 · output 386 tokens</p>
-                  <p class="typing-line">ledger synced ✓</p>
+                  <p class="typing-line">{{ t('home.coococode.terminalLedger') }}</p>
                 </div>
               </div>
 
-              <div class="burst">新鲜<br />直连</div>
+              <div class="burst">{{ t('home.coococode.fresh') }}<br />{{ t('home.coococode.direct') }}</div>
               <div class="island">
                 <div class="cloud"></div>
                 <div class="leaf one"></div>
@@ -159,42 +166,42 @@
           </div>
         </section>
 
-        <section class="proof-row" aria-label="核心卖点">
+        <section class="proof-row" :aria-label="t('home.coococode.proofLabel')">
           <article class="proof-card">
             <div class="icon-box">T</div>
             <div>
-              <h2>真 Token 计数</h2>
-              <p>展示请求实际返回用量；不把空气塞进账单，不拿假数字糊弄开发者。</p>
+              <h2>{{ t('home.coococode.proofTokenTitle') }}</h2>
+              <p>{{ t('home.coococode.proofTokenDescription') }}</p>
             </div>
           </article>
           <article class="proof-card">
             <div class="icon-box">{}</div>
             <div>
-              <h2>SDK 原样可用</h2>
-              <p>OpenAI 风格客户端换 base URL 和 key 即可，减少迁移和排障成本。</p>
+              <h2>{{ t('home.coococode.proofSdkTitle') }}</h2>
+              <p>{{ t('home.coococode.proofSdkDescription') }}</p>
             </div>
           </article>
           <article class="proof-card">
             <div class="icon-box">↯</div>
             <div>
-              <h2>失败不装成功</h2>
-              <p>日志、错误、余额和额度放在明面上；该报错就报错，该对账就对账。</p>
+              <h2>{{ t('home.coococode.proofErrorTitle') }}</h2>
+              <p>{{ t('home.coococode.proofErrorDescription') }}</p>
             </div>
           </article>
         </section>
 
-        <section id="usage" class="usage-panel" aria-label="模型和用量">
+        <section id="usage" class="usage-panel" :aria-label="t('home.coococode.usageLabel')">
           <div class="panel-head">
-            <strong>真用量看板</strong>
-            <span>请求、token、余额、错误日志，一张台账说清楚</span>
+            <strong>{{ t('home.coococode.usageTitle') }}</strong>
+            <span>{{ t('home.coococode.usageDescription') }}</span>
           </div>
         </section>
 
-        <footer id="pricing" class="ticker" aria-label="底部能力条">
-          <span><i>/v1</i> OpenAI-compatible</span>
-          <span><i>T</i> 真 Token 台账</span>
-          <span><i>¥</i> 透明预付余额</span>
-          <span><i>!</i> 错误日志可查</span>
+        <footer id="pricing" class="ticker" :aria-label="t('home.coococode.capabilitiesLabel')">
+          <span><i>/v1</i> {{ t('home.coococode.compatible') }}</span>
+          <span><i>T</i> {{ t('home.coococode.tokenLedger') }}</span>
+          <span><i>¥</i> {{ t('home.coococode.prepaidBalance') }}</span>
+          <span><i>!</i> {{ t('home.coococode.errorLogs') }}</span>
         </footer>
       </main>
     </div>
@@ -204,6 +211,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import DOMPurify from 'dompurify'
 import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -222,11 +230,7 @@ const siteName = computed(() => {
   return name && name !== 'Sub2API' ? name : 'coococode'
 })
 const siteLogo = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
-const siteSubtitle = computed(
-  () =>
-    appStore.cachedPublicSettings?.site_subtitle ||
-    'OpenAI-compatible API 网关，按真实请求返回、真实 token 用量、真实日志记录来对账。base URL 一换就能跑，账单别靠玄学。'
-)
+const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || t('home.coococode.defaultSubtitle'))
 const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''))
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
 const hasHomeContent = computed(() => homeContent.value.trim().length > 0)
@@ -236,6 +240,13 @@ const isHomeContentUrl = computed(() => {
   const content = homeContent.value.trim()
   return content.startsWith('http://') || content.startsWith('https://')
 })
+const sanitizedHomeContent = computed(() =>
+  DOMPurify.sanitize(homeContent.value, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ['iframe', 'object', 'embed'],
+    FORBID_ATTR: ['srcdoc']
+  })
+)
 
 // Theme
 const isDark = ref(document.documentElement.classList.contains('dark'))

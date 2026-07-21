@@ -393,6 +393,18 @@ function persistPendingOAuthSession(provider: string, redirect?: string): void {
   })
 }
 
+function serializePendingAdoptionDecision(): Record<string, boolean> {
+  const payload: Record<string, boolean> = {}
+  const decision = pendingAdoptionDecision.value
+  if (typeof decision?.adoptDisplayName === 'boolean') {
+    payload.adopt_display_name = decision.adoptDisplayName
+  }
+  if (typeof decision?.adoptAvatar === 'boolean') {
+    payload.adopt_avatar = decision.adoptAvatar
+  }
+  return payload
+}
+
 // ==================== Send Code ====================
 
 async function sendCode(): Promise<void> {
@@ -506,10 +518,9 @@ async function handleVerify(): Promise<void> {
           email: email.value,
           password: password.value,
           verify_code: verifyCode.value.trim(),
-          invitation_code: invitationCode.value || undefined,
+          ...(invitationCode.value ? { invitation_code: invitationCode.value } : {}),
           ...oauthAffiliatePayload(affCode.value || loadAffiliateReferralCode()),
-          adopt_display_name: pendingAdoptionDecision.value?.adoptDisplayName,
-          adopt_avatar: pendingAdoptionDecision.value?.adoptAvatar
+          ...serializePendingAdoptionDecision()
         }
       )
       if (isPendingOAuthSessionResponse(data)) {

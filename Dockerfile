@@ -7,7 +7,7 @@
 # =============================================================================
 
 ARG NODE_IMAGE=node:24-alpine
-ARG GOLANG_IMAGE=golang:1.26.4-alpine
+ARG GOLANG_IMAGE=golang:1.26.5-alpine
 ARG ALPINE_IMAGE=alpine:3.21
 ARG POSTGRES_IMAGE=postgres:18-alpine
 ARG GOPROXY=https://goproxy.cn,direct
@@ -25,6 +25,8 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 
 # Install dependencies first (better caching)
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY frontend/vendor/ ./vendor/
+RUN echo "8dc73fc3b00203e72d176e85b50938627c7b086e607c682e8d3c22c02bb99fe8  vendor/xlsx-0.20.3.tgz" | sha256sum -c -
 RUN pnpm install --frozen-lockfile
 
 # Copy frontend source and build

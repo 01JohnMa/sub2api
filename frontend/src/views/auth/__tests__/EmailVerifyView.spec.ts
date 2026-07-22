@@ -136,7 +136,7 @@ describe('EmailVerifyView', () => {
       'register_data',
       JSON.stringify({
         email: 'fresh@example.com',
-        password: 'secret-123'
+        password: 'secret-123',
       })
     )
 

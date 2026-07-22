@@ -18,11 +18,11 @@
             v-if="siteLogo"
             class="mb-5 inline-flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg border border-primary-200 bg-white shadow-sm"
           >
-            <img :src="siteLogo" alt="Logo" class="h-full w-full object-contain" />
+            <img :src="siteLogo" :alt="t('auth.logoAlt', { siteName })" class="h-full w-full object-contain" />
           </div>
-          <PixelCoconutMark v-else class="mb-5" size="lg" variant="sprout" :label="`${siteName} young coconut mark`" />
+          <PixelCoconutMark v-else class="mb-5" size="lg" variant="sprout" :label="t('auth.siteMarkLabel', { siteName })" />
           <div class="text-xs font-medium uppercase tracking-[0.22em] text-primary-700">
-            Pixel coconut gateway
+            {{ t('auth.brandEyebrow') }}
           </div>
           <h1 class="mt-2 text-4xl font-semibold tracking-tight text-accent-950">
             <BrandWordmark :text="siteName" size="inherit" />
@@ -45,7 +45,7 @@
 
       <!-- Copyright -->
       <div class="mt-8 text-center text-xs text-accent-500">
-        &copy; {{ currentYear }} <BrandWordmark :text="siteName" size="inline" />. All rights reserved.
+        &copy; {{ currentYear }} <BrandWordmark :text="siteName" size="inline" />. {{ t('auth.allRightsReserved') }}
       </div>
       </section>
     </div>
@@ -54,19 +54,21 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
 import BrandWordmark from '@/components/brand/BrandWordmark.vue'
 import PixelCoconutMark from '@/components/brand/PixelCoconutMark.vue'
 
 const appStore = useAppStore()
+const { t } = useI18n()
 
 const siteName = computed(() => {
   const name = appStore.siteName || ''
   return name && name !== 'Sub2API' ? name : 'coococode'
 })
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
-const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'Minimal pixel coconut access with calm operational control.')
+const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || t('auth.defaultSiteSubtitle'))
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
 const currentYear = computed(() => new Date().getFullYear())

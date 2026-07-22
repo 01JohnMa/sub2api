@@ -37,6 +37,15 @@
           </div>
 
           <div class="nav-actions">
+            <a
+              v-if="docUrl"
+              :href="docUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="nav-link"
+            >
+              {{ t('home.docs') }}
+            </a>
             <LocaleSwitcher fixed-light />
             <router-link class="nav-cta" :to="entryPath">{{ t('home.coococode.start') }}</router-link>
           </div>
@@ -147,6 +156,7 @@ import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import BrandWordmark from '@/components/brand/BrandWordmark.vue'
 import PixelCoconutMark from '@/components/brand/PixelCoconutMark.vue'
+import { sanitizeUrl } from '@/utils/url'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -157,8 +167,9 @@ const siteName = computed(() => {
   const name = appStore.cachedPublicSettings?.site_name || appStore.siteName || ''
   return name && name !== 'Sub2API' ? name : 'coococode'
 })
-const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
+const siteLogo = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || t('home.coococode.defaultSubtitle'))
+const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''))
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
 
 const isHomeContentUrl = computed(() => {
@@ -260,6 +271,7 @@ onMounted(() => {
   gap: 10px;
 }
 
+.nav-link,
 .nav-cta {
   display: inline-flex;
   align-items: center;
@@ -274,6 +286,10 @@ onMounted(() => {
   font-weight: 1000;
   text-decoration: none;
   white-space: nowrap;
+}
+
+.nav-link {
+  font-size: 16px;
 }
 
 .nav-cta {

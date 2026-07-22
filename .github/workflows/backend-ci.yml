@@ -8,6 +8,15 @@ permissions:
   contents: read
 
 jobs:
+  shell:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check deployment scripts
+        run: |
+          /bin/bash -n deploy/apple-container.sh
+          /bin/bash deploy/tests/apple-container-test.sh
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -33,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 9
       - name: Setup Node.js

@@ -8,6 +8,11 @@ const componentPath = resolve(dirname(fileURLToPath(import.meta.url)), '../AppSi
 const componentSource = readFileSync(componentPath, 'utf8')
 const stylePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../style.css')
 const styleSource = readFileSync(stylePath, 'utf8')
+const versionBadgePath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../common/VersionBadge.vue'
+)
+const versionBadgeSource = readFileSync(versionBadgePath, 'utf8')
 
 describe('AppSidebar custom SVG styles', () => {
   it('does not override uploaded SVG fill or stroke colors', () => {
@@ -16,6 +21,29 @@ describe('AppSidebar custom SVG styles', () => {
     expect(componentSource).toContain('display: block;')
     expect(componentSource).not.toContain('stroke: currentColor;')
     expect(componentSource).not.toContain('fill: none;')
+  })
+})
+
+describe('AppSidebar scroll position persistence', () => {
+  it('binds a template ref to the sidebar nav element', () => {
+    expect(componentSource).toContain('ref="sidebarNavRef"')
+    expect(componentSource).toContain('sidebar-nav')
+  })
+
+  it('declares sidebarNavRef in script setup', () => {
+    expect(componentSource).toContain("const sidebarNavRef = ref<HTMLElement | null>(null)")
+  })
+
+  it('saves scroll position on beforeUnmount', () => {
+    expect(componentSource).toContain('onBeforeUnmount')
+    expect(componentSource).toContain('appStore.sidebarScrollTop')
+    expect(componentSource).toContain('sidebarNavRef.value.scrollTop')
+  })
+
+  it('restores scroll position on mount', () => {
+    expect(componentSource).toContain('onMounted')
+    expect(componentSource).toContain('appStore.sidebarScrollTop')
+    expect(componentSource).toContain('nextTick')
   })
 })
 
@@ -34,5 +62,14 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch).not.toBeNull()
     expect(sidebarHeaderBlockMatch?.[0]).not.toContain('@apply overflow-hidden;')
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
+  })
+
+  it('contains long version labels without clipping the dropdown', () => {
+    expect(versionBadgeSource).toContain('<div class="relative min-w-0 max-w-full">')
+    expect(versionBadgeSource).toContain('max-w-full items-center gap-1.5 overflow-hidden')
+    expect(versionBadgeSource).toContain('class="min-w-0 truncate font-medium"')
+    expect(versionBadgeSource).toContain(':title="currentVersionLabel"')
+    expect(versionBadgeSource).toContain('const formatVersionLabel = (value?: string) =>')
+    expect(versionBadgeSource).toContain("normalized.startsWith('v') ? normalized : `v${normalized}`")
   })
 })

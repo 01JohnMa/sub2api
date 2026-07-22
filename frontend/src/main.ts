@@ -5,6 +5,7 @@ import router from './router'
 import { normalizeDocumentSiteName } from './router/title'
 import i18n, { initI18n } from './i18n'
 import { useAppStore } from '@/stores/app'
+import { updateFavicon } from '@/utils/branding'
 import './style.css'
 
 function initThemeClass() {
@@ -33,6 +34,7 @@ async function bootstrap() {
   if (initialSiteName !== 'coococode') {
     document.title = `${initialSiteName} - AI API Gateway`
   }
+  updateFavicon(appStore.siteLogo)
 
   await initI18n()
 

@@ -180,6 +180,10 @@ func (s *GatewayService) ForwardAsChatCompletions(
 
 	// 13. Extract reasoning effort from CC request body
 	reasoningEffort := extractCCReasoningEffortFromBody(body)
+	// 国产模型默认 effort 补充：本路径是客户端 CC 请求 → Anthropic 上游，
+	// 如果上游是 passback-required 国产模型 (Kimi-anthropic / GLM-anthropic / MiniMax)
+	// 且客户端在 body 里传了 thinking.type=enabled，补中默认 effort。
+	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, body, mappedModel)
 
 	// 14. Handle normal response
 	// Read Anthropic SSE → convert to Responses events → convert to CC format
@@ -266,7 +270,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 				mergeAnthropicUsage(&usage, *event.Usage)
 			}
 			if event.Delta != nil && event.Delta.StopReason != "" && finalResp != nil {
-				finalResp.StopReason = event.Delta.StopReason
+				finalResp.StopReason = apicompat.AnthropicStopReasonPtr(event.Delta.StopReason)
 			}
 		}
 		if event.Type == "content_block_start" && event.ContentBlock != nil && finalResp != nil {

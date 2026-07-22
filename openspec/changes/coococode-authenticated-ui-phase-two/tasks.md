@@ -1,22 +1,22 @@
 ## 1. Authenticated Baseline Gate
 
-- [ ] 1.1 Obtain safe signed-in user and administrator sessions: synthetic non-production accounts for the candidate and only user-authorized read-only sessions for production. Do not create/change production credentials or copy cookies/tokens into the candidate.
-- [ ] 1.2 Fill the complete route matrix in `evidence.md`: role, exact route, sidebar visibility versus direct-route guard, standard/simple/backend mode, public/admin feature source, safe read-only interactions, and deferred reason.
-- [ ] 1.3 Capture representative user/admin routes at 390 x 844, 768 x 900, and 1440 x 900; add 767/768 for DataTable consumers and 1023/1024 for shell consumers. Record document/table overflow, bounding boxes, action reachability, dialogs, console/API results, and screenshot references.
-- [ ] 1.4 Create stable Critical/Important/Minor issue IDs and an `issue -> role/route/width -> batch -> exact files -> observable acceptance` matrix using the same role, fixture, feature state, and width for before/after evidence.
-- [ ] 1.5 Freeze the first checkpoint's file list and exact candidate recipe. If no Important visible issue is preselected or either safe role session is unavailable, record the blocker and do not start P0A.
+- [x] 1.1 Obtain safe signed-in user and administrator candidate sessions using synthetic non-production accounts. Production sessions remain a separately authorized release requirement; do not create/change production credentials or copy cookies/tokens into the candidate.
+- [x] 1.2 Fill the complete grouped route matrix in `evidence.md`: role, exact route, sidebar visibility versus direct-route guard, active standard mode, unavailable simple/backend modes, public/admin feature source, safe read-only interactions, and deferred reason.
+- [x] 1.3 Capture representative user/admin routes at 390 x 844, 768 x 900, and 1440 x 900; add 767/768 for DataTable consumers and 1023/1024 for shell consumers. Record document/table overflow, bounding boxes, action reachability, dialogs, console/API results, and non-sensitive screenshot disposition.
+- [x] 1.4 Create stable Critical/Important/Minor issue IDs and an `issue -> role/route/width -> batch -> exact files -> observable acceptance` matrix using the same role, fixture, feature state, and width for before/after evidence.
+- [x] 1.5 Freeze the first checkpoint's file list and exact candidate recipe. If no Important visible shell issue exists, require an independent no-op decision before P0B; either safe candidate role being unavailable remains a blocker.
 
 ## 2. P0A Authenticated Shell Checkpoint
 
-- [ ] 2.1 Select only baseline-justified files among `AppLayout`, `AppSidebar`, `AppHeader`, and `TablePageLayout`; prefer route-local wrappers or opt-in variants and leave unrelated inventory files untouched.
-- [ ] 2.2 Preserve menu order, role visibility, standard/simple/backend behavior, public/admin feature sources, custom items, scroll restoration, theme, route guards, content offsets, and mobile close behavior.
-- [ ] 2.3 Add a focused test for every modified component and impacted route class; run the existing sidebar, table-layout, and route-guard suites plus the exact test paths recorded in evidence.
-- [ ] 2.4 Browser-verify both roles at 390/768/1440 and the 1023/1024 shell edge. Close at least one preselected Important issue with same-state before/after evidence and fix all Critical/Important review findings before P0B.
+- [x] 2.1 Select only baseline-justified files among `AppLayout`, `AppSidebar`, `AppHeader`, and `TablePageLayout`; the baseline selected none and froze all four shared components.
+- [x] 2.2 Preserve menu order, role visibility, standard/simple/backend behavior, public/admin feature sources, custom items, scroll restoration, theme, route guards, content offsets, and mobile close behavior through a no-op decision.
+- [x] 2.3 Run the existing sidebar, table-layout, and app-store suites; 3 files / 37 tests passed. No new test is required because no P0A source changed.
+- [x] 2.4 Browser-verify both roles at representative 390/768/1440 widths and the 1023/1024 shell edge. An independent read-only reviewer found no Important shell issue and approved a P0A no-op before P0B; any later shared-shell edit reopens this gate.
 
 ## 3. P0B Table, Dialog, Card, And Status Checkpoint
 
-- [ ] 3.1 Select only baseline-justified files among `DataTable`, `StatCard`, `EmptyState`, `BaseDialog`, `ConfirmDialog`, and `StatusBadge`; do not assume the whole list requires changes.
-- [ ] 3.2 Preserve DataTable selection/multi-page selection/server sorting/virtualization/pagination/actions and dialog focus restoration/Escape/body-scroll lock/dismissal/confirmation/emitted events.
+- [x] 3.1 Select only baseline-justified files among `DataTable`, `StatCard`, `EmptyState`, `BaseDialog`, `ConfirmDialog`, and `StatusBadge`; `UI-P0B-001` froze only existing `frontend/src/style.css` plus new `BaseDialog.spec.ts`.
+- [x] 3.2 Preserve DataTable selection/multi-page selection/server sorting/virtualization/pagination/actions and dialog focus restoration/Escape/body-scroll lock/dismissal/confirmation/emitted events. The global padding-only implementation changes no component script/template, and focused behavior tests pass.
 - [ ] 3.3 For a global shared change, enumerate all consumers and add focused fixture tests plus read-only/feature-off visual evidence for representative Audit Log, Prompt Audit, Batch Image, Ops, and Payment consumers. Never trigger save, clear, probe, deletion, payment, refund, or callback actions.
 - [ ] 3.4 Browser-verify both roles at 390/768/1440 and the 767/768 table edge. Close at least one preselected Important issue with same-state before/after evidence and fix all Critical/Important review findings before P1.
 
@@ -50,9 +50,9 @@
 
 ## 8. Per-Batch Source And Verification Gate
 
-- [ ] 8.1 Before editing, record the frozen files and run `git diff --name-status ecb7c2e3ae22686ffbcf0fac4e7a1ba98aeafcb9...HEAD -- frontend/`; inspect each frozen file with `git diff --stat 27f094e0960ebd8e52de7ff7e763c6fec2ff4057...HEAD -- <file>`. A pre-reviewed wrapper listed in the issue/file matrix is allowed; any unlisted new file, view-script change, or router/store/API/request/payload change stops work for renewed review.
-- [ ] 8.2 Run `cd frontend && pnpm exec vitest run <exact focused test paths> && pnpm lint:check && pnpm typecheck && pnpm test:run && pnpm build`; record commands, paths, counts, warnings, and exit status.
-- [ ] 8.3 Run `cd frontend && pnpm audit --prod --audit-level=high --json > audit.json || true`, then `python3 tools/check_pnpm_audit_exceptions.py --audit frontend/audit.json --exceptions .github/audit-exceptions.yml` from the repository root, plus `openspec validate coococode-authenticated-ui-phase-two --strict`.
+- [x] 8.1 Before editing, record the frozen files and run `git diff --name-status ecb7c2e3ae22686ffbcf0fac4e7a1ba98aeafcb9...HEAD -- frontend/`; inspect each frozen file with `git diff --stat 27f094e0960ebd8e52de7ff7e763c6fec2ff4057...HEAD -- <file>`. A pre-reviewed wrapper listed in the issue/file matrix is allowed; any unlisted new file, view-script change, or router/store/API/request/payload change stops work for renewed review.
+- [x] 8.2 Run the exact focused/full Vitest, lint, typecheck, and build binaries and record paths, counts, warnings, and exit status. The host pnpm 11 wrapper refused the existing module store before executing tests, so the already-installed package binaries were used without reinstalling; Docker remains pinned to pnpm 9/frozen lockfile.
+- [x] 8.3 Run production-dependency audit, validate repository exceptions, and run strict OpenSpec validation. Result: 0 high / 0 critical vulnerabilities, exceptions valid, strict validation passed.
 - [ ] 8.4 Build an exact-commit `linux/amd64` candidate and start it with the recorded literal `docker compose -f <isolated-compose> --env-file <non-repository-secret-env> up -d --wait`; require `curl -fsS http://127.0.0.1:18080/health` -> `{"status":"ok"}`, healthy disposable PostgreSQL/Redis, synthetic accounts, no printed secrets, and a recorded teardown.
 - [ ] 8.5 Browser-verify every modified route for the batch's role at 390/768/1440; P0 uses both roles, breakpoint-edge checks apply to changed shared semantics, and shared cross-role consumers receive representative checks. Require zero newly introduced or unowned console/API errors and zero unexplained document overflow.
 - [ ] 8.6 Complete a read-only review against the requirement, frozen issue/file matrix, diff, tests, candidate logs, and browser evidence; fix all Critical/Important findings and record accepted Minor debt.

@@ -1,6 +1,6 @@
 # Phase-Two Frontend Evidence
 
-This file is the non-sensitive evidence index for the authenticated frontend work. It starts empty because no authorized user/admin baseline has yet been supplied for this change. Never record credentials, cookies, tokens, private URLs, production row contents, or personal data.
+This file is the non-sensitive evidence index for the authenticated frontend work. The implementation baseline below uses only disposable synthetic accounts in an isolated candidate. Production signed-in verification remains a separate, explicitly authorized release gate. Never record credentials, cookies, tokens, private URLs, production row contents, or personal data.
 
 ## Baseline Identity
 
@@ -8,10 +8,12 @@ This file is the non-sensitive evidence index for the authenticated frontend wor
 | --- | --- |
 | Base commit | `ecb7c2e3ae22686ffbcf0fac4e7a1ba98aeafcb9` |
 | Official comparison | `v0.1.162` / `27f094e0960ebd8e52de7ff7e763c6fec2ff4057` |
-| Candidate commit/image | Pending |
-| Candidate health URL/result | Pending; expected loopback `/health` body is `{"status":"ok"}` |
-| Synthetic user/admin fixture IDs | Pending; non-sensitive aliases only |
-| Production baseline authorization/time | Pending |
+| Candidate commit/image | Embedded commit `ecb7c2e3ae22686ffbcf0fac4e7a1ba98aeafcb9`; `ghcr.io/01johnma/sub2api:ui-redesign-ecb7c2e@sha256:2f7cc7bcdf2cc4b92ca79125b8417bf5a72c72c0c39433d000bd9d05396caf6e` |
+| Candidate health URL/result | Loopback `http://127.0.0.1:18080/health` -> `{"status":"ok"}`; application, disposable PostgreSQL, and disposable Redis all healthy with restart count `0` at recheck |
+| Synthetic user/admin fixture IDs | `candidate-user` and `candidate-admin`; credentials exist only in the active browser runtime and are neither printed nor written |
+| Candidate configuration | Standard mode; `backend_mode=false`, Payment/Risk Control/Available Channels/Affiliate/TOTP/custom menu disabled, Channel Monitor enabled; no production configuration was copied |
+| Baseline window | Candidate started `2026-07-22T07:01:19Z`; authenticated browser capture started `2026-07-22T07:08:18Z` |
+| Production baseline authorization/time | Pending; candidate evidence does not satisfy production signed-in verification |
 
 ## Route And Feature Baseline
 
@@ -19,7 +21,17 @@ For each authenticated route, add one row or a link to its grouped rows.
 
 | Role | Route | Standard/simple/backend result | Sidebar visibility vs direct-route guard | Feature source/state | Safe interactions | Candidate commit/time | Result |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Pending | Pending | Pending | Pending | Pending | Read-only only | Pending | Pending |
+| User | `/dashboard`, `/keys`, `/usage`, `/profile`, `/monitor`, `/subscriptions`, `/redeem` | Standard mode rendered; simple/backend modes were not enabled because changing candidate configuration is outside this read-only baseline | Core entries follow the current sidebar rules; direct routes remained reachable | Public settings; Channel Monitor on, other listed routes unflagged | Navigate, scroll, open non-mutating UI only | `ecb7c2e`, `2026-07-22T07:08Z+` | Reachable; no document overflow at 390 in the grouped route sweep |
+| User | `/available-channels` | Standard mode rendered | Direct route reachable although the feature is absent from the sidebar when disabled | Public `available_channels=false` | Read-only | Same | Reachable; no document overflow |
+| User | `/affiliate` | Standard mode rendered | Direct route reachable although the feature is absent from the sidebar when disabled | Public `affiliate=false` | Read-only and copy-button visibility only; copy not required for baseline | Same | Reachable; Important 390 px overflow recorded as `UI-P3U-AFF-001` |
+| User | `/batch-image` and alias `/docs/batch-image` | Standard mode rendered | Direct route reachable while current eligibility keeps it out of the sidebar | Eligibility/account-group source left unchanged | Read-only | Same | Reachable; deferred feature surface |
+| User | `/purchase`, `/orders`, `/payment/qrcode` | Standard mode | Guard redirects direct navigation to `/dashboard`; sidebar entries hidden | Public `payment=false` | Navigation only | Same | Expected guarded redirect |
+| User | `/custom/nonexistent` | Standard mode | Direct route remains on the custom route | Public custom menu count `0` | Read-only | Same | Missing-page state rendered; deferred |
+| Admin | `/admin/dashboard`, `/admin/users`, `/admin/groups`, `/admin/channels/pricing`, `/admin/channels/monitor`, `/admin/subscriptions`, `/admin/accounts`, `/admin/announcements`, `/admin/proxies`, `/admin/redeem`, `/admin/promo-codes`, `/admin/settings`, `/admin/usage`, `/admin/audit-logs` | Standard mode rendered; simple/backend modes not enabled | Direct routes reachable under administrator guard; sidebar filtering left unchanged | Existing public/admin sources; Channel Monitor on | Navigate, scroll, open/close safe dialogs only | Same | Reachable; no grouped 390 px document overflow; Users dialog issue recorded separately |
+| Admin | `/admin/ops` | Standard mode rendered | Direct route reachable | Existing Ops source left unchanged | Read-only | Same | Important 390 px overflow and very long page recorded as `UI-DEFER-OPS-001` |
+| Admin | `/admin/risk-control`, `/admin/prompt-audit` | Standard mode | Guard redirects direct navigation to `/admin/settings` | Public `risk_control=false` | Navigation only | Same | Expected guarded redirect; feature surfaces not opened |
+| Admin | `/admin/affiliates/invites`, `/admin/affiliates/rebates`, `/admin/affiliates/transfers` | Standard mode rendered | Direct routes reachable although affiliate navigation is disabled | Public `affiliate=false` | Read-only | Same | Reachable; deferred P3-admin surfaces |
+| Admin | `/admin/orders/dashboard`, `/admin/orders`, `/admin/orders/plans` | Standard mode | Guard redirects direct navigation to `/admin/dashboard` | Public `payment=false` | Navigation only | Same | Expected guarded redirect |
 
 ## Issue-To-Batch Acceptance Matrix
 
@@ -27,13 +39,26 @@ Use stable IDs (`UI-P0A-001`, `UI-P0B-001`, `UI-P1-001`, and so on). Before/afte
 
 | Issue ID | Severity | Role/route | Feature/fixture state | Viewport | Baseline observation | Owning batch | Frozen files | Observable acceptance | Before screenshot | After screenshot | Disposition |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
+| `UI-P0B-001` | Important | Admin `/admin/users`, edit-user `BaseDialog`; global shared primitive | Synthetic admin/user; candidate standard-mode feature state recorded in Baseline Identity | 390 x 844 | Dialog bounds `left=8`, `right=382`, `width=374`; only 8 px viewport inset, below the 16 px mobile target | P0B | `frontend/src/style.css`; new focused `frontend/src/components/common/__tests__/BaseDialog.spec.ts` | `left >= 16`, `right <= innerWidth - 16`, `width <= innerWidth - 32`, document contained; body/footer non-overlap; Escape, focus restoration, body lock, close events unchanged | Captured in the active candidate browser; not committed because fixture identifiers are visible | Pending | Accepted for P0B |
+| `UI-P1-KEYS-001` | Important | User `/keys`, empty fixture | Synthetic user; current visible-column preference | 768 x 900 | Nine-column header compresses to wrapper width and Chinese labels wrap character by character; no useful wrapper scroll range | P1 | `frontend/src/views/user/KeysView.vue`; focused `KeysView.spec.ts` update | Headers do not break per character; table wrapper alone may scroll horizontally; document remains contained; sorting/columns/pagination/actions unchanged | Active browser capture, not committed | Pending | Accepted for P1 |
+| `UI-P1-DASH-001` | Minor | User `/dashboard`, spend statistics | Synthetic user, empty/default totals | 390 x 844 | Actual/standard price separator can wrap so `/ $...` becomes an orphaned continuation | P1 | `frontend/src/components/user/dashboard/UserDashboardStats.vue`; new focused `UserDashboardStats.spec.ts` | Each actual-price/separator/standard-price group wraps as one unit, never leaving the separator alone; no document overflow; values/tooltips unchanged | Active browser capture, not committed | Pending | Accepted Minor; must not displace Important work |
+| `UI-P3U-AFF-001` | Important | User `/affiliate` | Synthetic user; Affiliate disabled in sidebar but direct route currently reachable; long generated link | 390 x 844 | `documentElement` about `542/382`; invite-code/link flex rows expand to about 501 px and copy buttons leave the viewport | P3-user | `frontend/src/views/user/AffiliateView.vue`; new focused `AffiliateView.spec.ts` | Document scroll width equals client width; both rows stay in content bounds; original copy behavior and direct-route semantics unchanged | Active browser capture, not committed | Pending | Accepted for P3-user; do not pull across batch ordering |
+| `UI-DEFER-OPS-001` | Important | Admin `/admin/ops` | Synthetic admin; current Ops settings/data | 390 x 844 | `documentElement` about `596/382`; fixed-width filter row is about 516 px; page height about 33,228 px | Separate deferred Ops change | Not frozen | No document overflow; controls remain reachable; page density/virtualization require separate contract | Active browser capture, not committed | Pending | Deferred; not owned by P0B/P1/P2/P3 |
 
 ## Geometry And Browser Results
 
 | Batch | Role/route | Viewport | Document client/scroll width | Table wrapper client/scroll width | Dialog bounds | Header/filter/table-header bounds | Console/API window and allowlist | Screenshot | Result |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
+| P0A baseline | User/admin shell | 390/768/1440 plus 1023/1024 edge | No unexplained shell-level document overflow; 1023 mobile drawer/full-width main, 1024 fixed 256 px sidebar/about 760 px main | Representative table checks below | N/A | Sidebar/main/header offsets agree at the `lg` edge | No new console/API errors in shell sweep | Active browser capture, not committed | No-op approved by read-only source/test audit |
+| P0B baseline | Admin `/admin/users`, edit dialog | 390 x 844 | Document remained contained | N/A | `left=8`, `right=382`, `width=374`, `top=21`, `bottom=823`; footer `top=768`, `bottom=810` | Body/footer visual crowding noted but overlap not proven; only inset is accepted for this batch | No new error tied to opening/closing dialog | Active browser capture, not committed | Fails 16 px inset target |
+| P0B baseline | Admin `/admin/users` | 767 x 900 | `767/767`; document contained | Card mode at 767 | N/A | Breakpoint switches before the table layout | No new error | Active browser capture, not committed | Contained |
+| P0B baseline | Admin `/admin/users` | 768 x 900 | `768/768`; document contained | Actual table about 1368 px inside an explicit wrapper; wrapper-only horizontal scrolling | N/A | Table mode at 768 | No new error | Active browser capture, not committed | Contained |
+| P1 baseline | User `/keys` | 768 x 900 | `760/760`; document contained | About `708/708`; nine columns compress instead of producing useful wrapper scroll | N/A | Header labels wrap per character | No new error | Active browser capture, not committed | `UI-P1-KEYS-001` |
+| P1 baseline | User `/dashboard` | 390 / 768 / 1440 | `382/382`, `760/760`, `1432/1432`; heights about `2173`, `2051`, `1178` | N/A | N/A | Spend pair wraps awkwardly only at 390 | No new error | Active browser capture, not committed | `UI-P1-DASH-001` |
+| P3-user baseline | User `/affiliate` | 390 x 844 | About `382/542` | N/A | N/A | Code/link flex rows about 501 px | No new error | Active browser capture, not committed | `UI-P3U-AFF-001` |
+| Deferred baseline | Admin `/admin/ops` | 390 x 844 | About `382/596`; height about 33,228 px | N/A | N/A | Filter row about 516 px | No new error | Active browser capture, not committed | `UI-DEFER-OPS-001` |
+
+Baseline warning: on the initial Admin Channels load around `2026-07-22T07:10Z`, `GET /api/v1/admin/settings/web-search-emulation` returned one `404`; immediate later requests returned `200`. Candidate logs contain no related `5xx`, fatal, or panic. This is an unowned upstream-baseline warning, not an approved release allowlist; every modified-batch rerun must prove it is not newly introduced and the release gate remains closed if it becomes reproducible or unexplained.
 
 Existing errors may be allowlisted only with timestamp, route, source, reproduction, owner, and proof that the batch did not introduce them. Every release requires zero new or unowned console errors, unhandled rejections, and failed API requests.
 
@@ -46,15 +71,28 @@ git diff --name-status ecb7c2e3ae22686ffbcf0fac4e7a1ba98aeafcb9...HEAD -- fronte
 git diff --stat 27f094e0960ebd8e52de7ff7e763c6fec2ff4057...HEAD -- <each-frozen-file>
 ```
 
+Global dialog consumer inventory is reproducible with:
+
+```text
+rg -l '<(BaseDialog|ConfirmDialog)\b' frontend/src -g '*.vue' | wc -l
+rg -o '<(BaseDialog|ConfirmDialog)\b' frontend/src -g '*.vue' | wc -l
+```
+
+Baseline result: 80 Vue files and 132 tag instances. The mandatory high-risk representative set is Audit (`AuditLogView.vue`), Prompt Audit (`PromptAuditView.vue` plus dialog components), Batch Image (`BatchImageGuideView.vue`), Ops (`OpsDashboard.vue` plus dialog components), and Payment (`PaymentQRDialog.vue`, `AdminRefundDialog.vue`). These pages are for safe open/scroll/close/Escape checks only; no confirm, save, clear, delete, probe, payment, refund, or callback action is authorized.
+
 | Batch | Accepted issue IDs | Frozen files | Shared consumers | New upstream-owned file? | Reviewer decision |
 | --- | --- | --- | --- | --- | --- |
-| Pending | Pending | Pending | Pending | No | Pending |
+| P0A | None; baseline found no Important shell issue | None; freeze `AppLayout.vue`, `AppSidebar.vue`, `AppHeader.vue`, `TablePageLayout.vue`, shell store/router semantics | User/admin shell and all authenticated routes | No | No-op approved; any later shell edit requires renewed review |
+| P0B | `UI-P0B-001` only | `frontend/src/style.css`; `frontend/src/components/common/__tests__/BaseDialog.spec.ts` | All `BaseDialog` and `ConfirmDialog` consumers; representative Audit Log, Prompt Audit, Batch Image, Ops, and Payment checks required | No new upstream-owned source file; modify existing `style.css` and add one local focused test | `APPROVE_SCOPE`; 0 Critical, 0 Important; multi-dialog body-lock reference counting remains an unproven pre-existing Minor boundary |
 
 ## Commands And Results
 
 | Batch | Focused Vitest paths/result | lint/typecheck/full Vitest/build | dependency/OpenSpec checks | Exact candidate start/seed/health/teardown | Logs/health/restarts | Result |
 | --- | --- | --- | --- | --- | --- | --- |
-| Pending | Pending | Pending | Pending | Pending | Pending | Pending |
+| Baseline/P0A | `AppSidebar.spec.ts`, `TablePageLayout.spec.ts`, `app.spec.ts`: 3 files / 37 tests passed | Not yet run for P0B | `openspec validate ... --strict` passed before execution; rerun pending after evidence update | `/private/tmp/coocode-v0162-candidate.compose.yml`; `docker compose -p coocode-v0162-candidate -f /private/tmp/coocode-v0162-candidate.compose.yml up -d --wait --no-deps sub2api`; candidate uses disposable data services and runtime-only synthetic credentials | App/PostgreSQL/Redis healthy, all restart `0`; loopback health `{"status":"ok"}` | Baseline ready; candidate remains running for same-state after checks |
+| P0B pre-candidate | New `BaseDialog.spec.ts`: 1 file / 4 tests; P0A + Prompt Audit + Payment representative set: 7 files / 59 tests; all passed | ESLint passed; `vue-tsc --noEmit` passed; full Vitest 186 files / 1,257 tests passed; production build passed with existing Browserslist, dynamic-import, and chunk-size warnings | npm audit: 0 high / 0 critical; repository exceptions validated; strict OpenSpec and `git diff --check` passed | Pending exact-commit image build and isolated candidate replacement | Pending post-replacement health/log/restart window | Static/unit/build gate passed |
+
+The first literal `pnpm exec vitest` attempt did not run tests: the host pnpm 11 wrapper rejected the existing pnpm-managed module directory and attempted a network reinstall. No dependency install or lockfile change was accepted. Verification then used the repository's already-installed exact binaries (`node_modules/.bin/vitest`, `eslint`, `vue-tsc`, and `vite`); the Docker candidate build remains pinned to pnpm 9 with `--frozen-lockfile`.
 
 The exact candidate record includes sanitized compose/env artifact paths, image tag/digest/embedded commit, loopback URL, disposable PostgreSQL/Redis identity, synthetic role aliases, literal start command, fixture seed command, health body, and teardown confirmation. Secret values are omitted.
 
@@ -63,6 +101,8 @@ The exact candidate record includes sanitized compose/env artifact paths, image 
 | Batch | Review input commit/diff | Validation evidence | Critical | Important | Minor | Decision |
 | --- | --- | --- | --- | --- | --- | --- |
 | Plan revision | This OpenSpec change | Strict validation and diff check passed; two independent read-only reviewers approved | 0 open | 0 open | 2 wording/status findings fixed | `APPROVE_PLAN` |
+| P0A baseline | `09c7ffecf51fd801a0ca1638e2db81693e37c4ac` plus read-only source/test audit | 1023/1024 browser geometry; 3 files / 37 focused tests passed | 0 | 0 | Existing tests are not sufficient protection for a future shared-shell edit | `NO_OP`; shared shell frozen |
+| P0B scope gate | Baseline evidence, issue/file matrix, 80-file/132-instance consumer inventory, and frozen two-file code scope | Strict OpenSpec and diff check passed; route/alias/upstream wording findings fixed and re-reviewed | 0 | 0 | Multi-dialog body-lock risk is pre-existing and unproven; stop for renewed review only if candidate reproduction occurs | `APPROVE_SCOPE` |
 
 ## Release And Rollback
 

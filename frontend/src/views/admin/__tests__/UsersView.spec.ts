@@ -82,6 +82,7 @@ const DataTableStub = {
   template: `
     <div>
       <div data-test="columns">{{ columns.map(col => col.key).join(',') }}</div>
+      <div data-test="columns-meta">{{ JSON.stringify(columns.map(col => ({ key: col.key, class: col.class ?? '' }))) }}</div>
       <div data-test="row-order">{{ data.map(row => row.email).join(',') }}</div>
       <div data-test="selected-keys">{{ (selectedKeys || []).join(',') }}</div>
       <button data-test="sort-last-used" @click="$emit('sort', 'last_used_at', 'desc')">sort</button>
@@ -184,6 +185,15 @@ describe('admin UsersView', () => {
     const visibleColumns = columns.split(',')
     expect(visibleColumns.slice(-4, -1)).toEqual(['last_active_at', 'last_used_at', 'created_at'])
     expect(visibleColumns).not.toContain('last_login_at')
+    const visibleColumnMeta = JSON.parse(
+      wrapper.get('[data-test="columns-meta"]').text()
+    ) as Array<{ key: string; class: string }>
+    expect(visibleColumnMeta.map(column => column.key)).toEqual(visibleColumns)
+    expect(
+      visibleColumnMeta.every(column =>
+        column.class.split(/\s+/).includes('whitespace-nowrap')
+      )
+    ).toBe(true)
 
     await wrapper.get('[data-test="sort-last-used"]').trigger('click')
     await flushPromises()

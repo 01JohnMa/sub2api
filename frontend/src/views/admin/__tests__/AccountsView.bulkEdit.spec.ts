@@ -239,11 +239,16 @@ describe('admin AccountsView bulk edit scope', () => {
 
     const columnKeys = wrapper.findAll('[data-test="column-key"]').map(node => node.text())
     expect(columnKeys).toContain('created_at')
-    const columns = wrapper.getComponent(DataTableStub).props('columns') as Array<{ key: string; label: string; sortable: boolean }>
+    const columns = wrapper.getComponent(DataTableStub).props('columns') as Array<{ key: string; label: string; sortable: boolean; class?: string }>
     expect(columns.find(column => column.key === 'created_at')).toMatchObject({
       label: 'admin.accounts.columns.createdAt',
       sortable: true
     })
+    expect(
+      columns.every(column =>
+        column.class?.split(/\s+/).includes('whitespace-nowrap')
+      )
+    ).toBe(true)
   })
 
   it('passes the loaded global probe state to every upstream billing cell', async () => {

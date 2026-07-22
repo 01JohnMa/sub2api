@@ -3790,9 +3790,14 @@ const toggleColumn = (key: string) => {
 };
 
 const columns = computed<Column[]>(() =>
-  allColumns.value.filter(
-    (col) => ALWAYS_VISIBLE_COLUMNS.has(col.key) || !hiddenColumns.has(col.key),
-  ),
+  allColumns.value
+    .filter(
+      (col) => ALWAYS_VISIBLE_COLUMNS.has(col.key) || !hiddenColumns.has(col.key),
+    )
+    .map((col) => ({
+      ...col,
+      class: `${col.class ?? ""} whitespace-nowrap`.trim(),
+    })),
 );
 
 if (typeof window !== "undefined") {

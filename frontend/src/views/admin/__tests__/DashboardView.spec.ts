@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { defineComponent } from 'vue'
 
 import type { DashboardStats } from '@/types'
 import DashboardView from '../DashboardView.vue'
@@ -88,6 +89,44 @@ const createDashboardStats = (): DashboardStats => ({
   tpm: 0
 })
 
+const DateRangePickerStub = defineComponent({
+  name: 'DateRangePicker',
+  props: {
+    startDate: { type: String, default: '' },
+    endDate: { type: String, default: '' }
+  },
+  emits: ['update:startDate', 'update:endDate', 'change'],
+  setup(_, { emit }) {
+    const emitUpdatedRange = () => {
+      emit('update:startDate', '2026-04-10')
+      emit('update:endDate', '2026-04-10')
+      emit('change', {
+        startDate: '2026-04-10',
+        endDate: '2026-04-10',
+        preset: null
+      })
+    }
+
+    return { emitUpdatedRange }
+  },
+  template: '<button type="button" data-test="date-range-picker" @click="emitUpdatedRange">date range</button>'
+})
+
+const mountDashboard = () => mount(DashboardView, {
+  global: {
+    stubs: {
+      AppLayout: { template: '<div><slot /></div>' },
+      LoadingSpinner: true,
+      Icon: true,
+      DateRangePicker: DateRangePickerStub,
+      Select: true,
+      ModelDistributionChart: true,
+      TokenUsageTrend: true,
+      Line: true
+    }
+  }
+})
+
 describe('admin DashboardView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -118,20 +157,7 @@ describe('admin DashboardView', () => {
   })
 
   it('uses last 24 hours as default dashboard range', async () => {
-    mount(DashboardView, {
-      global: {
-        stubs: {
-          AppLayout: { template: '<div><slot /></div>' },
-          LoadingSpinner: true,
-          Icon: true,
-          DateRangePicker: true,
-          Select: true,
-          ModelDistributionChart: true,
-          TokenUsageTrend: true,
-          Line: true
-        }
-      }
-    })
+    mountDashboard()
 
     await flushPromises()
 
@@ -143,6 +169,49 @@ describe('admin DashboardView', () => {
       start_date: formatLocalDate(yesterday),
       end_date: formatLocalDate(now),
       granularity: 'hour'
+    }))
+  })
+
+  it('applies responsive date controls and reloads all chart requests for an emitted range', async () => {
+    const wrapper = mountDashboard()
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="admin-dashboard-date-range"]').classes()).toEqual(
+      expect.arrayContaining([
+        'flex',
+        'w-full',
+        'flex-col',
+        'items-start',
+        'gap-2',
+        'sm:w-auto',
+        'sm:flex-row',
+        'sm:items-center'
+      ])
+    )
+    expect(wrapper.get('[data-test="date-range-picker"]').classes()).toEqual(
+      expect.arrayContaining(['w-full', 'sm:w-auto'])
+    )
+
+    getSnapshotV2.mockClear()
+    getUserUsageTrend.mockClear()
+    getUserSpendingRanking.mockClear()
+
+    await wrapper.get('[data-test="date-range-picker"]').trigger('click')
+    await flushPromises()
+
+    expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
+      start_date: '2026-04-10',
+      end_date: '2026-04-10',
+      granularity: 'hour'
+    }))
+    expect(getUserUsageTrend).toHaveBeenCalledWith(expect.objectContaining({
+      start_date: '2026-04-10',
+      end_date: '2026-04-10',
+      granularity: 'hour'
+    }))
+    expect(getUserSpendingRanking).toHaveBeenCalledWith(expect.objectContaining({
+      start_date: '2026-04-10',
+      end_date: '2026-04-10'
     }))
   })
 })

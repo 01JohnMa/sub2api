@@ -1014,9 +1014,14 @@ const hasVisibleAttributeColumns = computed(() =>
 
 // Filtered columns based on visibility
 const columns = computed<Column[]>(() =>
-  allColumns.value.filter(col =>
-    col.key === 'email' || col.key === 'actions' || !hiddenColumns.has(col.key)
-  )
+  allColumns.value
+    .filter(col =>
+      col.key === 'email' || col.key === 'actions' || !hiddenColumns.has(col.key)
+    )
+    .map(col => ({
+      ...col,
+      class: `${col.class ?? ''} whitespace-nowrap`.trim()
+    }))
 )
 
 const users = ref<AdminUser[]>([])

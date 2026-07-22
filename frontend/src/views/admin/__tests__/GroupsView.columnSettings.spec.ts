@@ -271,6 +271,18 @@ describe('admin GroupsView column settings', () => {
     expect(localStorage.getItem('group-column-settings-version')).toBe('2')
   })
 
+  it('marks every visible table header as non-wrapping', async () => {
+    const wrapper = await mountView()
+    const columns = wrapper.getComponent(DataTableStub).props('columns') as Array<{ class?: string }>
+
+    expect(columns).toHaveLength(10)
+    expect(
+      columns.every((column) =>
+        column.class?.split(/\s+/).includes('whitespace-nowrap'),
+      ),
+    ).toBe(true)
+  })
+
   it('applies saved hidden columns on mount and ignores unknown keys', async () => {
     localStorage.setItem(
       'group-hidden-columns',

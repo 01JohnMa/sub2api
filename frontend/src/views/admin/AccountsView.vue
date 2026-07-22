@@ -478,6 +478,7 @@ import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
+import type { Column } from '@/components/common/types'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -1356,8 +1357,8 @@ function getAntigravityTierClass(row: any): string {
 }
 
 // All available columns
-const allColumns = computed(() => {
-  const c = [
+const allColumns = computed<Column[]>(() => {
+  const c: Column[] = [
     { key: 'select', label: '', sortable: false },
     { key: 'name', label: t('admin.accounts.columns.name'), sortable: true },
     { key: 'id', label: t('admin.accounts.columns.id'), sortable: true },
@@ -1392,10 +1393,15 @@ const toggleableColumns = computed(() =>
 )
 
 // Filtered columns based on visibility
-const cols = computed(() =>
-  allColumns.value.filter(col =>
-    col.key === 'select' || col.key === 'name' || col.key === 'actions' || !hiddenColumns.has(col.key)
-  )
+const cols = computed<Column[]>(() =>
+  allColumns.value
+    .filter(col =>
+      col.key === 'select' || col.key === 'name' || col.key === 'actions' || !hiddenColumns.has(col.key)
+    )
+    .map(col => ({
+      ...col,
+      class: `${col.class ?? ''} whitespace-nowrap`.trim()
+    }))
 )
 
 const handleEdit = (a: Account) => { edAcc.value = a; showEdit.value = true }

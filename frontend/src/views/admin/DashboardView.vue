@@ -269,13 +269,17 @@
           <!-- Date Range Filter -->
           <div class="card p-4">
             <div class="flex flex-wrap items-center gap-4">
-              <div class="flex items-center gap-2">
+              <div
+                data-test="admin-dashboard-date-range"
+                class="flex w-full flex-col items-start gap-2 sm:w-auto sm:flex-row sm:items-center"
+              >
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
                   >{{ t('admin.dashboard.timeRange') }}:</span
                 >
                 <DateRangePicker
                   v-model:start-date="startDate"
                   v-model:end-date="endDate"
+                  class="w-full sm:w-auto"
                   @change="onDateRangeChange"
                 />
               </div>

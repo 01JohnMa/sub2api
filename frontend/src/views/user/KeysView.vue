@@ -1266,7 +1266,12 @@ const toggleColumn = (key: string) => {
 const isColumnVisible = (key: string) => !hiddenColumns.has(key)
 
 const columns = computed<Column[]>(() =>
-  allColumns.value.filter((col) => ALWAYS_VISIBLE_COLUMNS.has(col.key) || !hiddenColumns.has(col.key))
+  allColumns.value
+    .filter((col) => ALWAYS_VISIBLE_COLUMNS.has(col.key) || !hiddenColumns.has(col.key))
+    .map((col) => ({
+      ...col,
+      class: `${col.class ?? ''} whitespace-nowrap`.trim()
+    }))
 )
 
 const apiKeys = ref<ApiKey[]>([])

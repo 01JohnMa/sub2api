@@ -158,7 +158,7 @@ const DataTableStub = {
   template: `
     <div>
       <div data-test="columns">{{ columns.map((col) => col.key).join(',') }}</div>
-      <div data-test="columns-meta">{{ JSON.stringify(columns.map((col) => ({ key: col.key, sortable: !!col.sortable }))) }}</div>
+      <div data-test="columns-meta">{{ JSON.stringify(columns.map((col) => ({ key: col.key, sortable: !!col.sortable, class: col.class ?? '' }))) }}</div>
       <button data-test="sort-current-concurrency" @click="$emit('sort', 'current_concurrency', 'asc')">
         Sort Current Concurrency
       </button>
@@ -245,7 +245,7 @@ const mountView = async () => {
 const visibleColumnKeys = (wrapper: VueWrapper) =>
   wrapper.get('[data-test="columns"]').text().split(',').filter(Boolean)
 
-const visibleColumnMeta = (wrapper: VueWrapper): Array<{ key: string; sortable: boolean }> =>
+const visibleColumnMeta = (wrapper: VueWrapper): Array<{ key: string; sortable: boolean; class: string }> =>
   JSON.parse(wrapper.get('[data-test="columns-meta"]').text())
 
 const getButtonByText = (wrapper: VueWrapper, text: string) => {
@@ -303,6 +303,17 @@ describe('user KeysView column settings', () => {
     expect(visibleColumnKeys(wrapper)).not.toContain('last_used_at')
     expect(visibleColumnKeys(wrapper)).not.toContain('last_used_ip')
     expect(visibleColumnKeys(wrapper)).not.toContain('id')
+  })
+
+  it('marks every visible table header as non-wrapping', async () => {
+    const wrapper = await mountView()
+
+    expect(visibleColumnMeta(wrapper)).toHaveLength(9)
+    expect(
+      visibleColumnMeta(wrapper).every((column) =>
+        column.class.split(/\s+/).includes('whitespace-nowrap')
+      )
+    ).toBe(true)
   })
 
   it('shows a hidden column when toggled and persists the preference', async () => {

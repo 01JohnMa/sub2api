@@ -1,0 +1,65 @@
+## 1. Authenticated Baseline Gate
+
+- [ ] 1.1 Obtain safe signed-in user and administrator sessions: synthetic non-production accounts for the candidate and only user-authorized read-only sessions for production. Do not create/change production credentials or copy cookies/tokens into the candidate.
+- [ ] 1.2 Fill the complete route matrix in `evidence.md`: role, exact route, sidebar visibility versus direct-route guard, standard/simple/backend mode, public/admin feature source, safe read-only interactions, and deferred reason.
+- [ ] 1.3 Capture representative user/admin routes at 390 x 844, 768 x 900, and 1440 x 900; add 767/768 for DataTable consumers and 1023/1024 for shell consumers. Record document/table overflow, bounding boxes, action reachability, dialogs, console/API results, and screenshot references.
+- [ ] 1.4 Create stable Critical/Important/Minor issue IDs and an `issue -> role/route/width -> batch -> exact files -> observable acceptance` matrix using the same role, fixture, feature state, and width for before/after evidence.
+- [ ] 1.5 Freeze the first checkpoint's file list and exact candidate recipe. If no Important visible issue is preselected or either safe role session is unavailable, record the blocker and do not start P0A.
+
+## 2. P0A Authenticated Shell Checkpoint
+
+- [ ] 2.1 Select only baseline-justified files among `AppLayout`, `AppSidebar`, `AppHeader`, and `TablePageLayout`; prefer route-local wrappers or opt-in variants and leave unrelated inventory files untouched.
+- [ ] 2.2 Preserve menu order, role visibility, standard/simple/backend behavior, public/admin feature sources, custom items, scroll restoration, theme, route guards, content offsets, and mobile close behavior.
+- [ ] 2.3 Add a focused test for every modified component and impacted route class; run the existing sidebar, table-layout, and route-guard suites plus the exact test paths recorded in evidence.
+- [ ] 2.4 Browser-verify both roles at 390/768/1440 and the 1023/1024 shell edge. Close at least one preselected Important issue with same-state before/after evidence and fix all Critical/Important review findings before P0B.
+
+## 3. P0B Table, Dialog, Card, And Status Checkpoint
+
+- [ ] 3.1 Select only baseline-justified files among `DataTable`, `StatCard`, `EmptyState`, `BaseDialog`, `ConfirmDialog`, and `StatusBadge`; do not assume the whole list requires changes.
+- [ ] 3.2 Preserve DataTable selection/multi-page selection/server sorting/virtualization/pagination/actions and dialog focus restoration/Escape/body-scroll lock/dismissal/confirmation/emitted events.
+- [ ] 3.3 For a global shared change, enumerate all consumers and add focused fixture tests plus read-only/feature-off visual evidence for representative Audit Log, Prompt Audit, Batch Image, Ops, and Payment consumers. Never trigger save, clear, probe, deletion, payment, refund, or callback actions.
+- [ ] 3.4 Browser-verify both roles at 390/768/1440 and the 767/768 table edge. Close at least one preselected Important issue with same-state before/after evidence and fix all Critical/Important review findings before P1.
+
+## 4. P1 User High-Frequency Self-Service
+
+- [ ] 4.1 Improve only accepted issue targets on `/dashboard`, `/keys`, `/usage`, `/profile`, `/available-channels`, and `/monitor`.
+- [ ] 4.2 Preserve requests, copy/edit/delete/export, sorting, pagination, OAuth/TOTP/password/balance settings, feature-menu sources, refresh, detail behavior, and direct-route semantics.
+- [ ] 4.3 Add at least one focused view/component test for every modified route and run the full frontend gate.
+- [ ] 4.4 Browser-verify all modified user routes at 390/768/1440 with the frozen fixtures; close the preselected Important issue(s) and complete independent review.
+
+## 5. P2 Administrator High-Density Operations
+
+- [ ] 5.1 Improve only accepted issue targets on `/admin/dashboard`, `/admin/users`, `/admin/groups`, `/admin/channels/pricing`, `/admin/accounts`, and `/admin/usage`; “Channels” never includes Channel Monitor in this batch.
+- [ ] 5.2 Preserve multi-page selection, server sorting, virtualization, refresh, group/model mapping, export/cleanup, payloads, permissions, and confirmation behavior. Do not modify view scripts, stores, API/request modules, or payload construction.
+- [ ] 5.3 Add at least one focused view/component test for every modified route and verify 390 px action/dialog reachability, 768 px wrapper-only table scrolling, and 1440 px filter/table-header bounding boxes within the first 900 px.
+- [ ] 5.4 Run the full frontend gate, close the preselected Important issue(s), and complete independent admin review before P3.
+
+## 6. P3 Secondary Workflows
+
+- [ ] 6.1 P3-user: independently scope and review `/subscriptions`, `/redeem`, and `/affiliate`; preserve simple-mode guards, public feature flags, requests, forms, and direct-route behavior.
+- [ ] 6.2 P3-admin: independently scope and review `/admin/subscriptions`, `/admin/announcements`, `/admin/proxies`, `/admin/redeem`, `/admin/promo-codes`, and all three `/admin/affiliates/*` routes.
+- [ ] 6.3 For each modified route, add a focused test, verify filtering/pagination/forms/dialogs/confirmations and 390/768/1440 geometry, and close at least one preselected Important visual issue per released sub-batch.
+- [ ] 6.4 Keep `/admin/settings`, `/custom/:id`, and all deferred/high-risk routes out of P3. Any Settings shell/tab proposal requires a renewed scope review and may not change fields, scripts, validation, save order, step-up, feature sources, or payloads.
+
+## 7. Deferred Feature-Surface Decisions
+
+- [ ] 7.1 Audit `/admin/audit-logs` separately with TOTP step-up and clear-log behavior protected by tests; do not execute destructive production actions.
+- [ ] 7.2 Audit `/admin/risk-control` and `/admin/prompt-audit` separately with risk control on/off, blocking confirmation, configuration, probe, and deletion boundaries.
+- [ ] 7.3 Audit `/batch-image` separately with eligible/ineligible account/group states and preserve current menu-versus-direct-route semantics.
+- [ ] 7.4 Audit `/admin/ops`, `/admin/channels/monitor`, all user/admin Payment routes, `/admin/settings`, and `/custom/:id` in separate changes with their distinct feature/config sources and safe fixture data.
+
+## 8. Per-Batch Source And Verification Gate
+
+- [ ] 8.1 Before editing, record the frozen files and run `git diff --name-status ecb7c2e3ae22686ffbcf0fac4e7a1ba98aeafcb9...HEAD -- frontend/`; inspect each frozen file with `git diff --stat 27f094e0960ebd8e52de7ff7e763c6fec2ff4057...HEAD -- <file>`. A pre-reviewed wrapper listed in the issue/file matrix is allowed; any unlisted new file, view-script change, or router/store/API/request/payload change stops work for renewed review.
+- [ ] 8.2 Run `cd frontend && pnpm exec vitest run <exact focused test paths> && pnpm lint:check && pnpm typecheck && pnpm test:run && pnpm build`; record commands, paths, counts, warnings, and exit status.
+- [ ] 8.3 Run `cd frontend && pnpm audit --prod --audit-level=high --json > audit.json || true`, then `python3 tools/check_pnpm_audit_exceptions.py --audit frontend/audit.json --exceptions .github/audit-exceptions.yml` from the repository root, plus `openspec validate coococode-authenticated-ui-phase-two --strict`.
+- [ ] 8.4 Build an exact-commit `linux/amd64` candidate and start it with the recorded literal `docker compose -f <isolated-compose> --env-file <non-repository-secret-env> up -d --wait`; require `curl -fsS http://127.0.0.1:18080/health` -> `{"status":"ok"}`, healthy disposable PostgreSQL/Redis, synthetic accounts, no printed secrets, and a recorded teardown.
+- [ ] 8.5 Browser-verify every modified route for the batch's role at 390/768/1440; P0 uses both roles, breakpoint-edge checks apply to changed shared semantics, and shared cross-role consumers receive representative checks. Require zero newly introduced or unowned console/API errors and zero unexplained document overflow.
+- [ ] 8.6 Complete a read-only review against the requirement, frozen issue/file matrix, diff, tests, candidate logs, and browser evidence; fix all Critical/Important findings and record accepted Minor debt.
+
+## 9. Per-Batch Release Gate
+
+- [ ] 9.1 Publish `.github/workflows/coococode-image.yml` from the reviewed exact commit and record the tag, OCI index digest, runnable `linux/amd64` manifest, and embedded commit/version.
+- [ ] 9.2 In `evidence.md`, record the actual production backup path, current image/digest, candidate image/digest, exact health requests/statuses, log window, migration/invalid-index state, executable application rollback, and post-rollback health check using the established v0.1.162 procedure.
+- [ ] 9.3 Replace only `sub2api` with `docker compose -f /opt/sub2api/docker-compose.yml -f /opt/sub2api/docker-compose.override.yml up -d --no-deps --force-recreate sub2api`; do not restart PostgreSQL, Redis, CPA, or Nginx.
+- [ ] 9.4 Verify container/public health, restart count, startup and smoke logs, representative API requests, and the batch's signed-in role routes. Roll back immediately on a Critical failure; documentation-only commits do not cause a production replacement.

@@ -23,10 +23,11 @@
 ## 4. Authenticated And Release Verification
 
 - [x] 4.1 Build and run an isolated candidate stack, verify health/startup logs, and remotely browser-check representative signed-in user/admin routes plus public/auth routes at 390, 768, and 1440 px.
-- [ ] 4.2 Commit the reviewed integration with a Chinese message, push the isolated branch, verify CI publishes the exact commit image, and record its immutable digest.
-- [ ] 4.3 Refresh production topology, running image, database migration state, backups, and executable rollback commands immediately before cutover.
-- [ ] 4.4 Replace only the production `sub2api` image, then verify container/public health, logs, representative API requests, and signed-in user/admin behavior; roll back immediately on a critical failure.
+- [x] 4.2 Commit the reviewed integration with a Chinese message, push the isolated branch, verify CI publishes the exact commit image, and record its immutable digest.
+- [x] 4.3 Refresh production topology, running image, database migration state, backups, and executable rollback commands immediately before cutover.
+- [x] 4.4 Replace only the production `sub2api` image, then verify container/public health, logs, and representative API requests; roll back immediately on a critical failure.
+- [ ] 4.5 Verify signed-in regular-user and administrator production behavior read-only without creating, retrieving, or changing credentials.
 
 ## 5. Phase-Two Handoff
 
-- [ ] 5.1 Re-audit authenticated routes and shared components on the upgraded baseline and create the separate phase-two frontend OpenSpec with revised page batches and visual acceptance evidence.
+- [x] 5.1 Re-audit authenticated routes and shared components on the upgraded baseline and create the separate phase-two frontend OpenSpec with revised page batches and visual acceptance evidence.

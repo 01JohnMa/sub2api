@@ -45,6 +45,7 @@
   - Backup: `/opt/sub2api/backups/20260721T022853Z-pre-ui-priority`.
   - Rollback image: `ghcr.io/01johnma/sub2api:ui-redesign-69cd045`, ID `sha256:ad162ceace8a4cdfe35933cd9399cee1fa4e381c39850953b63ac430bf5d7bc9`.
 - [x] 6.5 Replace the production image, run smoke tests, and keep rollback commands ready
+  - Historical interim step, superseded by the final registry promotion in 6.6; do not use this image or rollback reference as the current production state.
   - Interim production image: `ghcr.io/01johnma/sub2api:ui-priority-20260721T014012Z`, ID `sha256:7a1de03900c49ccd8a966fdc979264174c3942114843cd3f893aaa026cbe51d2`. This locally transferred tag is not the final registry promotion target.
   - Transfer archive SHA-256: `43be793becde711cc471ed574a1dae582ac6d457e4cfc7b6ca8db0e0561fba82`.
   - Origin/public health, public settings, routes, static assets, PostgreSQL, Redis, and CPA checks pass with zero container restarts.
@@ -60,4 +61,8 @@
     curl -fsS http://127.0.0.1:8080/health
     curl -fsS https://coococode.com/health
     ```
-- [ ] 6.6 Commit and push the exact deployed source, publish a pullable `linux/amd64` GHCR image in GitHub Actions, replace the interim production image with the verified registry tag/digest, and repeat the scoped smoke and rollback checks without building on the production host
+- [x] 6.6 Commit and push the exact deployed source, publish a pullable `linux/amd64` GHCR image in GitHub Actions, replace the interim production image with the verified registry tag/digest, and repeat the scoped smoke and rollback checks without building on the production host
+  - Final merge commit: `ecb7c2e3ae22686ffbcf0fac4e7a1ba98aeafcb9`; GitHub Actions run `29893129766` completed successfully.
+  - Final production image: `ghcr.io/01johnma/sub2api:ui-redesign-ecb7c2e@sha256:2f7cc7bcdf2cc4b92ca79125b8417bf5a72c72c0c39433d000bd9d05396caf6e` (`linux/amd64`).
+  - Production backup: `/opt/sub2api/backups/20260722T062047Z-pre-v0162`; only `sub2api` was recreated and its dependency services were not restarted.
+  - Origin/public health, public settings, migrations, no-invalid-index check, stored forwarded-IP `false`, public/auth responsive pages, static frontend, expected unauthenticated `/v1/models` 401, and CPA state passed. Signed-in user/admin visual acceptance remains explicitly open in tasks 5.3 and 6.3.

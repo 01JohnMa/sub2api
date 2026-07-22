@@ -15,8 +15,8 @@
 
 ## 3. P0B Table, Dialog, Card, And Status Checkpoint
 
-- [x] 3.1 Select only baseline-justified files among `DataTable`, `StatCard`, `EmptyState`, `BaseDialog`, `ConfirmDialog`, and `StatusBadge`; `UI-P0B-001` froze only existing `frontend/src/style.css` plus new `BaseDialog.spec.ts`.
-- [x] 3.2 Preserve DataTable selection/multi-page selection/server sorting/virtualization/pagination/actions and dialog focus restoration/Escape/body-scroll lock/dismissal/confirmation/emitted events. The global padding-only implementation changes no component script/template, and focused behavior tests pass.
+- [x] 3.1 Select only baseline-justified files among `DataTable`, `StatCard`, `EmptyState`, `BaseDialog`, `ConfirmDialog`, and `StatusBadge`; `UI-P0B-001` froze existing `frontend/src/style.css` plus new `BaseDialog.spec.ts`, and the independently approved `UI-P0B-002` candidate checkpoint added only existing `BaseDialog.vue`.
+- [x] 3.2 Preserve DataTable selection/multi-page selection/server sorting/virtualization/pagination/actions and dialog focus restoration/Escape/body-scroll lock/dismissal/confirmation/emitted events. The shared dialog implementation now uses per-instance body-lock ownership without changing templates, props, events, or consumer payloads; focused behavior tests pass.
 - [ ] 3.3 For a global shared change, enumerate all consumers and add focused fixture tests plus read-only/feature-off visual evidence for representative Audit Log, Prompt Audit, Batch Image, Ops, and Payment consumers. Never trigger save, clear, probe, deletion, payment, refund, or callback actions.
 - [ ] 3.4 Browser-verify both roles at 390/768/1440 and the 767/768 table edge. Close at least one preselected Important issue with same-state before/after evidence and fix all Critical/Important review findings before P1.
 

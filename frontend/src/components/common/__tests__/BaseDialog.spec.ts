@@ -97,6 +97,58 @@ describe('BaseDialog', () => {
     expect(document.body.classList.contains('modal-open')).toBe(false)
   })
 
+  it('keeps a visible dialog locked when a hidden ConfirmDialog mounts or unmounts', async () => {
+    const visibleDialog = mountBaseDialog()
+    await nextTick()
+    expect(document.body.classList.contains('modal-open')).toBe(true)
+
+    const hiddenConfirm = track(mount(ConfirmDialog, {
+      attachTo: document.body,
+      props: {
+        show: false,
+        title: 'Hidden confirmation',
+        message: 'This fixture must not release another dialog lock.',
+      },
+      global: {
+        stubs: {
+          Icon: true,
+        },
+      },
+    }))
+    await nextTick()
+
+    expect(document.body.classList.contains('modal-open')).toBe(true)
+
+    hiddenConfirm.unmount()
+    mountedWrappers.delete(hiddenConfirm)
+    expect(document.body.classList.contains('modal-open')).toBe(true)
+
+    await visibleDialog.setProps({ show: false })
+    expect(document.body.classList.contains('modal-open')).toBe(false)
+  })
+
+  it('keeps the lock and restores underlying focus until the final open dialog closes', async () => {
+    const firstDialog = mountBaseDialog({ title: 'First dialog', showCloseButton: false })
+    await nextTick()
+    const firstAction = document.querySelectorAll<HTMLButtonElement>('[data-testid="body-action"]')[0]
+    expect(document.activeElement).toBe(firstAction)
+
+    const secondDialog = mountBaseDialog({ title: 'Second dialog', showCloseButton: false })
+    await nextTick()
+    const secondAction = document.querySelectorAll<HTMLButtonElement>('[data-testid="body-action"]')[1]
+
+    expect(document.activeElement).toBe(secondAction)
+    expect(document.body.classList.contains('modal-open')).toBe(true)
+
+    await secondDialog.setProps({ show: false })
+    expect(document.body.classList.contains('modal-open')).toBe(true)
+    expect(document.activeElement).toBe(firstAction)
+
+    firstDialog.unmount()
+    mountedWrappers.delete(firstDialog)
+    expect(document.body.classList.contains('modal-open')).toBe(false)
+  })
+
   it('honors Escape and backdrop dismissal options without changing close events', async () => {
     const wrapper = mountBaseDialog()
     await nextTick()

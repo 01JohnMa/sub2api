@@ -17,8 +17,8 @@
 
 - [x] 3.1 Select only baseline-justified files among `DataTable`, `StatCard`, `EmptyState`, `BaseDialog`, `ConfirmDialog`, and `StatusBadge`; `UI-P0B-001` froze existing `frontend/src/style.css` plus new `BaseDialog.spec.ts`, and the independently approved `UI-P0B-002` candidate checkpoint added only existing `BaseDialog.vue`.
 - [x] 3.2 Preserve DataTable selection/multi-page selection/server sorting/virtualization/pagination/actions and dialog focus restoration/Escape/body-scroll lock/dismissal/confirmation/emitted events. The shared dialog implementation now uses per-instance body-lock ownership without changing templates, props, events, or consumer payloads; focused behavior tests pass.
-- [ ] 3.3 For a global shared change, enumerate all consumers and add focused fixture tests plus read-only/feature-off visual evidence for representative Audit Log, Prompt Audit, Batch Image, Ops, and Payment consumers. Never trigger save, clear, probe, deletion, payment, refund, or callback actions.
-- [ ] 3.4 Browser-verify both roles at 390/768/1440 and the 767/768 table edge. Close at least one preselected Important issue with same-state before/after evidence and fix all Critical/Important review findings before P1.
+- [x] 3.3 For a global shared change, enumerate all consumers and add focused fixture tests plus read-only/feature-off visual evidence for representative Audit Log, Prompt Audit, Batch Image, Ops, and Payment consumers. Never trigger save, clear, probe, deletion, payment, refund, or callback actions.
+- [x] 3.4 Browser-verify both roles at 390/768/1440 and the 767/768 table edge. Close at least one preselected Important issue with same-state before/after evidence and fix all Critical/Important review findings before P1.
 
 ## 4. P1 User High-Frequency Self-Service
 
@@ -54,8 +54,8 @@
 - [x] 8.2 Run the exact focused/full Vitest, lint, typecheck, and build binaries and record paths, counts, warnings, and exit status. The host pnpm 11 wrapper refused the existing module store before executing tests, so the already-installed package binaries were used without reinstalling; Docker remains pinned to pnpm 9/frozen lockfile.
 - [x] 8.3 Run production-dependency audit, validate repository exceptions, and run strict OpenSpec validation. Result: 0 high / 0 critical vulnerabilities, exceptions valid, strict validation passed.
 - [ ] 8.4 Build an exact-commit `linux/amd64` candidate and start it with the recorded literal `docker compose -f <isolated-compose> --env-file <non-repository-secret-env> up -d --wait`; require `curl -fsS http://127.0.0.1:18080/health` -> `{"status":"ok"}`, healthy disposable PostgreSQL/Redis, synthetic accounts, no printed secrets, and a recorded teardown.
-- [ ] 8.5 Browser-verify every modified route for the batch's role at 390/768/1440; P0 uses both roles, breakpoint-edge checks apply to changed shared semantics, and shared cross-role consumers receive representative checks. Require zero newly introduced or unowned console/API errors and zero unexplained document overflow.
-- [ ] 8.6 Complete a read-only review against the requirement, frozen issue/file matrix, diff, tests, candidate logs, and browser evidence; fix all Critical/Important findings and record accepted Minor debt.
+- [x] 8.5 Browser-verify every modified route for the batch's role at 390/768/1440; P0 uses both roles, breakpoint-edge checks apply to changed shared semantics, and shared cross-role consumers receive representative checks. Require zero newly introduced or unowned console/API errors and zero unexplained document overflow. The pre-recorded Ops page overflow remains explicitly deferred and was not introduced by P0B.
+- [x] 8.6 Complete a read-only review against the requirement, frozen issue/file matrix, diff, tests, candidate logs, and browser evidence; fix all Critical/Important findings and record accepted Minor debt. P0B final result: 0 Critical / 0 Important / 0 Minor, `APPROVE_P0B`.
 
 ## 9. Per-Batch Release Gate
 

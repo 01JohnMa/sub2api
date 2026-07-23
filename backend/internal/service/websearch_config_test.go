@@ -4,11 +4,101 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/websearch"
 	"github.com/stretchr/testify/require"
 )
+
+type webSearchConfigSettingRepoStub struct {
+	value string
+	err   error
+	calls int
+}
+
+func (s *webSearchConfigSettingRepoStub) Get(context.Context, string) (*Setting, error) {
+	panic("unexpected Get call")
+}
+
+func (s *webSearchConfigSettingRepoStub) GetValue(context.Context, string) (string, error) {
+	s.calls++
+	return s.value, s.err
+}
+
+func (s *webSearchConfigSettingRepoStub) Set(context.Context, string, string) error {
+	panic("unexpected Set call")
+}
+
+func (s *webSearchConfigSettingRepoStub) GetMultiple(context.Context, []string) (map[string]string, error) {
+	panic("unexpected GetMultiple call")
+}
+
+func (s *webSearchConfigSettingRepoStub) SetMultiple(context.Context, map[string]string) error {
+	panic("unexpected SetMultiple call")
+}
+
+func (s *webSearchConfigSettingRepoStub) GetAll(context.Context) (map[string]string, error) {
+	panic("unexpected GetAll call")
+}
+
+func (s *webSearchConfigSettingRepoStub) Delete(context.Context, string) error {
+	panic("unexpected Delete call")
+}
+
+func expireWebSearchConfigCacheForTest(t *testing.T) {
+	t.Helper()
+	expire := func() {
+		webSearchEmulationSF.Forget(sfKeyWebSearchConfig)
+		webSearchEmulationCache.Store(&cachedWebSearchEmulationConfig{
+			config:    &WebSearchEmulationConfig{},
+			expiresAt: time.Now().Add(-time.Second).UnixNano(),
+		})
+	}
+	expire()
+	t.Cleanup(expire)
+}
+
+func TestGetWebSearchEmulationConfig_MissingSettingReturnsDisabledEmpty(t *testing.T) {
+	expireWebSearchConfigCacheForTest(t)
+	svc := NewSettingService(
+		&webSearchConfigSettingRepoStub{err: ErrSettingNotFound},
+		&config.Config{},
+	)
+
+	cfg, err := svc.GetWebSearchEmulationConfig(context.Background())
+
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	require.False(t, cfg.Enabled)
+	require.NotNil(t, cfg.Providers)
+	require.Empty(t, cfg.Providers)
+}
+
+func TestGetWebSearchEmulationConfig_UnexpectedRepositoryErrorStillFails(t *testing.T) {
+	expireWebSearchConfigCacheForTest(t)
+	repoErr := errors.New("database unavailable")
+	repo := &webSearchConfigSettingRepoStub{err: repoErr}
+	svc := NewSettingService(
+		repo,
+		&config.Config{},
+	)
+
+	cfg, err := svc.GetWebSearchEmulationConfig(context.Background())
+
+	require.ErrorIs(t, err, repoErr)
+	require.NotNil(t, cfg)
+	require.False(t, cfg.Enabled)
+
+	cachedCfg, cachedErr := svc.GetWebSearchEmulationConfig(context.Background())
+
+	require.ErrorIs(t, cachedErr, repoErr)
+	require.NotNil(t, cachedCfg)
+	require.False(t, cachedCfg.Enabled)
+	require.Equal(t, 1, repo.calls)
+}
 
 // --- validateWebSearchConfig ---
 

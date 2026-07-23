@@ -29,10 +29,10 @@
 
 ## 5. P2 Administrator High-Density Operations
 
-- [ ] 5.1 Improve only accepted issue targets on `/admin/dashboard`, `/admin/users`, `/admin/groups`, `/admin/channels/pricing`, `/admin/accounts`, and `/admin/usage`; “Channels” never includes Channel Monitor in this batch.
-- [ ] 5.2 Preserve multi-page selection, server sorting, virtualization, refresh, group/model mapping, export/cleanup, payloads, permissions, and confirmation behavior. Do not modify view scripts, stores, API/request modules, or payload construction.
-- [ ] 5.3 Add at least one focused view/component test for every modified route and verify 390 px action/dialog reachability, 768 px wrapper-only table scrolling, and 1440 px filter/table-header bounding boxes within the first 900 px.
-- [ ] 5.4 Run the full frontend gate, close the preselected Important issue(s), and complete independent admin review before P3.
+- [x] 5.1 Improve only accepted issue targets on `/admin/dashboard`, `/admin/users`, `/admin/groups`, `/admin/channels/pricing`, `/admin/accounts`, and `/admin/usage`; “Channels” never includes Channel Monitor in this batch.
+- [x] 5.2 Preserve multi-page selection, server sorting, virtualization, refresh, group/model mapping, export/cleanup, payloads, permissions, and confirmation behavior. Do not modify view business/control-flow logic, stores, API/request modules, or payload construction. The only approved view-script exception is the independently reviewed, route-local merge of existing `Column.class` presentation metadata for accepted P2 header issues; any other script change reopens the scope gate.
+- [x] 5.3 Add at least one focused view/component test for every modified route and verify 390 px action/dialog reachability, 768 px wrapper-only table scrolling, and 1440 px filter/table-header bounding boxes within the first 900 px.
+- [x] 5.4 Run the full frontend gate, close the preselected Important issue(s), and complete independent admin review before P3.
 
 ## 6. P3 Secondary Workflows
 
@@ -47,6 +47,7 @@
 - [ ] 7.2 Audit `/admin/risk-control` and `/admin/prompt-audit` separately with risk control on/off, blocking confirmation, configuration, probe, and deletion boundaries.
 - [ ] 7.3 Audit `/batch-image` separately with eligible/ineligible account/group states and preserve current menu-versus-direct-route semantics.
 - [ ] 7.4 Audit `/admin/ops`, `/admin/channels/monitor`, all user/admin Payment routes, `/admin/settings`, and `/custom/:id` in separate changes with their distinct feature/config sources and safe fixture data.
+- [ ] 7.5 Resolve `UI-DEFER-WEBSEARCH-001` in a separate backend/config-contract change: missing `web_search_emulation_config` must either return a disabled empty configuration or have an explicitly owned caller fallback, with focused service/handler tests and no unowned console/API failure. This remains a production release blocker and must not be folded into P2.
 
 ## 8. Per-Batch Source And Verification Gate
 
@@ -54,8 +55,8 @@
 - [x] 8.2 Run the exact focused/full Vitest, lint, typecheck, and build binaries and record paths, counts, warnings, and exit status. The host pnpm 11 wrapper refused the existing module store before executing tests, so the already-installed package binaries were used without reinstalling; Docker remains pinned to pnpm 9/frozen lockfile.
 - [x] 8.3 Run production-dependency audit, validate repository exceptions, and run strict OpenSpec validation. Result: 0 high / 0 critical vulnerabilities, exceptions valid, strict validation passed.
 - [ ] 8.4 Build an exact-commit `linux/amd64` candidate and start it with the recorded literal `docker compose -f <isolated-compose> --env-file <non-repository-secret-env> up -d --wait`; require `curl -fsS http://127.0.0.1:18080/health` -> `{"status":"ok"}`, healthy disposable PostgreSQL/Redis, synthetic accounts, no printed secrets, and a recorded teardown.
-- [x] 8.5 Browser-verify every modified route for the batch's role at 390/768/1440; P0 uses both roles, breakpoint-edge checks apply to changed shared semantics, and shared cross-role consumers receive representative checks. Require zero newly introduced or unowned console/API errors and zero unexplained document overflow. The pre-recorded Ops page overflow remains explicitly deferred and was not introduced by P0B. P1 `/keys` and `/dashboard` passed their three-width checks and clean final browser/server windows.
-- [x] 8.6 Complete a read-only review against the requirement, frozen issue/file matrix, diff, tests, candidate logs, and browser evidence; fix all Critical/Important findings and record accepted Minor debt. P0B final result: 0 Critical / 0 Important / 0 Minor, `APPROVE_P0B`; P1 final result: 0 Critical / 0 Important / 0 Minor, `APPROVE_P1`.
+- [x] 8.5 Browser-verify every modified route for the batch's role at 390/768/1440; P0 uses both roles, breakpoint-edge checks apply to changed shared semantics, and shared cross-role consumers receive representative checks. Require zero newly introduced or unowned console/API errors and zero unexplained document overflow. The pre-recorded Ops page overflow remains explicitly deferred and was not introduced by P0B. P1 `/keys` and `/dashboard` passed their three-width checks and clean final browser/server windows. P2 passed 390/639/640/767/768/1440 geometry and safe interaction checks; its reproducible, pre-existing Web Search config `404` is now owned by `UI-DEFER-WEBSEARCH-001`, was not introduced by P2, and is not a production release allowlist.
+- [x] 8.6 Complete a read-only review against the requirement, frozen issue/file matrix, diff, tests, candidate logs, and browser evidence; fix all Critical/Important findings and record accepted Minor debt. P0B final result: 0 Critical / 0 Important / 0 Minor, `APPROVE_P0B`; P1 final result: 0 Critical / 0 Important / 0 Minor, `APPROVE_P1`; P2 final result: 0 Critical / 0 Important / 0 Minor, `APPROVE_P2`.
 
 ## 9. Per-Batch Release Gate
 

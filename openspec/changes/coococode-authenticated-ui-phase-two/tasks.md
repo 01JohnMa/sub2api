@@ -36,10 +36,10 @@
 
 ## 6. P3 Secondary Workflows
 
-- [ ] 6.1 P3-user: independently scope and review `/subscriptions`, `/redeem`, and `/affiliate`; preserve simple-mode guards, public feature flags, requests, forms, and direct-route behavior.
-- [ ] 6.2 P3-admin: independently scope and review `/admin/subscriptions`, `/admin/announcements`, `/admin/proxies`, `/admin/redeem`, `/admin/promo-codes`, and all three `/admin/affiliates/*` routes.
+- [x] 6.1 P3-user: independently scope and review `/subscriptions`, `/redeem`, and `/affiliate`; preserve simple-mode guards, public feature flags, requests, forms, and direct-route behavior. The review kept Subscriptions and Redeem no-op and froze only the accepted Affiliate template/test pair; its static/unit/build checkpoint passed while browser closure remains in 6.3.
+- [x] 6.2 P3-admin: independently scope and review `/admin/subscriptions`, `/admin/announcements`, `/admin/proxies`, `/admin/redeem`, `/admin/promo-codes`, and all three `/admin/affiliates/*` routes. The independent route/source/test audit found no preselected Important issue, so all eight routes remain a reviewed no-op with no frontend file frozen.
 - [ ] 6.3 For each modified route, add a focused test, verify filtering/pagination/forms/dialogs/confirmations and 390/768/1440 geometry, and close at least one preselected Important visual issue per released sub-batch.
-- [ ] 6.4 Keep `/admin/settings`, `/custom/:id`, and all deferred/high-risk routes out of P3. Any Settings shell/tab proposal requires a renewed scope review and may not change fields, scripts, validation, save order, step-up, feature sources, or payloads.
+- [x] 6.4 Keep `/admin/settings`, `/custom/:id`, and all deferred/high-risk routes out of P3. The final implementation-checkpoint diff review confirmed that no Settings, Custom, deferred/high-risk, script, router, store, API, request, or payload file changed; any future expansion still requires renewed scope review.
 
 ## 7. Deferred Feature-Surface Decisions
 

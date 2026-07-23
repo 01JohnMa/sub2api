@@ -17,7 +17,7 @@
 
 ## 4. Candidate and Release Evidence
 
-- [ ] 4.1 Verify the exact candidate returns HTTP 200 for the missing Web Search configuration and produces no Web Search warning in affected admin flows
-- [ ] 4.2 Publish and verify the exact reviewed Linux image through the existing release path
+- [x] 4.1 Verify the exact candidate returns HTTP 200 for the missing Web Search configuration and produces no Web Search warning in affected admin flows
+- [x] 4.2 Publish and verify the exact reviewed Linux image through the existing release path
 - [ ] 4.3 Deploy only the `sub2api` service after current production preflight and backup pass, then verify health, logs, API behavior, and rollback readiness
-- [ ] 4.4 Record the completed contract evidence in the parent phase-two change
+- [x] 4.4 Record the completed contract evidence in the parent phase-two change

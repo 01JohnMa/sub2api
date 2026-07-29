@@ -10,13 +10,13 @@
 ## 2. Organization Domain And Membership Transactions
 
 - [ ] 2.1 Implement organization repository and service operations for create, list, get, edit name/code/description, disable, reactivate, archive, and platform-admin historical reads, with lifecycle mutations locking the Organization row.
-- [ ] 2.2 Implement platform-admin membership assignment, removal, and organization-role changes without modifying the existing platform role; joining locks User, revalidates it is not deleted/deleting and unorganized, creates a zero active allocation, and role changes preserve it.
+- [x] 2.2 Implement platform-admin membership assignment, removal, and organization-role changes without modifying the existing platform role; joining locks User, revalidates it is not deleted/deleting and unorganized, creates a zero active allocation, and role changes preserve it.
 - [x] 2.3 Implement organization-admin exact-email/exact-ID member addition as `organization_member`, with no global search or invitation flow and byte-equivalent status/error shape for nonexistent versus already-organized targets.
-- [ ] 2.4 Implement organization-admin removal of same-organization ordinary members while rejecting organization administrators and foreign IDs.
-- [ ] 2.5 Make member removal reject unresolved reservations, atomically reclaim available organization funds, close the allocation, clear User/API Key organization attribution, and preserve personal balance and consumed history.
+- [x] 2.4 Implement organization-admin removal of same-organization ordinary members while rejecting organization administrators and foreign IDs.
+- [x] 2.5 Make member removal reject unresolved reservations, atomically reclaim available organization funds, close the allocation, clear User/API Key organization attribution, and preserve personal balance and consumed history.
 - [x] 2.6 Guard every platform-admin, self-service, OAuth-cleanup, and soft-delete user path by locking User and rechecking membership/allocation in the deletion transaction so an organized user cannot be deleted until idempotent membership removal closes/reclaims its allocation; add deletion-bypass and concurrent delete-versus-join regression tests.
-- [ ] 2.7 Make lifecycle, member, and balance writes lock Organization then User/allocation rows in stable ID order; make API Key creation and User deletion lock the same User row; add rollback and concurrent archive/add/change/remove/Key-create/delete tests.
-- [ ] 2.8 Invalidate affected API Key authentication and billing caches after membership or organization status commits, including a tested organization-wide invalidation path, while keeping authorization and balance correctness independent of cache invalidation.
+- [x] 2.7 Make lifecycle, member, and balance writes lock Organization then User/allocation rows in stable ID order; make API Key creation and User deletion lock the same User row; add rollback and concurrent archive/add/change/remove/Key-create/delete tests.
+- [x] 2.8 Invalidate affected API Key authentication and billing caches after membership or organization status commits, including a tested organization-wide invalidation path, while keeping authorization and balance correctness independent of cache invalidation.
 
 ## 3. Organization Funding And Allocation
 

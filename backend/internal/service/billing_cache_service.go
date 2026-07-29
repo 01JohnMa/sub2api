@@ -402,6 +402,17 @@ func (s *BillingCacheService) InvalidateUserBalance(ctx context.Context, userID 
 	return nil
 }
 
+func (s *BillingCacheService) InvalidateUserPlatformQuota(ctx context.Context, userID int64, platform string) error {
+	if s.cache == nil {
+		return nil
+	}
+	if err := s.cache.DeleteUserPlatformQuotaCache(ctx, userID, platform); err != nil {
+		logger.LegacyPrintf("service.billing_cache", "Warning: invalidate platform quota cache failed for user %d platform %s: %v", userID, platform, err)
+		return err
+	}
+	return nil
+}
+
 // ============================================
 // 订阅缓存方法
 // ============================================
@@ -546,14 +557,40 @@ func (s *BillingCacheService) InvalidateAPIKeyRateLimit(ctx context.Context, key
 // resets expired windows in-memory and triggers async DB reset,
 // and returns an error if any window limit is exceeded.
 func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey *APIKey) error {
+	return s.checkAPIKeyRateLimitsWithPolicy(ctx, apiKey, false)
+}
+
+func (s *BillingCacheService) checkOrganizationAPIKeyRateLimits(ctx context.Context, apiKey *APIKey) error {
+	return s.checkAPIKeyRateLimitsWithPolicy(ctx, apiKey, true)
+}
+
+func (s *BillingCacheService) checkAPIKeyRateLimitsWithPolicy(ctx context.Context, apiKey *APIKey, failClosed bool) error {
+	if s == nil || apiKey == nil {
+		if failClosed {
+			return ErrOrganizationBillingUnavailable
+		}
+		return nil
+	}
 	if s.cache == nil {
 		// No cache: fall back to reading from DB directly
 		if s.apiKeyRateLimitLoader == nil {
+			if failClosed {
+				return ErrOrganizationBillingUnavailable
+			}
 			return nil
 		}
 		data, err := s.apiKeyRateLimitLoader.GetRateLimitData(ctx, apiKey.ID)
 		if err != nil {
+			if failClosed {
+				return ErrOrganizationBillingUnavailable.WithCause(err)
+			}
 			return nil // Don't block requests on DB errors
+		}
+		if data == nil {
+			if failClosed {
+				return ErrOrganizationBillingUnavailable
+			}
+			return nil
 		}
 		return s.evaluateRateLimits(ctx, apiKey, data.Usage5h, data.Usage1d, data.Usage7d,
 			data.Window5hStart, data.Window1dStart, data.Window7dStart)
@@ -563,11 +600,23 @@ func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey 
 	if err != nil {
 		// Cache miss: load from DB and populate cache
 		if s.apiKeyRateLimitLoader == nil {
+			if failClosed {
+				return ErrOrganizationBillingUnavailable.WithCause(err)
+			}
 			return nil
 		}
 		dbData, dbErr := s.apiKeyRateLimitLoader.GetRateLimitData(ctx, apiKey.ID)
 		if dbErr != nil {
+			if failClosed {
+				return ErrOrganizationBillingUnavailable.WithCause(dbErr)
+			}
 			return nil // Don't block requests on DB errors
+		}
+		if dbData == nil {
+			if failClosed {
+				return ErrOrganizationBillingUnavailable
+			}
+			return nil
 		}
 		// Build cache entry from DB data
 		cacheEntry := &APIKeyRateLimitCacheData{
@@ -586,6 +635,12 @@ func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey 
 		}
 		_ = s.cache.SetAPIKeyRateLimit(ctx, apiKey.ID, cacheEntry)
 		cacheData = cacheEntry
+	}
+	if cacheData == nil {
+		if failClosed {
+			return ErrOrganizationBillingUnavailable
+		}
+		return nil
 	}
 
 	var w5h, w1d, w7d *time.Time
@@ -759,7 +814,28 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 // 与旧版"级联互斥"设计不同，新版确保 user.rpm_limit 作为全局天花板不会被 group 或 override 覆盖。
 // Redis 故障一律 fail-open（打 warning，不阻塞业务）。
 func (s *BillingCacheService) checkRPM(ctx context.Context, user *User, group *Group) error {
-	if s == nil || s.userRPMCache == nil || user == nil {
+	return s.checkRPMWithPolicy(ctx, user, group, false)
+}
+
+func (s *BillingCacheService) checkOrganizationRPM(ctx context.Context, user *User, group *Group) error {
+	return s.checkRPMWithPolicy(ctx, user, group, true)
+}
+
+func (s *BillingCacheService) checkRPMWithPolicy(ctx context.Context, user *User, group *Group, failClosed bool) error {
+	if s == nil || user == nil {
+		if failClosed {
+			return ErrOrganizationBillingUnavailable
+		}
+		return nil
+	}
+	needsRPM := user.RPMLimit > 0 || group != nil
+	if !needsRPM {
+		return nil
+	}
+	if s.userRPMCache == nil {
+		if failClosed {
+			return ErrOrganizationBillingUnavailable
+		}
 		return nil
 	}
 
@@ -777,9 +853,14 @@ func (s *BillingCacheService) checkRPM(ctx context.Context, user *User, group *G
 					"Warning: rpm override lookup failed for user=%d group=%d: %v",
 					user.ID, group.ID, err,
 				)
+				if failClosed {
+					return ErrOrganizationBillingUnavailable.WithCause(err)
+				}
 			} else {
 				override = dbOverride
 			}
+		} else if failClosed {
+			return ErrOrganizationBillingUnavailable
 		}
 
 		if override != nil {
@@ -792,7 +873,10 @@ func (s *BillingCacheService) checkRPM(ctx context.Context, user *User, group *G
 						"Warning: rpm increment (override) failed for user=%d group=%d: %v",
 						user.ID, group.ID, incErr,
 					)
-					// fail-open
+					if failClosed {
+						return ErrOrganizationBillingUnavailable.WithCause(incErr)
+					}
+					// personal traffic keeps the legacy fail-open behavior
 				} else if count > *override {
 					return ErrGroupRPMExceeded
 				}
@@ -807,7 +891,10 @@ func (s *BillingCacheService) checkRPM(ctx context.Context, user *User, group *G
 					"Warning: rpm increment (group) failed for user=%d group=%d: %v",
 					user.ID, group.ID, err,
 				)
-				// fail-open
+				if failClosed {
+					return ErrOrganizationBillingUnavailable.WithCause(err)
+				}
+				// personal traffic keeps the legacy fail-open behavior
 			} else if count > group.RPMLimit {
 				return ErrGroupRPMExceeded
 			}
@@ -823,6 +910,9 @@ func (s *BillingCacheService) checkRPM(ctx context.Context, user *User, group *G
 				"Warning: rpm increment (user) failed for user=%d: %v",
 				user.ID, err,
 			)
+			if failClosed {
+				return ErrOrganizationBillingUnavailable.WithCause(err)
+			}
 			return nil // fail-open
 		}
 		if count > user.RPMLimit {
@@ -1040,7 +1130,30 @@ func (s *BillingCacheService) checkUserPlatformQuotaEligibility(
 	userID int64,
 	platform string,
 ) error {
-	if platform == "" || s.userPlatformQuotaRepo == nil {
+	return s.checkUserPlatformQuotaEligibilityWithPolicy(ctx, userID, platform, false)
+}
+
+func (s *BillingCacheService) checkOrganizationUserPlatformQuotaEligibility(
+	ctx context.Context,
+	userID int64,
+	platform string,
+) error {
+	return s.checkUserPlatformQuotaEligibilityWithPolicy(ctx, userID, platform, true)
+}
+
+func (s *BillingCacheService) checkUserPlatformQuotaEligibilityWithPolicy(
+	ctx context.Context,
+	userID int64,
+	platform string,
+	failClosed bool,
+) error {
+	if platform == "" {
+		return nil
+	}
+	if s == nil || s.userPlatformQuotaRepo == nil {
+		if failClosed {
+			return ErrOrganizationBillingUnavailable
+		}
 		return nil
 	}
 
@@ -1157,10 +1270,16 @@ func (s *BillingCacheService) checkUserPlatformQuotaEligibility(
 	case <-ctx.Done():
 		// 当前 caller 的 ctx 被取消：fail-open，不阻断 (此请求已无意义)。
 		logger.LegacyPrintf("service.billing_cache", "Warning: user platform quota check ctx cancelled user=%d platform=%s: %v (fail-open)", userID, platform, ctx.Err())
+		if failClosed {
+			return ErrOrganizationBillingUnavailable.WithCause(ctx.Err())
+		}
 		return nil
 	}
 	if dbErr != nil {
 		logger.LegacyPrintf("service.billing_cache", "Warning: load user platform quota failed user=%d platform=%s: %v (fail-open)", userID, platform, dbErr)
+		if failClosed {
+			return ErrOrganizationBillingUnavailable.WithCause(dbErr)
+		}
 		return nil
 	}
 	rec, _ := v.(*UserPlatformQuotaRecord)

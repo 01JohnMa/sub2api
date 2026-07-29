@@ -124,6 +124,18 @@ func (r *organizationExecutionRepository) RedriveExecutionOutbox(ctx context.Con
 	})
 }
 
+func (r *organizationExecutionRepository) RedrivePendingExecutionEffects(ctx context.Context, limit int) ([]service.OrganizationExecutionOutboxApplyResult, error) {
+	if r == nil || r.client == nil {
+		return nil, service.ErrOrganizationExecutionRepositoryUnavailable
+	}
+	if limit <= 0 || limit > 1000 {
+		return nil, service.ErrOrganizationExecutionInvalid
+	}
+	return withExecutionTransaction(r, ctx, "redrive organization execution effects", func(txCtx context.Context, client *dbent.Client) ([]service.OrganizationExecutionOutboxApplyResult, error) {
+		return redrivePendingOrganizationExecutionEffects(txCtx, client, limit)
+	})
+}
+
 func withExecutionTransaction[T any](
 	r *organizationExecutionRepository,
 	ctx context.Context,
@@ -299,6 +311,13 @@ func reserveOrganizationExecution(ctx context.Context, client *dbent.Client, com
 			return nil, err
 		}
 		return preDispatchRejectedExecution(ctx, client, command, execution, "stale_authoritative_attribution")
+	}
+	if command.PreDispatchZeroProof != "" {
+		execution, err := insertOrganizationExecution(ctx, client, command, nil, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+		return preDispatchRejectedExecution(ctx, client, command, execution, command.PreDispatchZeroProof)
 	}
 
 	reservedAmount, err := parseExecutionMoney(command.CandidateRouteMaximumCost)
@@ -524,7 +543,7 @@ func preDispatchRejectedExecution(ctx context.Context, client *dbent.Client, com
 	if err := requireSingleExecutionMutation("terminalize stale execution", updateResult); err != nil {
 		return nil, err
 	}
-	if err := insertExecutionOutboxes(ctx, client, execution, finalID, service.OrganizationExecutionTerminalOutcomeError, occurredAt); err != nil {
+	if err := insertExecutionOutboxes(ctx, client, execution, finalID, service.OrganizationExecutionTerminalOutcomeError, decimal.Zero, occurredAt); err != nil {
 		return nil, err
 	}
 	final := &organizationFinalEvidenceRecord{
@@ -1391,9 +1410,10 @@ func redrivePendingOrganizationAttemptAccountEffects(ctx context.Context, client
 	rows, err := client.QueryContext(ctx, `
 		SELECT attempt_id_snapshot
 		FROM organization_attempt_account_effects
-		WHERE status = $1
-		ORDER BY created_at, id
-		LIMIT $2
+			WHERE status = $1
+			ORDER BY created_at, id
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
 	`, service.OrganizationAttemptAccountEffectStatePending, limit)
 	if err != nil {
 		return nil, executionStorageError("claim pending attempt Account effects", err)
@@ -1462,8 +1482,47 @@ func redriveOrganizationExecutionOutbox(ctx context.Context, client *dbent.Clien
 		} else if err != nil {
 			return nil, executionStorageError("lock execution outbox API key", err)
 		} else if settledCost.GreaterThan(decimal.Zero) {
-			if _, err := client.ExecContext(ctx, `UPDATE api_keys SET quota_used = quota_used + $1::numeric, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL`, fixedExecutionMoney(settledCost), outbox.APIKeyID); err != nil {
-				return nil, executionStorageError("apply execution API key quota", err)
+			// The API-key outbox is the durable idempotency boundary for both
+			// quota_used and rate-limit usage. Keeping them in one SQL update
+			// prevents a crash between the two effects from losing rate usage.
+			cost := fixedExecutionMoney(settledCost)
+			if _, err := client.ExecContext(ctx, `
+				UPDATE api_keys SET
+					quota_used = quota_used + $1::numeric,
+					usage_5h = CASE
+						WHEN rate_limit_5h <= 0 THEN usage_5h
+						WHEN window_5h_start IS NULL OR window_5h_start + INTERVAL '5 hours' <= $2::timestamptz THEN $1::numeric
+						ELSE usage_5h + $1::numeric
+					END,
+					usage_1d = CASE
+						WHEN rate_limit_1d <= 0 THEN usage_1d
+						WHEN window_1d_start IS NULL OR window_1d_start + INTERVAL '24 hours' <= $2::timestamptz THEN $1::numeric
+						ELSE usage_1d + $1::numeric
+					END,
+					usage_7d = CASE
+						WHEN rate_limit_7d <= 0 THEN usage_7d
+						WHEN window_7d_start IS NULL OR window_7d_start + INTERVAL '7 days' <= $2::timestamptz THEN $1::numeric
+						ELSE usage_7d + $1::numeric
+					END,
+					window_5h_start = CASE
+						WHEN rate_limit_5h <= 0 THEN window_5h_start
+						WHEN window_5h_start IS NULL OR window_5h_start + INTERVAL '5 hours' <= $2::timestamptz THEN $2::timestamptz
+						ELSE window_5h_start
+					END,
+					window_1d_start = CASE
+						WHEN rate_limit_1d <= 0 THEN window_1d_start
+						WHEN window_1d_start IS NULL OR window_1d_start + INTERVAL '24 hours' <= $2::timestamptz THEN date_trunc('day', $2::timestamptz)
+						ELSE window_1d_start
+					END,
+					window_7d_start = CASE
+						WHEN rate_limit_7d <= 0 THEN window_7d_start
+						WHEN window_7d_start IS NULL OR window_7d_start + INTERVAL '7 days' <= $2::timestamptz THEN date_trunc('day', $2::timestamptz)
+						ELSE window_7d_start
+					END,
+					updated_at = NOW()
+				WHERE id = $3 AND deleted_at IS NULL
+			`, cost, outbox.OccurredAt.UTC(), outbox.APIKeyID); err != nil {
+				return nil, executionStorageError("apply execution API key quota and rate", err)
 			}
 		}
 	case "user_platform_quota":
@@ -1503,6 +1562,47 @@ func redriveOrganizationExecutionOutbox(ctx context.Context, client *dbent.Clien
 	}
 	outbox.Status = status
 	return organizationExecutionOutboxApplyResult(outbox, false), nil
+}
+
+func redrivePendingOrganizationExecutionEffects(ctx context.Context, client *dbent.Client, limit int) ([]service.OrganizationExecutionOutboxApplyResult, error) {
+	rows, err := client.QueryContext(ctx, `
+		SELECT id
+		FROM organization_execution_outboxes
+			WHERE status = $1
+				AND event_type IN ('api_key_quota', 'user_platform_quota')
+			ORDER BY id
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+	`, service.OrganizationAttemptAccountEffectStatePending, limit)
+	if err != nil {
+		return nil, executionStorageError("list pending execution effects", err)
+	}
+	defer rows.Close()
+
+	var outboxIDs []int64
+	for rows.Next() {
+		var outboxID int64
+		if err := rows.Scan(&outboxID); err != nil {
+			return nil, executionStorageError("scan pending execution effect", err)
+		}
+		outboxIDs = append(outboxIDs, outboxID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, executionStorageError("iterate pending execution effects", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, executionStorageError("close pending execution effects", err)
+	}
+
+	results := make([]service.OrganizationExecutionOutboxApplyResult, 0, len(outboxIDs))
+	for _, outboxID := range outboxIDs {
+		result, err := redriveOrganizationExecutionOutbox(ctx, client, outboxID)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, *result)
+	}
+	return results, nil
 }
 
 func loadOrganizationExecutionOutbox(ctx context.Context, client *dbent.Client, outboxID int64, forUpdate bool) (*organizationExecutionOutboxRecord, error) {
@@ -1842,7 +1942,7 @@ func terminalizeOrganizationExecution(ctx context.Context, client *dbent.Client,
 	if err := requireSingleExecutionMutation("terminalize execution", updateResult); err != nil {
 		return nil, err
 	}
-	if err := insertExecutionOutboxes(ctx, client, execution, finalID, command.TerminalOutcome, command.OccurredAt); err != nil {
+	if err := insertExecutionOutboxes(ctx, client, execution, finalID, command.TerminalOutcome, settledAmount, command.OccurredAt); err != nil {
 		return nil, err
 	}
 
@@ -2439,11 +2539,7 @@ func loadFinalAttemptEvidence(ctx context.Context, client *dbent.Client, attempt
 	return record, nil
 }
 
-func insertExecutionOutboxes(ctx context.Context, client *dbent.Client, execution *organizationExecutionRecord, finalEvidenceID int64, terminalOutcome string, occurredAt time.Time) error {
-	eventType := "usage_projection"
-	if terminalOutcome == service.OrganizationExecutionTerminalOutcomeError {
-		eventType = "error_projection"
-	}
+func insertExecutionOutboxes(ctx context.Context, client *dbent.Client, execution *organizationExecutionRecord, finalEvidenceID int64, terminalOutcome string, settledCost decimal.Decimal, occurredAt time.Time) error {
 	payload, err := json.Marshal(map[string]any{
 		"execution_id":      execution.ExecutionID,
 		"final_evidence_id": finalEvidenceID,
@@ -2453,7 +2549,9 @@ func insertExecutionOutboxes(ctx context.Context, client *dbent.Client, executio
 	if err != nil {
 		return service.ErrOrganizationExecutionInvariant.WithCause(err)
 	}
-	for _, event := range []string{eventType, "api_key_quota", "user_platform_quota"} {
+	// Preserve the terminal projection for zero-cost errors, but only create
+	// quota projections when a positive organization cost was settled.
+	for _, event := range organizationExecutionOutboxEventTypes(terminalOutcome, settledCost) {
 		if _, err := client.ExecContext(ctx, `
 			INSERT INTO organization_execution_outboxes (
 				execution_id_snapshot, execution_ref_id, final_evidence_id_snapshot,
@@ -2464,6 +2562,18 @@ func insertExecutionOutboxes(ctx context.Context, client *dbent.Client, executio
 		}
 	}
 	return nil
+}
+
+func organizationExecutionOutboxEventTypes(terminalOutcome string, settledCost decimal.Decimal) []string {
+	eventType := "usage_projection"
+	if terminalOutcome == service.OrganizationExecutionTerminalOutcomeError {
+		eventType = "error_projection"
+	}
+	events := []string{eventType}
+	if settledCost.GreaterThan(decimal.Zero) {
+		events = append(events, "api_key_quota", "user_platform_quota")
+	}
+	return events
 }
 
 func organizationFinalEvidenceResult(ctx context.Context, client *dbent.Client, execution *organizationExecutionRecord, reservation *organizationReservationRecord, final *organizationFinalEvidenceRecord, replayed bool) (*service.OrganizationFinalExecutionEvidenceResult, error) {

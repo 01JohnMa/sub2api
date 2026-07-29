@@ -117,6 +117,7 @@ type OrganizationExecutionReservationInput struct {
 	PricingSnapshot           json.RawMessage
 	CandidateRouteMaximumCost string
 	BillingFingerprint        string
+	PreDispatchZeroProof      string
 }
 
 // OrganizationExecutionReservationCommand is the repository transaction
@@ -135,6 +136,7 @@ type OrganizationExecutionReservationCommand struct {
 	PricingSnapshotHash       string
 	CandidateRouteMaximumCost string
 	BillingFingerprint        string
+	PreDispatchZeroProof      string
 	AcceptedAt                time.Time
 }
 
@@ -340,6 +342,13 @@ type OrganizationExecutionRecoveryRepository interface {
 	RedriveExecutionOutbox(ctx context.Context, outboxID int64) (*OrganizationExecutionOutboxApplyResult, error)
 }
 
+// OrganizationExecutionAutomaticEffectRepository is an optional runtime seam
+// for applying the durable side-effect records created by attempt and final
+// evidence. Failures leave those records pending for the recovery control plane.
+type OrganizationExecutionAutomaticEffectRepository interface {
+	RedrivePendingExecutionEffects(ctx context.Context, limit int) ([]OrganizationExecutionOutboxApplyResult, error)
+}
+
 type OrganizationPendingReconciliationCommand struct {
 	ExecutionID          string
 	OperationID          string
@@ -488,6 +497,7 @@ func (s *OrganizationExecutionService) ExecuteMultiAttempt(
 	if reservation.FinalEvidence != nil {
 		finalEvidence := *reservation.FinalEvidence
 		finalEvidence.Replayed = finalEvidence.Replayed || reservation.Replayed
+		s.redriveExecutionEffects(ctx)
 		return &OrganizationExecutionAttemptRunResult{
 			ExecutionID:   command.ExecutionID,
 			CorrelationID: command.CorrelationID,
@@ -545,7 +555,7 @@ func (s *OrganizationExecutionService) ExecuteMultiAttempt(
 			OccurredAt:      s.clockNow(),
 		}
 		if !dispatchResult.Dispatched {
-			if sequence != 1 || dispatchResult.Retryable || dispatchResult.PendingReconciliation {
+			if dispatchResult.Retryable || dispatchResult.PendingReconciliation {
 				return nil, ErrOrganizationExecutionInvalid
 			}
 			terminal.ZeroProof = strings.TrimSpace(dispatchResult.ZeroProof)
@@ -595,6 +605,7 @@ func (s *OrganizationExecutionService) ExecuteMultiAttempt(
 		if err := ValidateOrganizationAttemptEvidenceResult(attemptCommand, attemptEvidence); err != nil {
 			return nil, err
 		}
+		s.redriveAttemptAccountEffect(ctx, attemptCommand.AttemptID)
 		evidenceID := attemptEvidence.AttemptEvidenceID
 		run.Attempts = append(run.Attempts, OrganizationExecutionAttemptRun{
 			AttemptID:       attemptCommand.AttemptID,
@@ -636,7 +647,31 @@ func (s *OrganizationExecutionService) terminalize(
 	if err := ValidateOrganizationFinalExecutionEvidenceResult(reservation, command, result); err != nil {
 		return nil, err
 	}
+	s.redriveExecutionEffects(ctx)
 	return result, nil
+}
+
+func (s *OrganizationExecutionService) redriveAttemptAccountEffect(ctx context.Context, attemptID string) {
+	if s == nil || s.repo == nil {
+		return
+	}
+	recovery, ok := s.repo.(OrganizationExecutionRecoveryRepository)
+	if !ok {
+		return
+	}
+	_, _ = recovery.RedriveAttemptAccountEffect(ctx, attemptID)
+	_, _ = recovery.RedrivePendingAttemptAccountEffects(ctx, 100)
+}
+
+func (s *OrganizationExecutionService) redriveExecutionEffects(ctx context.Context) {
+	if s == nil || s.repo == nil {
+		return
+	}
+	repository, ok := s.repo.(OrganizationExecutionAutomaticEffectRepository)
+	if !ok {
+		return
+	}
+	_, _ = repository.RedrivePendingExecutionEffects(ctx, 100)
 }
 
 // OrganizationExecutionFakeAdapter is a static, in-process adapter for the
@@ -676,7 +711,11 @@ func newOrganizationExecutionReservationCommand(input OrganizationExecutionReser
 	if err != nil {
 		return OrganizationExecutionReservationCommand{}, err
 	}
-	ceiling, err := NormalizeOrganizationMoney(input.CandidateRouteMaximumCost, true)
+	preDispatchZeroProof, err := normalizeOrganizationExecutionIdentifier(input.PreDispatchZeroProof, organizationExecutionReasonMaxBytes, true)
+	if err != nil {
+		return OrganizationExecutionReservationCommand{}, err
+	}
+	ceiling, err := NormalizeOrganizationMoney(input.CandidateRouteMaximumCost, preDispatchZeroProof == "")
 	if err != nil {
 		return OrganizationExecutionReservationCommand{}, ErrOrganizationExecutionInvalid.WithCause(err)
 	}
@@ -691,6 +730,9 @@ func newOrganizationExecutionReservationCommand(input OrganizationExecutionReser
 	clientRequestID, err := normalizeOrganizationExecutionIdentifier(input.ClientRequestID, organizationExecutionMetadataMaxBytes, true)
 	if err != nil {
 		return OrganizationExecutionReservationCommand{}, err
+	}
+	if preDispatchZeroProof != "" && ceiling != "0.00000000" {
+		return OrganizationExecutionReservationCommand{}, ErrOrganizationExecutionInvalid
 	}
 	fingerprint := strings.ToLower(strings.TrimSpace(input.BillingFingerprint))
 	if !validSHA256(fingerprint) {
@@ -712,6 +754,7 @@ func newOrganizationExecutionReservationCommand(input OrganizationExecutionReser
 		PricingSnapshotHash:       pricingSnapshotHash,
 		CandidateRouteMaximumCost: ceiling,
 		BillingFingerprint:        fingerprint,
+		PreDispatchZeroProof:      preDispatchZeroProof,
 		AcceptedAt:                now.UTC(),
 	}, nil
 }
@@ -861,10 +904,17 @@ func ValidateOrganizationExecutionReservationCommand(command OrganizationExecuti
 	if err := validateCanonicalOrganizationExecutionJSON(command.PricingSnapshotJSON, command.PricingSnapshotHash); err != nil {
 		return err
 	}
-	if canonical, err := NormalizeOrganizationMoney(command.CandidateRouteMaximumCost, true); err != nil || canonical != command.CandidateRouteMaximumCost {
+	proof, err := normalizeOrganizationExecutionIdentifier(command.PreDispatchZeroProof, organizationExecutionReasonMaxBytes, true)
+	if err != nil || proof != command.PreDispatchZeroProof {
+		return ErrOrganizationExecutionInvalid
+	}
+	if canonical, err := NormalizeOrganizationMoney(command.CandidateRouteMaximumCost, proof == ""); err != nil || canonical != command.CandidateRouteMaximumCost {
 		return ErrOrganizationExecutionInvalid
 	}
 	if fingerprint := strings.ToLower(strings.TrimSpace(command.BillingFingerprint)); fingerprint != command.BillingFingerprint || !validSHA256(fingerprint) {
+		return ErrOrganizationExecutionInvalid
+	}
+	if proof != "" && command.CandidateRouteMaximumCost != "0.00000000" {
 		return ErrOrganizationExecutionInvalid
 	}
 	return nil

@@ -96,6 +96,26 @@ type organizationExecutionRecoveryRepositoryStub struct {
 	reconcileResult  *OrganizationFinalExecutionEvidenceResult
 }
 
+type organizationExecutionAutomaticEffectsRepositoryStub struct {
+	*organizationExecutionRecoveryRepositoryStub
+	accountEffectAttemptIDs []string
+	executionEffectLimits   []int
+}
+
+func (r *organizationExecutionAutomaticEffectsRepositoryStub) RedriveAttemptAccountEffect(_ context.Context, attemptID string) (*OrganizationAttemptAccountEffectResult, error) {
+	r.accountEffectAttemptIDs = append(r.accountEffectAttemptIDs, attemptID)
+	return &OrganizationAttemptAccountEffectResult{AttemptID: attemptID, Status: OrganizationAttemptAccountEffectStateApplied}, nil
+}
+
+func (r *organizationExecutionAutomaticEffectsRepositoryStub) RedrivePendingExecutionEffects(_ context.Context, limit int) ([]OrganizationExecutionOutboxApplyResult, error) {
+	r.executionEffectLimits = append(r.executionEffectLimits, limit)
+	return nil, nil
+}
+
+func (r *organizationExecutionAutomaticEffectsRepositoryStub) RedrivePendingAttemptAccountEffects(_ context.Context, limit int) ([]OrganizationAttemptAccountEffectResult, error) {
+	return nil, nil
+}
+
 func (r *organizationExecutionRecoveryRepositoryStub) RecordPendingAttempt(_ context.Context, command OrganizationPendingAttemptCommand) error {
 	r.pendingCommands = append(r.pendingCommands, command)
 	return nil
@@ -346,6 +366,69 @@ func TestOrganizationExecutionServiceMultiAttemptFailoverPersistsEveryAttemptAnd
 	require.Equal(t, 1, repo.terminalCalls)
 	require.Len(t, adapter.requests, 2)
 	require.NotEqual(t, adapter.requests[0].ProviderRequestID, adapter.requests[1].ProviderRequestID)
+}
+
+func TestOrganizationExecutionServiceBestEffortAppliesDurableRuntimeEffects(t *testing.T) {
+	base := &organizationExecutionRepositoryStub{}
+	base.reserve = func(command OrganizationExecutionReservationCommand) (*OrganizationExecutionReservationResult, error) {
+		return organizationExecutionReserved(command), nil
+	}
+	base.attempt = func(command OrganizationAttemptEvidenceCommand) (*OrganizationAttemptEvidenceResult, error) {
+		return &OrganizationAttemptEvidenceResult{AttemptEvidenceID: 811, ExecutionID: command.ExecutionID, AttemptID: command.AttemptID}, nil
+	}
+	base.terminal = func(command OrganizationTerminalizationCommand) (*OrganizationFinalExecutionEvidenceResult, error) {
+		return organizationExecutionFinal(command, "1.25", "1.25000000", OrganizationReservationStateSettled), nil
+	}
+	repo := &organizationExecutionAutomaticEffectsRepositoryStub{
+		organizationExecutionRecoveryRepositoryStub: &organizationExecutionRecoveryRepositoryStub{organizationExecutionRepositoryStub: base},
+	}
+	executionService := newOrganizationExecutionTestService(repo)
+	command, err := executionService.NewReservationCommand(organizationExecutionInput())
+	require.NoError(t, err)
+	observation := organizationExecutionObservation()
+	observation.RawActualCost = "1.25"
+
+	run, err := executionService.ExecuteMultiAttempt(context.Background(), *command, 1, &organizationExecutionAdapterStub{result: &OrganizationExecutionAttemptResult{
+		Dispatched: true, TerminalOutcome: OrganizationExecutionTerminalOutcomeSuccess, Observation: observation,
+	}})
+
+	require.NoError(t, err)
+	require.Len(t, repo.accountEffectAttemptIDs, 1)
+	require.Equal(t, run.Attempts[0].AttemptID, repo.accountEffectAttemptIDs[0])
+	require.Equal(t, []int{100}, repo.executionEffectLimits)
+}
+
+func TestOrganizationExecutionServiceCandidateConflictAfterFailoverReleasesWithZeroProof(t *testing.T) {
+	repo := &organizationExecutionRepositoryStub{}
+	repo.reserve = func(command OrganizationExecutionReservationCommand) (*OrganizationExecutionReservationResult, error) {
+		return organizationExecutionReserved(command), nil
+	}
+	repo.attempt = func(command OrganizationAttemptEvidenceCommand) (*OrganizationAttemptEvidenceResult, error) {
+		return &OrganizationAttemptEvidenceResult{AttemptEvidenceID: 701, ExecutionID: command.ExecutionID, AttemptID: command.AttemptID}, nil
+	}
+	repo.terminal = func(command OrganizationTerminalizationCommand) (*OrganizationFinalExecutionEvidenceResult, error) {
+		require.Nil(t, command.FinalAttemptID)
+		require.Equal(t, "candidate_snapshot_conflict", command.ZeroProof)
+		return organizationExecutionFinal(command, "0", "0.00000000", OrganizationReservationStateReleased), nil
+	}
+	service := newOrganizationExecutionTestService(repo)
+	command, err := service.NewReservationCommand(organizationExecutionInput())
+	require.NoError(t, err)
+	failed := organizationExecutionObservation()
+	failed.RawActualCost = "0"
+	adapter := &organizationExecutionSequenceAdapterStub{results: []*OrganizationExecutionAttemptResult{
+		{Dispatched: true, TerminalOutcome: OrganizationExecutionTerminalOutcomeError, Observation: failed, Retryable: true},
+		{Dispatched: false, TerminalOutcome: OrganizationExecutionTerminalOutcomeError, ZeroProof: "candidate_snapshot_conflict"},
+	}}
+
+	run, err := service.ExecuteMultiAttempt(context.Background(), *command, 2, adapter)
+
+	require.NoError(t, err)
+	require.Len(t, run.Attempts, 1)
+	require.NotNil(t, run.Final)
+	require.Equal(t, OrganizationReservationStateReleased, run.Final.ReservationState)
+	require.Equal(t, 1, repo.attemptCalls)
+	require.Equal(t, 1, repo.terminalCalls)
 }
 
 func TestOrganizationExecutionServiceUnknownDispatchKeepsReservationPending(t *testing.T) {

@@ -1,6 +1,6 @@
 import type { GroupPlatform } from '@/types'
 
-export const OPENAI_CC_SWITCH_CODEX_MODEL = 'gpt-5.5'
+export const OPENAI_CC_SWITCH_CODEX_MODEL = 'gpt-5.6-sol'
 
 export type CcSwitchClientType = 'claude' | 'gemini'
 
@@ -19,6 +19,11 @@ export interface CcSwitchImportDeeplinkInput {
   usageScript: string
 }
 
+function normalizeOpenAICcSwitchEndpoint(baseUrl: string): string {
+  const trimmedBaseUrl = baseUrl.replace(/\/+$/, '')
+  return `${trimmedBaseUrl.replace(/(?:\/v1)+$/i, '')}/v1`
+}
+
 export function resolveCcSwitchImportConfig(
   platform: GroupPlatform | undefined | null,
   clientType: CcSwitchClientType,
@@ -33,7 +38,7 @@ export function resolveCcSwitchImportConfig(
     case 'openai':
       return {
         app: 'codex',
-        endpoint: baseUrl,
+        endpoint: normalizeOpenAICcSwitchEndpoint(baseUrl),
         model: OPENAI_CC_SWITCH_CODEX_MODEL
       }
     case 'gemini':

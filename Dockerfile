@@ -30,7 +30,9 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 
 # Install dependencies first (better caching)
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
-RUN  \
+COPY frontend/vendor/ ./vendor/
+RUN echo "8dc73fc3b00203e72d176e85b50938627c7b086e607c682e8d3c22c02bb99fe8  vendor/xlsx-0.20.3.tgz" | sha256sum -c -
+RUN \
     if [ -n "${NPM_CONFIG_REGISTRY}" ]; then pnpm config set registry "${NPM_CONFIG_REGISTRY}"; fi && \
     pnpm install --frozen-lockfile --prefer-offline
 
@@ -74,7 +76,7 @@ WORKDIR /app/backend
 COPY backend/go.mod backend/go.sum ./
 # Cache mount keeps the module cache across builds so a transient CDN blip on
 # retry resumes instead of re-fetching every zip from scratch.
-RUN  \
+RUN \
     go mod download
 
 # Copy backend source first
@@ -85,7 +87,7 @@ COPY --from=frontend-builder /app/backend/internal/web/dist ./internal/web/dist
 
 # Build the binary (BuildType=release for CI builds, embed frontend)
 # Version precedence: build arg VERSION > exact git tag > cmd/server/VERSION
-RUN  \
+RUN \
     \
     VERSION_VALUE="${VERSION}" && \
     if [ -z "${VERSION_VALUE}" ]; then VERSION_VALUE="$(./scripts/resolve-version.sh)"; fi && \

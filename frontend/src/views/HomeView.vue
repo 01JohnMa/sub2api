@@ -5,11 +5,14 @@
     <iframe
       v-if="isHomeContentUrl"
       :src="homeContent.trim()"
+      :title="t('home.customContentFrameTitle', { siteName })"
       class="h-screen w-full border-0"
+      sandbox="allow-forms allow-popups allow-scripts"
+      referrerpolicy="strict-origin-when-cross-origin"
       allowfullscreen
     ></iframe>
-    <!-- HTML mode - SECURITY: homeContent is admin-only setting, XSS risk is acceptable -->
-    <div v-else v-html="homeContent"></div>
+    <!-- HTML mode is sanitized before insertion into the application origin. -->
+    <div v-else v-html="sanitizedHomeContent"></div>
   </div>
 
   <!-- Compact Home Page -->
@@ -496,6 +499,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import DOMPurify from 'dompurify'
 import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -522,6 +526,13 @@ const isHomeContentUrl = computed(() => {
   const content = homeContent.value.trim()
   return content.startsWith('http://') || content.startsWith('https://')
 })
+const sanitizedHomeContent = computed(() =>
+  DOMPurify.sanitize(homeContent.value, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ['iframe', 'object', 'embed'],
+    FORBID_ATTR: ['srcdoc']
+  })
+)
 
 // Theme
 const isDark = ref(document.documentElement.classList.contains('dark'))

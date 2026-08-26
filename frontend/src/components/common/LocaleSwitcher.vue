@@ -1,10 +1,19 @@
 <template>
   <div class="relative" ref="dropdownRef">
     <button
+      type="button"
       @click="toggleDropdown"
       :disabled="switching"
-      class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+      class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors"
+      :class="
+        fixedLight
+          ? 'text-gray-950 hover:bg-black/10'
+          : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'
+      "
       :title="currentLocale?.name"
+      :aria-label="t('common.changeLanguage')"
+      aria-controls="locale-options"
+      :aria-expanded="isOpen"
     >
       <span class="text-base">{{ currentLocale?.flag }}</span>
       <span class="hidden sm:inline">{{ currentLocale?.code.toUpperCase() }}</span>
@@ -19,18 +28,28 @@
     <transition name="dropdown">
       <div
         v-if="isOpen"
-        class="absolute right-0 z-50 mt-1 w-32 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-dark-700 dark:bg-dark-800"
+        id="locale-options"
+        role="group"
+        :aria-label="t('common.changeLanguage')"
+        class="absolute right-0 z-50 mt-1 w-32 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
+        :class="{ 'dark:border-dark-700 dark:bg-dark-800': !fixedLight }"
       >
         <button
           v-for="locale in availableLocales"
           :key="locale.code"
+          type="button"
           :disabled="switching"
           @click="selectLocale(locale.code)"
-          class="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-dark-700"
-          :class="{
-            'bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400':
-              locale.code === currentLocaleCode
-          }"
+          class="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100"
+          :class="[
+            { 'dark:text-gray-200 dark:hover:bg-dark-700': !fixedLight },
+            locale.code === currentLocaleCode
+              ? fixedLight
+                ? 'bg-primary-50 text-primary-700'
+                : 'bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400'
+              : ''
+          ]"
+          :aria-pressed="locale.code === currentLocaleCode"
         >
           <span class="text-base">{{ locale.flag }}</span>
           <span>{{ locale.name }}</span>
@@ -47,7 +66,16 @@ import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import { setLocale, availableLocales } from '@/i18n'
 
-const { locale } = useI18n()
+withDefaults(
+  defineProps<{
+    fixedLight?: boolean
+  }>(),
+  {
+    fixedLight: false
+  }
+)
+
+const { locale, t } = useI18n()
 
 const isOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)

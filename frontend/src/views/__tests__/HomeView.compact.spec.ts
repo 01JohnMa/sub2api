@@ -80,10 +80,14 @@ describe('HomeView compact mode', () => {
   it('renders custom HTML ahead of compact mode', () => {
     const wrapper = mountHome({
       compact_home_enabled: true,
-      home_content: '<section id="custom-home">Custom home</section>',
+      home_content:
+        '<section id="custom-home">Custom home</section><script>alert(1)</script><img src="x" onerror="alert(2)"><iframe src="https://example.com"></iframe>',
     })
 
     expect(wrapper.get('#custom-home').text()).toBe('Custom home')
+    expect(wrapper.find('script').exists()).toBe(false)
+    expect(wrapper.find('iframe').exists()).toBe(false)
+    expect(wrapper.find('img').attributes('onerror')).toBeUndefined()
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
   })
 
@@ -94,6 +98,9 @@ describe('HomeView compact mode', () => {
     })
 
     expect(wrapper.get('iframe').attributes('src')).toBe('https://example.com/home')
+    expect(wrapper.get('iframe').attributes('title')).toBe('home.customContentFrameTitle')
+    expect(wrapper.get('iframe').attributes('sandbox')).toContain('allow-scripts')
+    expect(wrapper.get('iframe').attributes('sandbox')).not.toContain('allow-same-origin')
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
   })
 

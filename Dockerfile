@@ -30,6 +30,8 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 
 # Install dependencies first (better caching)
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY frontend/vendor/ ./vendor/
+RUN echo "8dc73fc3b00203e72d176e85b50938627c7b086e607c682e8d3c22c02bb99fe8  vendor/xlsx-0.20.3.tgz" | sha256sum -c -
 RUN --mount=type=cache,id=sub2api-pnpm-store,target=/root/.local/share/pnpm/store \
     if [ -n "${NPM_CONFIG_REGISTRY}" ]; then pnpm config set registry "${NPM_CONFIG_REGISTRY}"; fi && \
     pnpm install --frozen-lockfile --prefer-offline

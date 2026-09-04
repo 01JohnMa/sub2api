@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   GROK_CC_SWITCH_MODEL,
-  OPENAI_CC_SWITCH_CODEX_MODEL,
-  buildCcSwitchImportDeeplink
+  buildCcSwitchImportDeeplink,
+  resolveCcSwitchUsageBaseUrl
 } from '@/utils/ccswitchImport'
 import type { GroupPlatform } from '@/types'
 
@@ -12,10 +12,6 @@ function paramsFromDeeplink(deeplink: string): URLSearchParams {
 }
 
 describe('ccswitchImport utils', () => {
-  it('defaults OpenAI CC Switch imports to the current Codex model', () => {
-    expect(OPENAI_CC_SWITCH_CODEX_MODEL).toBe('gpt-5.5')
-  })
-
   it('defaults Grok Build imports to the current Grok model', () => {
     expect(GROK_CC_SWITCH_MODEL).toBe('grok-4.5')
   })
@@ -27,7 +23,7 @@ describe('ccswitchImport utils', () => {
     usageScript: 'return true'
   }
 
-  it('adds the Codex model parameter for OpenAI imports', () => {
+  it('leaves Codex model selection to Codex for OpenAI imports', () => {
     const params = paramsFromDeeplink(
       buildCcSwitchImportDeeplink({
         ...baseInput,
@@ -38,9 +34,40 @@ describe('ccswitchImport utils', () => {
 
     expect(params.get('resource')).toBe('provider')
     expect(params.get('app')).toBe('codex')
-    expect(params.get('endpoint')).toBe(baseInput.baseUrl)
-    expect(params.get('model')).toBe(OPENAI_CC_SWITCH_CODEX_MODEL)
+    expect(params.get('endpoint')).toBe(`${baseInput.baseUrl}/v1`)
+    expect(params.has('model')).toBe(false)
+    expect(params.get('usageEnabled')).toBe('true')
+    expect(params.get('usageBaseUrl')).toBe(baseInput.baseUrl)
     expect(atob(params.get('usageScript') || '')).toBe(baseInput.usageScript)
+  })
+
+  it.each([
+    ['https://api.example.com', 'https://api.example.com/v1'],
+    ['https://api.example.com/', 'https://api.example.com/v1'],
+    ['https://api.example.com/v1', 'https://api.example.com/v1'],
+    ['https://api.example.com/v1/', 'https://api.example.com/v1'],
+    ['https://api.example.com/v1/v1/', 'https://api.example.com/v1']
+  ])('normalizes the OpenAI endpoint from %s to %s', (baseUrl, expectedEndpoint) => {
+    const params = paramsFromDeeplink(
+      buildCcSwitchImportDeeplink({
+        ...baseInput,
+        baseUrl,
+        platform: 'openai',
+        clientType: 'claude'
+      })
+    )
+
+    expect(params.get('endpoint')).toBe(expectedEndpoint)
+  })
+
+  it.each([
+    ['https://api.example.com', 'https://api.example.com'],
+    ['https://api.example.com/', 'https://api.example.com'],
+    ['https://api.example.com/v1', 'https://api.example.com'],
+    ['https://api.example.com/v1/', 'https://api.example.com'],
+    ['  https://api.example.com/v1/v1/  ', 'https://api.example.com']
+  ])('resolves the usage base URL from %s', (baseUrl, expected) => {
+    expect(resolveCcSwitchUsageBaseUrl(baseUrl)).toBe(expected)
   })
 
   it.each([

@@ -113,6 +113,20 @@ func TestNormalizeOpenAIResponsesRejectedFieldRetryBodyRepairsAutomationMissingR
 	require.Equal(t, "object", gjson.GetBytes(retryBody, "tools.0.parameters.type").String())
 }
 
+func TestNormalizeOpenAIResponsesRejectedFieldRetryBodyRemovesRejectedReasoningSummary(t *testing.T) {
+	body := []byte("{\"model\":\"gpt-5.3-codex-spark\",\"reasoning\":{\"effort\":\"high\",\"summary\":\"auto\"},\"input\":\"hello\"}")
+	responseBody := []byte("{\"error\":{\"code\":\"unsupported_parameter\",\"message\":\"Unsupported parameter: 'reasoning.summary' is not supported with the 'gpt-5.3-codex-spark' model.\",\"param\":\"reasoning.summary\"}}")
+
+	retryBody, reason, changed, err := normalizeOpenAIResponsesRejectedFieldRetryBody(http.StatusBadRequest, body, responseBody)
+
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, "reasoning.summary parameter rejection", reason)
+	require.Equal(t, "high", gjson.GetBytes(retryBody, "reasoning.effort").String())
+	require.False(t, gjson.GetBytes(retryBody, "reasoning.summary").Exists())
+	require.Equal(t, "hello", gjson.GetBytes(retryBody, "input").String())
+}
+
 func TestNormalizeOpenAIResponsesRejectedFieldRetryBodyDoesNotGuessAutomationRootType(t *testing.T) {
 	body := []byte(`{"tools":[{"type":"function","name":"automation_update","parameters":{"oneOf":[{"type":"object"}]}}]}`)
 	tests := []string{
@@ -593,6 +607,28 @@ func TestOpenAIGatewayService_RetriesExplicitMaxOutputTokensRejection(t *testing
 	require.Equal(t, int64(4096), gjson.GetBytes(upstream.bodies[0], "max_output_tokens").Int())
 	require.False(t, gjson.GetBytes(upstream.bodies[1], "max_output_tokens").Exists())
 	require.Equal(t, "keep", gjson.GetBytes(upstream.bodies[1], "input.0.content.max_output_tokens").String())
+}
+
+func TestOpenAIGatewayService_RetriesRejectedReasoningSummary(t *testing.T) {
+	body := []byte("{\"model\":\"gpt-5.3-codex-spark\",\"stream\":false,\"reasoning\":{\"effort\":\"high\",\"summary\":\"auto\"},\"input\":\"hello\"}")
+	upstream := &httpUpstreamRecorder{responses: []*http.Response{
+		newOpenAIRejectedFieldTestResponse(http.StatusBadRequest, "{\"error\":{\"code\":\"unsupported_parameter\",\"message\":\"Unsupported parameter: 'reasoning.summary' is not supported with the 'gpt-5.3-codex-spark' model.\",\"param\":\"reasoning.summary\"}}"),
+		newOpenAIRejectedFieldTestResponse(http.StatusOK, "{\"output\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"input_tokens_details\":{\"cached_tokens\":0}}}"),
+	}}
+
+	result, err := newOpenAIRejectedFieldTestService(upstream).Forward(
+		context.Background(),
+		newOpenAIRejectedFieldTestContext(body),
+		newOpenAIRejectedFieldTestAccount(),
+		body,
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Len(t, upstream.bodies, 2)
+	require.Equal(t, "auto", gjson.GetBytes(upstream.bodies[0], "reasoning.summary").String())
+	require.False(t, gjson.GetBytes(upstream.bodies[1], "reasoning.summary").Exists())
+	require.Equal(t, "high", gjson.GetBytes(upstream.bodies[1], "reasoning.effort").String())
 }
 
 func TestOpenAIGatewayService_ComposesProactiveNamespaceStripWithRejectedFieldRetry(t *testing.T) {

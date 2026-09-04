@@ -21,7 +21,7 @@ var (
 	openAIResponsesRejectedStatusParamPattern     = regexp.MustCompile(`(?i)^input\[(\d+)\]\.status$`)
 	openAIResponsesRejectedContentParamPattern    = regexp.MustCompile(`(?i)^input\[(\d+)\]\.content$`)
 	openAIResponsesRejectedCacheParamPattern      = regexp.MustCompile(`(?i)^input\[(\d+)\]\.prompt_cache_breakpoint$`)
-	openAIResponsesRejectedMessageParamPattern    = regexp.MustCompile(`(?i)(?:unknown|unsupported)[ _-]+parameter\s*(?::|=|is)?\s*["']?(max_output_tokens|truncation|input\[\d+\]\.(?:namespace|status))(?:["']|\b)`)
+	openAIResponsesRejectedMessageParamPattern    = regexp.MustCompile(`(?i)(?:unknown|unsupported)[ _-]+parameter\s*(?::|=|is)?\s*["']?(reasoning\.summary|max_output_tokens|truncation|input\[\d+\]\.(?:namespace|status))(?:["']|\b)`)
 	openAIResponsesInvalidTypeMessageParamPattern = regexp.MustCompile(`(?i)invalid[ _-]+type\s+for\s+["']?(input\[\d+\]\.content)(?:["']|\b)[^\n]*\b(?:got|received)\s+null\b`)
 	openAIResponsesMaxZeroContentMessagePattern   = regexp.MustCompile(`(?i)invalid\s+["']?(input\[\d+\]\.content)["']?\s*:\s*array too long\.[^\n]*maximum length 0\b`)
 	openAIResponsesCacheModelRejectionPattern     = regexp.MustCompile(`(?i)["']?(prompt_cache_breakpoint|input\[\d+\]\.prompt_cache_breakpoint)["']?\s+is\s+not\s+supported\s+on\s+this\s+model\b`)
@@ -156,6 +156,13 @@ func normalizeOpenAIResponsesRejectedFieldRetryBody(statusCode int, body, respon
 		}
 		if param == "" {
 			param = messageParam
+		}
+		if param == "reasoning.summary" && gjson.GetBytes(body, param).Exists() {
+			retryBody, err := sjson.DeleteBytes(body, param)
+			if err != nil {
+				return nil, "", false, fmt.Errorf("delete rejected reasoning.summary: %w", err)
+			}
+			return retryBody, "reasoning.summary parameter rejection", true, nil
 		}
 		if index, ok := openAIResponsesRejectedNamespaceIndex(param); ok {
 			return removeOpenAIResponsesRejectedNamespaceAtIndex(body, index)

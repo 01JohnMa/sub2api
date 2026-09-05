@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  OPENAI_CC_SWITCH_CODEX_MODEL,
-  buildCcSwitchImportDeeplink
-} from '@/utils/ccswitchImport'
+import { buildCcSwitchImportDeeplink } from '@/utils/ccswitchImport'
 import type { GroupPlatform } from '@/types'
 
 function paramsFromDeeplink(deeplink: string): URLSearchParams {
@@ -18,7 +15,7 @@ describe('ccswitchImport utils', () => {
     usageScript: 'return true'
   }
 
-  it('adds the Codex model parameter for OpenAI imports', () => {
+  it('leaves model selection to the imported client for OpenAI imports', () => {
     const params = paramsFromDeeplink(
       buildCcSwitchImportDeeplink({
         ...baseInput,
@@ -30,7 +27,7 @@ describe('ccswitchImport utils', () => {
     expect(params.get('resource')).toBe('provider')
     expect(params.get('app')).toBe('codex')
     expect(params.get('endpoint')).toBe(baseInput.baseUrl)
-    expect(params.get('model')).toBe(OPENAI_CC_SWITCH_CODEX_MODEL)
+    expect(params.has('model')).toBe(false)
     expect(atob(params.get('usageScript') || '')).toBe(baseInput.usageScript)
   })
 

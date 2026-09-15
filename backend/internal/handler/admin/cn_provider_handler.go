@@ -53,6 +53,29 @@ func (h *CNProviderHandler) QueryQuota(c *gin.Context) {
 	response.Success(c, result)
 }
 
+// ResetQuota 使用一次智谱「用量重置额度」周重置次数，恢复账号周用量。
+func (h *CNProviderHandler) ResetQuota(c *gin.Context) {
+	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+	if h == nil || h.quotaService == nil {
+		response.BadRequest(c, "cn provider quota service is not enabled")
+		return
+	}
+	result, err := h.quotaService.ResetUsage(c.Request.Context(), accountID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if !result.Success {
+		response.Error(c, http.StatusBadRequest, result.Error)
+		return
+	}
+	response.Success(c, result)
+}
+
 // QueryBalance 查询 payg 账号余额。
 func (h *CNProviderHandler) QueryBalance(c *gin.Context) {
 	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)

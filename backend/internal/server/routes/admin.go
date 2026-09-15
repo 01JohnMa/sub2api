@@ -512,10 +512,9 @@ func registerCNProviderRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		cn.GET("/accounts/:id/quota", h.Admin.CNProvider.QueryQuota)
 		// payg 账号余额（kimi/deepseek；zhipu 无余额端点）。
 		cn.GET("/accounts/:id/balance", h.Admin.CNProvider.QueryBalance)
-		// 智谱 Coding Plan 重置卡：GET 拉列表并落快照，POST 消耗一张。
+// 智谱 Coding Plan 重置：GET 拉个人版重置卡列表(#7713)；POST 使用周额度重置(#7159，团队+个人)。
 		cn.GET("/accounts/:id/reset-quota", h.Admin.CNProvider.ListResetCards)
-		cn.POST("/accounts/:id/reset-quota", h.Admin.CNProvider.UseResetCard)
-	}
+		cn.POST("/accounts/:id/reset-quota", h.Admin.CNProvider.ResetQuota)	}
 }
 
 func registerProxyRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {

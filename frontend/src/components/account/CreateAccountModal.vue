@@ -1408,7 +1408,7 @@
               />
             </div>
           </div>
-          <p v-if="!cnSupportsNativeResponses(form.platform)" class="input-hint">
+          <p v-if="!cnSupportsNativeResponses(form.platform, currentOpenCodeOrCNMode())" class="input-hint">
             {{ t('admin.accounts.cnProviders.apiProtocol.responsesFallbackDesc') }}
           </p>
         </div>
@@ -4237,7 +4237,7 @@ const cnProtocolOptions = computed<Array<{ value: CnApiProtocol; labelKey: strin
     { value: 'chat_completions', labelKey: 'chatCompletions' },
     { value: 'anthropic', labelKey: 'anthropic' }
   ]
-  if (cnSupportsNativeResponses(form.platform)) {
+  if (cnSupportsNativeResponses(form.platform, currentOpenCodeOrCNMode())) {
     opts.push({ value: 'responses', labelKey: 'responses' })
   }
   return opts
@@ -4247,7 +4247,9 @@ const cnAdaptiveProtocolOptions = computed<Array<{ value: CnNativeApiProtocol; l
     { value: 'chat_completions', labelKey: 'chatCompletions' },
     { value: 'anthropic', labelKey: 'anthropic' }
   ]
-  if (cnSupportsNativeResponses(form.platform)) opts.push({ value: 'responses', labelKey: 'responses' })
+  if (cnSupportsNativeResponses(form.platform, currentOpenCodeOrCNMode())) {
+    opts.push({ value: 'responses', labelKey: 'responses' })
+  }
   return opts
 })
 
@@ -4335,6 +4337,15 @@ watch(openCodeAccountMode, (mode, previousMode) => {
 })
 watch(accountMode, (mode, previousMode) => {
   if (!isMultiProtocolPlatform.value || isOpenCodeGoPlatform.value) return
+  // GLM Responses 仅 Coding Plan 官方支持；切换模式时避免残留不可用协议。
+  if (
+    form.platform === 'zhipu' &&
+    apiProtocol.value === 'responses' &&
+    !cnSupportsNativeResponses(form.platform, mode)
+  ) {
+    apiProtocol.value = 'chat_completions'
+    return
+  }
   if (apiProtocol.value === 'adaptive') {
     const previousDefaults = defaultCNAdaptiveBaseUrls(adaptivePresetPlatform.value, previousMode)
     const nextDefaults = defaultCNAdaptiveBaseUrls(adaptivePresetPlatform.value, mode)

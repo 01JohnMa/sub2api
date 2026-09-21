@@ -1,0 +1,60 @@
+name: CCS image (amd64)
+
+# 用途：把我们自己的品牌版 sub2api（含 292 打票功能）构建成 amd64 镜像并推送到 GHCR。
+# 触发：推 ccs-* 标签（避开 sub4api 的 v* release 流水线与 main-release 的 main 分支触发）。
+# 产物：ghcr.io/01johnma/sub2api:<tag> 与 <tag>-amd64（包为 public，VPS 可匿名拉取）。
+
+on:
+  push:
+    tags: ['ccs-*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '手动构建用的标签名（仅影响镜像 tag）'
+        required: false
+        default: 'manual'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image tag
+        id: meta
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Building image tag: ${TAG}"
+
+      - name: Build and push (linux/amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/01johnma/sub2api:${{ steps.meta.outputs.tag }}-amd64
+            ghcr.io/01johnma/sub2api:${{ steps.meta.outputs.tag }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.tag }}
+            COMMIT=${{ github.sha }}
+            DATE=${{ github.event.repository.pushed_at }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

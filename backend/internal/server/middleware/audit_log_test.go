@@ -224,3 +224,10 @@ func TestAuditRecordsEveryMCPOAuthReadWithGrant(t *testing.T) {
 	require.Equal(t, "grant-1", logs[0].Extra["mcp_grant_id"])
 	require.Equal(t, "admin_list_users", logs[0].Extra["mcp_tool"])
 }
+
+func TestZhipuResetCardUseHasStableAuditAction(t *testing.T) {
+	route := "POST /api/v1/admin/cn-providers/accounts/:id/reset-quota"
+	require.Equal(t, "admin.cn_providers.reset_card.use", auditActionOverrides[route])
+	// 请求体只有 reset_type / record_id，没有凭证，照常入库便于追溯用了哪张卡。
+	require.NotContains(t, auditBodyOmittedRoutes, route)
+}

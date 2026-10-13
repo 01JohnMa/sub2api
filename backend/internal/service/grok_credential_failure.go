@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -647,6 +647,10 @@ func (s *OpenAIGatewayService) newGrokCredentialFailover(c *gin.Context, account
 		class.message = "Grok OAuth credentials are unavailable"
 	}
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		// Credential acquisition happens before the inference transport opens,
+		// so the account binding is not evidence of an inference proxy route.
+		ProxyID:   nil,
+		ProxyName: opsProxyNameUnknown,
 		Platform:  PlatformGrok,
 		AccountID: account.ID,
 		Stage:     string(GatewayFailureStageAccountAuth),

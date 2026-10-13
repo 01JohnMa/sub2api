@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/apikey"
-	"github.com/Wei-Shaw/sub2api/ent/group"
-	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
-	"github.com/Wei-Shaw/sub2api/ent/user"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	dbent "github.com/MACOS-DO/sub4api/ent"
+	"github.com/MACOS-DO/sub4api/ent/apikey"
+	"github.com/MACOS-DO/sub4api/ent/group"
+	"github.com/MACOS-DO/sub4api/ent/schema/mixins"
+	"github.com/MACOS-DO/sub4api/ent/user"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/lib/pq"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/MACOS-DO/sub4api/internal/pkg/pagination"
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
@@ -155,6 +155,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				user.FieldBalance,
 				user.FieldConcurrency,
 				user.FieldBalanceNotifyEnabled,
+				user.FieldRestrictPublicGroups,
 				user.FieldBalanceNotifyThresholdType,
 				user.FieldBalanceNotifyThreshold,
 				user.FieldBalanceNotifyExtraEmails,
@@ -209,11 +210,15 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldSupportedModelScopes,
 				group.FieldAllowMessagesDispatch,
 				group.FieldAllowLive,
+				group.FieldForceOpenaiFast,
+				group.FieldFreeOpenaiFast,
 				group.FieldDefaultMappedModel,
 				group.FieldMessagesDispatchModelConfig,
-				group.FieldModelsListConfig,
+				group.FieldModelAllowlist,
+				group.FieldCodexModelsManifestConfig,
 				group.FieldRpmLimit,
 				group.FieldMaxReasoningEffort,
+				group.FieldMaxReasoningEffortOverLimit,
 				group.FieldReasoningEffortMappings,
 				group.FieldPeakRateEnabled,
 				group.FieldPeakStart,
@@ -931,6 +936,7 @@ func userEntityToService(u *dbent.User) *service.User {
 		TotpEnabled:                u.TotpEnabled,
 		TotpEnabledAt:              u.TotpEnabledAt,
 		BalanceNotifyEnabled:       u.BalanceNotifyEnabled,
+		RestrictPublicGroups:       u.RestrictPublicGroups,
 		BalanceNotifyThresholdType: u.BalanceNotifyThresholdType,
 		BalanceNotifyThreshold:     u.BalanceNotifyThreshold,
 		TotalRecharged:             u.TotalRecharged,
@@ -1005,13 +1011,17 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		SortOrder:                       g.SortOrder,
 		AllowMessagesDispatch:           g.AllowMessagesDispatch,
 		AllowLive:                       g.AllowLive,
+		ForceOpenAIFast:                 g.ForceOpenaiFast,
+		FreeOpenAIFast:                  g.FreeOpenaiFast,
 		RequireOAuthOnly:                g.RequireOauthOnly,
 		RequirePrivacySet:               g.RequirePrivacySet,
 		DefaultMappedModel:              g.DefaultMappedModel,
 		MessagesDispatchModelConfig:     g.MessagesDispatchModelConfig,
-		ModelsListConfig:                g.ModelsListConfig,
+		ModelAllowlist:                  service.GroupModelAllowlistFromDomain(g.ModelAllowlist),
+		CodexModelsManifestConfig:       g.CodexModelsManifestConfig,
 		RPMLimit:                        g.RpmLimit,
 		MaxReasoningEffort:              g.MaxReasoningEffort,
+		MaxReasoningEffortOverLimit:     g.MaxReasoningEffortOverLimit,
 		ReasoningEffortMappings:         g.ReasoningEffortMappings,
 		PeakRateEnabled:                 g.PeakRateEnabled,
 		PeakStart:                       g.PeakStart,

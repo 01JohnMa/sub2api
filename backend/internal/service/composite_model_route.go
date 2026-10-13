@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
 )
 
 const (
@@ -23,7 +23,18 @@ const (
 
 	CompositeRouteSourceExplicit = "route"
 	CompositeRouteSourceDetector = "detector"
+	CompositeRouteSourceAccount  = "account_model"
 )
+
+// CompositeModelOwnership identifies the concrete provider that exposes a
+// public model through an account-level exact mapping.
+type CompositeModelOwnership struct {
+	TargetPlatform string
+	Matched        bool
+	Ambiguous      bool
+}
+
+type CompositeModelOwnershipResolver func(context.Context, int64, string) (CompositeModelOwnership, error)
 
 var (
 	ErrCompositeRouteNotFound = infraerrors.NotFound("COMPOSITE_ROUTE_NOT_FOUND", "composite route not found")

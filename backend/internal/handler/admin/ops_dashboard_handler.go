@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/pkg/response"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -219,7 +219,8 @@ func (h *OpsHandler) GetDashboardErrorDistribution(c *gin.Context) {
 	response.Success(c, data)
 }
 
-// GetDashboardOpenAITokenStats returns OpenAI token efficiency stats grouped by model.
+// GetDashboardOpenAITokenStats returns token efficiency stats for all platforms, grouped by model.
+// The endpoint name is retained for compatibility; platform and group_id optionally narrow the scope.
 // GET /api/v1/admin/ops/dashboard/openai-token-stats
 func (h *OpsHandler) GetDashboardOpenAITokenStats(c *gin.Context) {
 	if h.opsService == nil {

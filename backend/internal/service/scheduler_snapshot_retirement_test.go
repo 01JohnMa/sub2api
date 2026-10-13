@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/MACOS-DO/sub4api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -176,7 +176,7 @@ func TestSchedulerFullRebuildCapturesAllRegistryTokensBeforeDBLoad(t *testing.T)
 	}
 
 	captures, reopens := cache.captureAndReopenCounts()
-	require.Equal(t, 36, captures, "group0 and active-group canonical tokens must be captured before the first DB load")
+	require.Equal(t, 2*schedulerCanonicalBucketCount(), captures, "group0 and active-group canonical tokens must be captured before the first DB load")
 	require.Zero(t, reopens)
 	require.NoError(t, cache.RetireBucket(context.Background(), queued))
 	_, err := cache.ReopenBucket(context.Background(), queued)

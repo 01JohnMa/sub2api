@@ -9,12 +9,12 @@ import (
 	"strconv"
 	"strings"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
-	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
-	"github.com/Wei-Shaw/sub2api/internal/payment"
-	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	dbent "github.com/MACOS-DO/sub4api/ent"
+	"github.com/MACOS-DO/sub4api/ent/paymentorder"
+	"github.com/MACOS-DO/sub4api/ent/paymentproviderinstance"
+	"github.com/MACOS-DO/sub4api/internal/payment"
+	"github.com/MACOS-DO/sub4api/internal/payment/provider"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
 )
 
 // validateProviderConfig runs the provider's constructor to surface config-level
@@ -224,6 +224,7 @@ func validateProviderRequest(providerKey, name, supportedTypes string) error {
 }
 
 var easyPayCustomMethodCodePattern = regexp.MustCompile(`^[a-z0-9_-]+$`)
+var easyPayUpstreamMethodCodePattern = regexp.MustCompile(`^[a-z0-9_.-]+$`)
 
 type easyPayCustomMethodConfig struct {
 	Type         string `json:"type"`
@@ -253,8 +254,8 @@ func validateEasyPayCustomMethods(config map[string]string, supportedTypes strin
 		if !easyPayCustomMethodCodePattern.MatchString(method.Type) {
 			return infraerrors.BadRequest("VALIDATION_ERROR", "customMethods type may only contain lowercase letters, digits, underscores, and hyphens")
 		}
-		if !easyPayCustomMethodCodePattern.MatchString(method.UpstreamType) {
-			return infraerrors.BadRequest("VALIDATION_ERROR", "customMethods upstreamType may only contain lowercase letters, digits, underscores, and hyphens")
+		if !easyPayUpstreamMethodCodePattern.MatchString(method.UpstreamType) {
+			return infraerrors.BadRequest("VALIDATION_ERROR", "customMethods upstreamType may only contain lowercase letters, digits, periods, underscores, and hyphens")
 		}
 		if easyPayCustomMethodTypeConflictsWithBuiltin(method.Type) {
 			return infraerrors.BadRequest("VALIDATION_ERROR", "customMethods type cannot start with alipay or wxpay")

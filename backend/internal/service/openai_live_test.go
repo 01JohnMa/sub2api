@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	"github.com/MACOS-DO/sub4api/internal/pkg/tlsfingerprint"
 	coderws "github.com/coder/websocket"
 	"github.com/stretchr/testify/require"
 )
@@ -210,17 +210,18 @@ func TestLiveSidebandNormalCloseEndsCall(t *testing.T) {
 
 func TestLiveCreateFailoverUsesExistingOpenAIPolicy(t *testing.T) {
 	service := &OpenAIGatewayService{}
-	require.False(t, service.shouldFailoverLiveCreateError(&UpstreamFailoverError{
+	account := newOpenAIUpstreamErrorTestAccount()
+	require.False(t, service.shouldFailoverLiveCreateError(account, &UpstreamFailoverError{
 		StatusCode:   http.StatusBadRequest,
 		ResponseBody: []byte(`{"error":{"message":"invalid session"}}`),
 	}))
-	require.True(t, service.shouldFailoverLiveCreateError(&UpstreamFailoverError{
+	require.True(t, service.shouldFailoverLiveCreateError(account, &UpstreamFailoverError{
 		StatusCode: http.StatusForbidden,
 	}))
-	require.True(t, service.shouldFailoverLiveCreateError(&UpstreamFailoverError{
+	require.True(t, service.shouldFailoverLiveCreateError(account, &UpstreamFailoverError{
 		StatusCode: http.StatusBadGateway,
 	}))
-	require.True(t, service.shouldFailoverLiveCreateError(errors.New("transport failed")))
+	require.True(t, service.shouldFailoverLiveCreateError(account, errors.New("transport failed")))
 }
 
 func TestLiveCallIDFromLocation(t *testing.T) {

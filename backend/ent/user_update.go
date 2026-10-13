@@ -11,20 +11,20 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/Wei-Shaw/sub2api/ent/announcementread"
-	"github.com/Wei-Shaw/sub2api/ent/apikey"
-	"github.com/Wei-Shaw/sub2api/ent/authidentity"
-	"github.com/Wei-Shaw/sub2api/ent/group"
-	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
-	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
-	"github.com/Wei-Shaw/sub2api/ent/predicate"
-	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
-	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
-	"github.com/Wei-Shaw/sub2api/ent/usagelog"
-	"github.com/Wei-Shaw/sub2api/ent/user"
-	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
-	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
-	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/MACOS-DO/sub4api/ent/announcementread"
+	"github.com/MACOS-DO/sub4api/ent/apikey"
+	"github.com/MACOS-DO/sub4api/ent/authidentity"
+	"github.com/MACOS-DO/sub4api/ent/group"
+	"github.com/MACOS-DO/sub4api/ent/paymentorder"
+	"github.com/MACOS-DO/sub4api/ent/pendingauthsession"
+	"github.com/MACOS-DO/sub4api/ent/predicate"
+	"github.com/MACOS-DO/sub4api/ent/promocodeusage"
+	"github.com/MACOS-DO/sub4api/ent/redeemcode"
+	"github.com/MACOS-DO/sub4api/ent/usagelog"
+	"github.com/MACOS-DO/sub4api/ent/user"
+	"github.com/MACOS-DO/sub4api/ent/userattributevalue"
+	"github.com/MACOS-DO/sub4api/ent/userplatformquota"
+	"github.com/MACOS-DO/sub4api/ent/usersubscription"
 )
 
 // UserUpdate is the builder for updating User entities.
@@ -318,6 +318,20 @@ func (_u *UserUpdate) SetNillableLastActiveAt(v *time.Time) *UserUpdate {
 // ClearLastActiveAt clears the value of the "last_active_at" field.
 func (_u *UserUpdate) ClearLastActiveAt() *UserUpdate {
 	_u.mutation.ClearLastActiveAt()
+	return _u
+}
+
+// SetRestrictPublicGroups sets the "restrict_public_groups" field.
+func (_u *UserUpdate) SetRestrictPublicGroups(v bool) *UserUpdate {
+	_u.mutation.SetRestrictPublicGroups(v)
+	return _u
+}
+
+// SetNillableRestrictPublicGroups sets the "restrict_public_groups" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableRestrictPublicGroups(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetRestrictPublicGroups(*v)
+	}
 	return _u
 }
 
@@ -1068,6 +1082,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.LastActiveAtCleared() {
 		_spec.ClearField(user.FieldLastActiveAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.RestrictPublicGroups(); ok {
+		_spec.SetField(user.FieldRestrictPublicGroups, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.BalanceNotifyEnabled(); ok {
 		_spec.SetField(user.FieldBalanceNotifyEnabled, field.TypeBool, value)
@@ -1997,6 +2014,20 @@ func (_u *UserUpdateOne) ClearLastActiveAt() *UserUpdateOne {
 	return _u
 }
 
+// SetRestrictPublicGroups sets the "restrict_public_groups" field.
+func (_u *UserUpdateOne) SetRestrictPublicGroups(v bool) *UserUpdateOne {
+	_u.mutation.SetRestrictPublicGroups(v)
+	return _u
+}
+
+// SetNillableRestrictPublicGroups sets the "restrict_public_groups" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableRestrictPublicGroups(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetRestrictPublicGroups(*v)
+	}
+	return _u
+}
+
 // SetBalanceNotifyEnabled sets the "balance_notify_enabled" field.
 func (_u *UserUpdateOne) SetBalanceNotifyEnabled(v bool) *UserUpdateOne {
 	_u.mutation.SetBalanceNotifyEnabled(v)
@@ -2774,6 +2805,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if _u.mutation.LastActiveAtCleared() {
 		_spec.ClearField(user.FieldLastActiveAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.RestrictPublicGroups(); ok {
+		_spec.SetField(user.FieldRestrictPublicGroups, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.BalanceNotifyEnabled(); ok {
 		_spec.SetField(user.FieldBalanceNotifyEnabled, field.TypeBool, value)

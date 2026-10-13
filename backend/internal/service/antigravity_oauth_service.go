@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
+	"github.com/MACOS-DO/sub4api/internal/pkg/antigravity"
 )
 
 type AntigravityOAuthService struct {
@@ -90,7 +90,7 @@ type AntigravityTokenInfo struct {
 	Email            string `json:"email,omitempty"`
 	ProjectID        string `json:"project_id,omitempty"`
 	ProjectIDMissing bool   `json:"-"`
-	PlanType         string `json:"-"`
+	PlanType         string `json:"plan_type,omitempty"`
 	PrivacyMode      string `json:"-"`
 }
 

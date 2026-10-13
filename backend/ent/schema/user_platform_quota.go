@@ -10,7 +10,7 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
+	"github.com/MACOS-DO/sub4api/ent/schema/mixins"
 )
 
 // UserPlatformQuota holds the schema definition for per-user per-platform quota.
@@ -42,7 +42,7 @@ func (UserPlatformQuota) Fields() []ent.Field {
 				// 此处为 ent 构建期约束，需与 service.AllowedQuotaPlatforms 保持同步。
 				switch s {
 				case "anthropic", "openai", "gemini", "antigravity", "grok",
-					"kimi", "zhipu", "deepseek":
+					"kimi", "zhipu", "deepseek", "minimax", "opencode_go", "openai_bps":
 					return nil
 				default:
 					return fmt.Errorf("platform %q is not allowed", s)

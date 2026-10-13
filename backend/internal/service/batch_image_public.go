@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
+	"github.com/MACOS-DO/sub4api/internal/pkg/logger"
 	"go.uber.org/zap"
 )
 
@@ -944,9 +944,10 @@ func (s *BatchImagePublicService) selectProviderAndAccount(ctx context.Context, 
 		if err != nil {
 			return nil, nil, err
 		}
+		// 与普通账号调度一致：priority 数值越小越优先，同优先级按 ID 排序。
 		sort.SliceStable(accounts, func(i, j int) bool {
 			if accounts[i].Priority != accounts[j].Priority {
-				return accounts[i].Priority > accounts[j].Priority
+				return accounts[i].Priority < accounts[j].Priority
 			}
 			return accounts[i].ID < accounts[j].ID
 		})

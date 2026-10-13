@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
+	"github.com/MACOS-DO/sub4api/internal/pkg/usagestats"
 )
 
 // 与 dashboard 查询缓存同款:30s TTL 进程内缓存,仅服务 /admin/usage/stats 读路径。
@@ -21,6 +21,7 @@ type usageStatsCacheKeyData struct {
 	BillingMode           string `json:"billing_mode"`
 	RequestType           *int16 `json:"request_type"`
 	Stream                *bool  `json:"stream"`
+	NativeCompactionV2    *bool  `json:"native_compaction_v2"`
 	BillingType           *int8  `json:"billing_type"`
 	UpstreamModelMismatch *bool  `json:"upstream_model_mismatch"`
 }
@@ -45,6 +46,7 @@ func usageStatsCacheKey(filters usagestats.UsageLogFilters) string {
 		BillingMode:           filters.BillingMode,
 		RequestType:           filters.RequestType,
 		Stream:                filters.Stream,
+		NativeCompactionV2:    filters.NativeCompactionV2,
 		BillingType:           filters.BillingType,
 		UpstreamModelMismatch: filters.UpstreamModelMismatch,
 	})

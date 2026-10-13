@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/MACOS-DO/sub4api/internal/pkg/pagination"
 )
 
 // sessionWindowMockRepo is a minimal AccountRepository mock that records calls
@@ -164,7 +164,9 @@ func (m *sessionWindowMockRepo) BulkUpdate(context.Context, []int64, AccountBulk
 func (m *sessionWindowMockRepo) IncrementQuotaUsed(context.Context, int64, float64) error {
 	panic("unexpected")
 }
-func (m *sessionWindowMockRepo) ResetQuotaUsed(context.Context, int64) error { panic("unexpected") }
+func (m *sessionWindowMockRepo) ResetQuotaUsedAndClearRateLimitCooldown(context.Context, int64) error {
+	panic("unexpected")
+}
 func (m *sessionWindowMockRepo) RevertProxyFallback(context.Context, int64) error {
 	panic("unexpected")
 }

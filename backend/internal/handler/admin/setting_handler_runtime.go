@@ -3,9 +3,9 @@ package admin
 import (
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/handler/dto"
+	"github.com/MACOS-DO/sub4api/internal/pkg/response"
+	"github.com/MACOS-DO/sub4api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -152,6 +152,33 @@ func (h *SettingHandler) UpdateRateLimit429CooldownSettings(c *gin.Context) {
 		Enabled:         updatedSettings.Enabled,
 		CooldownSeconds: updatedSettings.CooldownSeconds,
 	})
+}
+
+func (h *SettingHandler) GetOpenAIImagesOAuthUnavailableCooldownSettings(c *gin.Context) {
+	settings, err := h.settingService.GetOpenAIImagesOAuthUnavailableCooldownSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.OpenAIImagesOAuthUnavailableCooldownSettings{CooldownMinutes: settings.CooldownMinutes})
+}
+
+type UpdateOpenAIImagesOAuthUnavailableCooldownSettingsRequest struct {
+	CooldownMinutes int `json:"cooldown_minutes"`
+}
+
+func (h *SettingHandler) UpdateOpenAIImagesOAuthUnavailableCooldownSettings(c *gin.Context) {
+	var req UpdateOpenAIImagesOAuthUnavailableCooldownSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	settings := &service.OpenAIImagesOAuthUnavailableCooldownSettings{CooldownMinutes: req.CooldownMinutes}
+	if err := h.settingService.SetOpenAIImagesOAuthUnavailableCooldownSettings(c.Request.Context(), settings); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, dto.OpenAIImagesOAuthUnavailableCooldownSettings{CooldownMinutes: settings.CooldownMinutes})
 }
 
 // GetPanelRateLimitSettings 获取面板 API 限流配置

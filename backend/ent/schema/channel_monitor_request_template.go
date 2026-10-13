@@ -1,7 +1,7 @@
 package schema
 
 import (
-	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
+	"github.com/MACOS-DO/sub4api/ent/schema/mixins"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
@@ -40,7 +40,7 @@ func (ChannelMonitorRequestTemplate) Fields() []ent.Field {
 			MaxLen(100),
 		field.Enum("provider").
 			Values("openai", "anthropic", "gemini", "grok",
-				"antigravity", "kimi", "zhipu", "deepseek"),
+				"antigravity", "kimi", "zhipu", "deepseek", "minimax", "opencode_go", "openai_bps"),
 		field.String("api_mode").
 			Default("chat_completions").
 			MaxLen(32).

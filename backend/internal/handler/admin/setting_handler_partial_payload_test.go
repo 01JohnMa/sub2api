@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/service"
 
 	"github.com/stretchr/testify/require"
 )
@@ -185,4 +185,38 @@ func TestUpdateSettingsValidatesTencentCaptchaAppIDWhenEnabledFlagIsOmitted(t *t
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	require.Contains(t, rec.Body.String(), "positive integer")
+}
+
+// subscription_enabled is an opt-out switch: an explicit false is written as-is,
+// and a later payload that omits the field keeps the stored value.
+func TestUpdateSettingsSubscriptionEnabledIsWritableAndKeptWhenOmitted(t *testing.T) {
+	h, repo := newStepUpSwitchTestHandler(t, map[string]string{
+		service.SettingKeySubscriptionEnabled: "true",
+	})
+
+	rec := doUpdateSettings(t, h, map[string]any{"subscription_enabled": false}, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "false", repo.values[service.SettingKeySubscriptionEnabled])
+
+	rec = doUpdateSettings(t, h, map[string]any{"site_name": "Example Gateway"}, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "false", repo.values[service.SettingKeySubscriptionEnabled],
+		"a payload without subscription_enabled must not flip the stored value back to true")
+}
+
+func TestUpdateSettingsCodexTicketAllowWithoutTicketPreservesPartialPayload(t *testing.T) {
+	h, repo := newStepUpSwitchTestHandler(t, map[string]string{
+		service.SettingKeyOpenAICodexTicketAllowWithoutTicket: "false",
+	})
+	response := doUpdateSettings(t, h, map[string]any{"openai_codex_ticket_allow_without_ticket": true}, nil)
+	require.Equal(t, http.StatusOK, response.Code)
+	require.Equal(t, "true", repo.values[service.SettingKeyOpenAICodexTicketAllowWithoutTicket])
+
+	response = doUpdateSettings(t, h, map[string]any{"risk_control_enabled": true}, nil)
+	require.Equal(t, http.StatusOK, response.Code)
+	require.Equal(t, "true", repo.values[service.SettingKeyOpenAICodexTicketAllowWithoutTicket])
+
+	response = doUpdateSettings(t, h, map[string]any{"openai_codex_ticket_allow_without_ticket": false}, nil)
+	require.Equal(t, http.StatusOK, response.Code)
+	require.Equal(t, "false", repo.values[service.SettingKeyOpenAICodexTicketAllowWithoutTicket])
 }

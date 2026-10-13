@@ -12,10 +12,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	pluginv1 "github.com/Wei-Shaw/sub2api/pkg/pluginapi/v1"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	pluginv1 "github.com/MACOS-DO/sub4api/pkg/pluginapi/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,7 +34,9 @@ func TestPluginPackageInstallerInstallUnsignedDevelopmentPackage(t *testing.T) {
 	assert.FileExists(t, installation.ArtifactPath)
 	info, statErr := os.Stat(installation.BinaryPath)
 	require.NoError(t, statErr)
-	assert.NotZero(t, info.Mode()&0o100)
+	if runtime.GOOS != "windows" {
+		assert.NotZero(t, info.Mode()&0o100)
+	}
 	assert.Contains(t, installation.InstallPath, filepath.Join("installed", "com.example.openai-transport"))
 }
 

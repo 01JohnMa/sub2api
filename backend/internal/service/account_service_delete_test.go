@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/MACOS-DO/sub4api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
 
@@ -215,7 +215,7 @@ func (s *accountRepoStub) IncrementQuotaUsed(ctx context.Context, id int64, amou
 	return nil
 }
 
-func (s *accountRepoStub) ResetQuotaUsed(ctx context.Context, id int64) error {
+func (s *accountRepoStub) ResetQuotaUsedAndClearRateLimitCooldown(ctx context.Context, id int64) error {
 	return nil
 }
 

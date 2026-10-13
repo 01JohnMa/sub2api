@@ -2,11 +2,13 @@ package dto
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/service"
 )
 
 func TestAccountFromServiceShallow_RedactsSensitiveCredentials(t *testing.T) {
@@ -93,10 +95,69 @@ func TestAccountFromServiceShallow_RedactsOllamaCloudManagedExtra(t *testing.T) 
 	require.Contains(t, src.Extra, service.OllamaCloudUsageSessionExtraKey)
 }
 
+func TestAccountFromServiceShallow_RedactsCodexTurnTicketState(t *testing.T) {
+	blob := "gAAAAA" + strings.Repeat("B", 286)
+	src := &service.Account{
+		ID: 41, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth,
+		Extra: map[string]any{
+			"codex_harvest_proxy_url": "http://user:legacy-proxy-secret@proxy.example.com:8080",
+			"codex_turn_ticket:gpt-6-astra": map[string]any{
+				"state":       blob,
+				"length":      292,
+				"model":       "gpt-6-astra",
+				"captured_at": time.Now().Add(-time.Minute),
+				"expires_at":  time.Now().Add(time.Hour),
+				"attempts":    3,
+			},
+		},
+	}
+	got := AccountFromServiceShallow(src)
+	require.NotContains(t, got.Extra, "codex_turn_ticket:gpt-6-astra")
+	raw, err := json.Marshal(got)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), blob)
+	require.NotContains(t, string(raw), "legacy-proxy-secret")
+	require.NotContains(t, got.Extra, "codex_harvest_proxy_url")
+	require.Contains(t, src.Extra, "codex_harvest_proxy_url")
+}
+
 func TestAccountFromServiceShallow_NilCredentialsOmitsStatus(t *testing.T) {
 	src := &service.Account{ID: 1, Name: "n", Platform: "anthropic", Type: "oauth"}
 	got := AccountFromServiceShallow(src)
 	require.NotNil(t, got)
 	require.Nil(t, got.Credentials)
 	require.Nil(t, got.CredentialsStatus)
+}
+
+func TestOpenAIBPSAccountDTORedactsTokenKeepsExpiry(t *testing.T) {
+	src := &service.Account{ID: 42, Platform: service.PlatformOpenAIBPS, Type: service.AccountTypeOAuth, Credentials: map[string]any{"access_token": "bps-test-secret", "chatgpt_account_id": "workspace", "expires_at": "2026-10-01T00:00:00Z"}}
+	dto := AccountFromServiceShallow(src)
+	require.NotContains(t, dto.Credentials, "access_token")
+	require.True(t, dto.CredentialsStatus["has_access_token"])
+	require.Equal(t, "workspace", dto.Credentials["chatgpt_account_id"])
+	require.Equal(t, "2026-10-01T00:00:00Z", dto.Credentials["expires_at"])
+	data, err := json.Marshal(dto)
+	require.NoError(t, err)
+	require.NotContains(t, string(data), "bps-test-secret")
+}
+
+func TestAccountFromServiceBPSCredentialStateFullAndLite(t *testing.T) {
+	now := time.Now().UTC()
+	source := &service.Account{ID: 42, Platform: service.PlatformOpenAIBPS, Type: service.AccountTypeOAuth, Status: service.StatusError, Schedulable: true, Credentials: map[string]any{"access_token": "private-bps-token", "chatgpt_account_id": "workspace", "expires_at": now.Add(time.Hour).Format(time.RFC3339)}, Extra: map[string]any{service.OpenAIBPSCredentialStateExtraKey: map[string]any{"status": "revoked", "error_code": "token_revoked", "observed_at": now.Format(time.RFC3339Nano), "managed_status_error": true, "credential_identity": "private-fingerprint"}}}
+	full := AccountFromService(source)
+	lite := AccountListItemFromAccount(full)
+	require.Equal(t, "revoked", full.BPSCredentialState.Status)
+	require.Equal(t, full.BPSCredentialState, lite.BPSCredentialState)
+	require.True(t, full.CredentialsStatus["has_access_token"])
+	require.NotContains(t, full.Credentials, "access_token")
+	require.NotContains(t, full.Extra, service.OpenAIBPSCredentialStateExtraKey)
+	data, err := json.Marshal(lite)
+	require.NoError(t, err)
+	require.NotContains(t, string(data), "private-bps-token")
+	require.NotContains(t, string(data), "private-fingerprint")
+	source.Extra = nil
+	source.Status = service.StatusActive
+	source.Credentials["expires_at"] = now.Add(-time.Hour).Format(time.RFC3339)
+	require.Equal(t, "expired", AccountFromService(source).BPSCredentialState.Status)
+	require.Equal(t, service.StatusActive, source.Status)
 }

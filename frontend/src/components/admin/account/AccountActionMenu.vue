@@ -1,11 +1,12 @@
 <template>
   <Teleport to="body">
-    <div v-if="show && position">
+    <div v-if="show && anchorRect">
       <!-- Backdrop: click anywhere outside to close -->
       <div class="fixed inset-0 z-[9998]" @click="emit('close')"></div>
       <div
-        class="action-menu-content fixed z-[9999] w-52 overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 dark:bg-dark-800"
-        :style="{ top: position.top + 'px', left: position.left + 'px' }"
+        ref="menuRef"
+        class="action-menu-content fixed z-[9999] w-52 overflow-y-auto overscroll-contain rounded-xl bg-white shadow-lg ring-1 ring-black/5 dark:bg-dark-800"
+        :style="menuStyle"
         @click.stop
       >
         <div class="py-1">
@@ -14,6 +15,7 @@
               <Icon name="play" size="sm" class="text-green-500" :stroke-width="2" />
               {{ t('admin.accounts.testConnection') }}
             </button>
+            <button v-if="account.platform === 'openai' && (account.type === 'oauth' || account.type === 'setup-token')" @click="$emit('codex-diagnostic', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-700"><Icon name="sparkles" size="sm" class="text-violet-500" />{{ t('admin.accounts.openai.codexDiagnostic') }}</button>
             <button @click="$emit('stats', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-700">
               <Icon name="chart" size="sm" class="text-indigo-500" />
               {{ t('admin.accounts.viewStats') }}
@@ -27,7 +29,7 @@
               {{ t('admin.accounts.duplicateAccount') }}
             </button>
             <!-- 影子账号不持凭据:重授权/刷新 token 对其无效(后端拒绝),故隐藏(外审 G4)。 -->
-            <template v-if="(account.type === 'oauth' || account.type === 'setup-token') && !isShadow">
+            <template v-if="(account.type === 'oauth' || account.type === 'setup-token') && !isShadow && account.platform !== 'openai_bps'">
               <button @click="$emit('reauth', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-gray-100 dark:hover:bg-dark-700">
                 <Icon name="link" size="sm" />
                 {{ t('admin.accounts.reAuthorize') }}
@@ -62,14 +64,48 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, onUnmounted } from 'vue'
+import { computed, ref, watch, onUnmounted } from 'vue'
+import { useResizeObserver, useWindowSize } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { Icon } from '@/components/icons'
 import type { Account } from '@/types'
 
-const props = defineProps<{ show: boolean; account: Account | null; position: { top: number; left: number } | null }>()
-const emit = defineEmits(['close', 'test', 'stats', 'schedule', 'duplicate', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow'])
+const props = defineProps<{ show: boolean; account: Account | null; anchorRect: DOMRect | null }>()
+const emit = defineEmits(['close', 'test', 'stats', 'schedule', 'duplicate', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow', 'codex-diagnostic'])
 const { t } = useI18n()
+const menuRef = ref<HTMLElement | null>(null)
+const { width: viewportWidth, height: viewportHeight } = useWindowSize()
+const viewportPadding = 8
+const menuPosition = ref({ top: viewportPadding, left: viewportPadding })
+const menuStyle = computed(() => ({
+  top: `${menuPosition.value.top}px`,
+  left: `${menuPosition.value.left}px`,
+  maxWidth: `${Math.max(0, viewportWidth.value - viewportPadding * 2)}px`,
+  maxHeight: `${Math.max(0, viewportHeight.value - viewportPadding * 2)}px`
+}))
+
+const updatePosition = () => {
+  if (!menuRef.value || !props.anchorRect) return
+
+  const { width, height } = menuRef.value.getBoundingClientRect()
+  const anchor = props.anchorRect
+  const gap = 4
+  const maxTop = viewportHeight.value - height - viewportPadding
+  const top = anchor.bottom + gap <= maxTop
+    ? anchor.bottom + gap
+    : anchor.top - height - gap
+  const left = viewportWidth.value < 768
+    ? anchor.left + anchor.width / 2 - width / 2
+    : anchor.right - width
+
+  menuPosition.value.top = Math.max(viewportPadding, Math.min(top, maxTop))
+  menuPosition.value.left = Math.max(viewportPadding, Math.min(left, viewportWidth.value - width - viewportPadding))
+}
+
+// Measure after rendering; menu items and translated labels can change its size.
+watch([menuRef, () => props.anchorRect, viewportWidth, viewportHeight], updatePosition, { flush: 'post' })
+useResizeObserver(menuRef, updatePosition)
+
 const canDuplicate = computed(() => {
   if (!props.account || props.account.parent_account_id != null) return false
   return ['apikey', 'upstream', 'bedrock', 'service_account'].includes(props.account.type)

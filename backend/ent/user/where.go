@@ -7,7 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/MACOS-DO/sub4api/ent/predicate"
 )
 
 // ID filters vertices based on their ID field.
@@ -143,6 +143,11 @@ func LastLoginAt(v time.Time) predicate.User {
 // LastActiveAt applies equality check predicate on the "last_active_at" field. It's identical to LastActiveAtEQ.
 func LastActiveAt(v time.Time) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldLastActiveAt, v))
+}
+
+// RestrictPublicGroups applies equality check predicate on the "restrict_public_groups" field. It's identical to RestrictPublicGroupsEQ.
+func RestrictPublicGroups(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRestrictPublicGroups, v))
 }
 
 // BalanceNotifyEnabled applies equality check predicate on the "balance_notify_enabled" field. It's identical to BalanceNotifyEnabledEQ.
@@ -1113,6 +1118,16 @@ func LastActiveAtIsNil() predicate.User {
 // LastActiveAtNotNil applies the NotNil predicate on the "last_active_at" field.
 func LastActiveAtNotNil() predicate.User {
 	return predicate.User(sql.FieldNotNull(FieldLastActiveAt))
+}
+
+// RestrictPublicGroupsEQ applies the EQ predicate on the "restrict_public_groups" field.
+func RestrictPublicGroupsEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRestrictPublicGroups, v))
+}
+
+// RestrictPublicGroupsNEQ applies the NEQ predicate on the "restrict_public_groups" field.
+func RestrictPublicGroupsNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldRestrictPublicGroups, v))
 }
 
 // BalanceNotifyEnabledEQ applies the EQ predicate on the "balance_notify_enabled" field.

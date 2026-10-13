@@ -5,11 +5,11 @@ import (
 	"strconv"
 	"time"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
+	"github.com/MACOS-DO/sub4api/internal/pkg/logger"
+	"github.com/MACOS-DO/sub4api/internal/pkg/response"
+	middleware2 "github.com/MACOS-DO/sub4api/internal/server/middleware"
+	"github.com/MACOS-DO/sub4api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -28,9 +28,26 @@ func executeAdminIdempotent(
 	ttl time.Duration,
 	execute func(context.Context) (any, error),
 ) (*service.IdempotencyExecuteResult, error) {
+	return executeAdminIdempotentWithTimeout(c, scope, payload, ttl, 0, execute)
+}
+
+func executeAdminIdempotentWithTimeout(
+	c *gin.Context,
+	scope string,
+	payload any,
+	ttl time.Duration,
+	executionTimeout time.Duration,
+	execute func(context.Context) (any, error),
+) (*service.IdempotencyExecuteResult, error) {
 	coordinator := service.DefaultIdempotencyCoordinator()
 	if coordinator == nil {
-		data, err := execute(c.Request.Context())
+		ctx := c.Request.Context()
+		if executionTimeout > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), executionTimeout)
+			defer cancel()
+		}
+		data, err := execute(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -38,14 +55,15 @@ func executeAdminIdempotent(
 	}
 
 	return coordinator.Execute(c.Request.Context(), service.IdempotencyExecuteOptions{
-		Scope:          scope,
-		ActorScope:     adminActorScope(c),
-		Method:         c.Request.Method,
-		Route:          c.FullPath(),
-		IdempotencyKey: c.GetHeader("Idempotency-Key"),
-		Payload:        payload,
-		RequireKey:     true,
-		TTL:            ttl,
+		Scope:            scope,
+		ActorScope:       adminActorScope(c),
+		Method:           c.Request.Method,
+		Route:            c.FullPath(),
+		IdempotencyKey:   c.GetHeader("Idempotency-Key"),
+		Payload:          payload,
+		RequireKey:       true,
+		TTL:              ttl,
+		ExecutionTimeout: executionTimeout,
 	}, execute)
 }
 
@@ -64,7 +82,18 @@ func executeAdminIdempotentJSON(
 	ttl time.Duration,
 	execute func(context.Context) (any, error),
 ) {
-	executeAdminIdempotentJSONWithMode(c, scope, payload, ttl, idempotencyStoreUnavailableFailClose, execute)
+	executeAdminIdempotentJSONWithMode(c, scope, payload, ttl, 0, idempotencyStoreUnavailableFailClose, execute)
+}
+
+func executeAdminIdempotentJSONWithTimeout(
+	c *gin.Context,
+	scope string,
+	payload any,
+	ttl time.Duration,
+	executionTimeout time.Duration,
+	execute func(context.Context) (any, error),
+) {
+	executeAdminIdempotentJSONWithMode(c, scope, payload, ttl, executionTimeout, idempotencyStoreUnavailableFailClose, execute)
 }
 
 func executeAdminIdempotentJSONFailOpenOnStoreUnavailable(
@@ -74,7 +103,7 @@ func executeAdminIdempotentJSONFailOpenOnStoreUnavailable(
 	ttl time.Duration,
 	execute func(context.Context) (any, error),
 ) {
-	executeAdminIdempotentJSONWithMode(c, scope, payload, ttl, idempotencyStoreUnavailableFailOpen, execute)
+	executeAdminIdempotentJSONWithMode(c, scope, payload, ttl, 0, idempotencyStoreUnavailableFailOpen, execute)
 }
 
 func executeAdminIdempotentJSONWithMode(
@@ -82,10 +111,11 @@ func executeAdminIdempotentJSONWithMode(
 	scope string,
 	payload any,
 	ttl time.Duration,
+	executionTimeout time.Duration,
 	mode idempotencyStoreUnavailableMode,
 	execute func(context.Context) (any, error),
 ) {
-	result, err := executeAdminIdempotent(c, scope, payload, ttl, execute)
+	result, err := executeAdminIdempotentWithTimeout(c, scope, payload, ttl, executionTimeout, execute)
 	if err != nil {
 		if infraerrors.Code(err) == infraerrors.Code(service.ErrIdempotencyStoreUnavail) {
 			strategy := "fail_close"

@@ -14,18 +14,24 @@ export type Platform =
   | 'kimi'
   | 'zhipu'
   | 'deepseek'
+  | 'minimax'
+  | 'opencode_go'
+  | 'openai_bps'
   | 'composite'
 
 // ── Badge (bg + text + border, for inline badges with border) ───────
 const BADGE: Record<Platform, string> = {
   anthropic: 'bg-orange-500/10 text-orange-600 border-orange-500/30 dark:text-orange-400',
   openai: 'bg-green-500/10 text-green-600 border-green-500/30 dark:text-green-400',
+  openai_bps: 'bg-green-500/10 text-green-600 border-green-500/30 dark:text-green-400',
   antigravity: 'bg-purple-500/10 text-purple-600 border-purple-500/30 dark:text-purple-400',
   gemini: 'bg-blue-500/10 text-blue-600 border-blue-500/30 dark:text-blue-400',
   grok: 'bg-zinc-800/10 text-zinc-800 border-zinc-800/30 dark:bg-zinc-500/10 dark:text-zinc-200 dark:border-zinc-500/30',
   kimi: 'bg-pink-500/10 text-pink-600 border-pink-500/30 dark:text-pink-400',
   zhipu: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30 dark:text-indigo-400',
   deepseek: 'bg-teal-500/10 text-teal-600 border-teal-500/30 dark:text-teal-400',
+  minimax: 'bg-rose-500/10 text-rose-600 border-rose-500/30 dark:text-rose-400',
+  opencode_go: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-300',
   composite: 'bg-cyan-500/10 text-cyan-700 border-cyan-500/30 dark:text-cyan-300',
 }
 const BADGE_DEFAULT = 'bg-slate-500/10 text-slate-600 border-slate-500/30 dark:text-slate-400'
@@ -34,12 +40,15 @@ const BADGE_DEFAULT = 'bg-slate-500/10 text-slate-600 border-slate-500/30 dark:t
 const BADGE_LIGHT: Record<Platform, string> = {
   anthropic: 'bg-orange-500/10 text-orange-600 dark:bg-orange-500/10 dark:text-orange-300',
   openai: 'bg-green-500/10 text-green-600 dark:bg-green-500/10 dark:text-green-300',
+  openai_bps: 'bg-green-500/10 text-green-600 dark:bg-green-500/10 dark:text-green-300',
   antigravity: 'bg-purple-500/10 text-purple-600 dark:bg-purple-500/10 dark:text-purple-300',
   gemini: 'bg-blue-500/10 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300',
   grok: 'bg-zinc-800/10 text-zinc-800 dark:bg-zinc-500/10 dark:text-zinc-200',
   kimi: 'bg-pink-500/10 text-pink-600 dark:bg-pink-500/10 dark:text-pink-300',
   zhipu: 'bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300',
   deepseek: 'bg-teal-500/10 text-teal-600 dark:bg-teal-500/10 dark:text-teal-300',
+  minimax: 'bg-rose-500/10 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300',
+  opencode_go: 'bg-amber-500/10 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
   composite: 'bg-cyan-500/10 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300',
 }
 
@@ -47,12 +56,15 @@ const BADGE_LIGHT: Record<Platform, string> = {
 const BORDER: Record<Platform, string> = {
   anthropic: 'border-orange-500/20 dark:border-orange-500/20',
   openai: 'border-green-500/20 dark:border-green-500/20',
+  openai_bps: 'border-green-500/20 dark:border-green-500/20',
   antigravity: 'border-purple-500/20 dark:border-purple-500/20',
   gemini: 'border-blue-500/20 dark:border-blue-500/20',
   grok: 'border-zinc-800/20 dark:border-zinc-500/20',
   kimi: 'border-pink-500/20 dark:border-pink-500/20',
   zhipu: 'border-indigo-500/20 dark:border-indigo-500/20',
   deepseek: 'border-teal-500/20 dark:border-teal-500/20',
+  minimax: 'border-rose-500/20 dark:border-rose-500/20',
+  opencode_go: 'border-amber-500/20 dark:border-amber-500/20',
   composite: 'border-cyan-500/20 dark:border-cyan-500/20',
 }
 const BORDER_DEFAULT = 'border-gray-200 dark:border-dark-700'
@@ -61,12 +73,15 @@ const BORDER_DEFAULT = 'border-gray-200 dark:border-dark-700'
 const BORDER_STRONG: Record<Platform, string> = {
   anthropic: 'border-orange-500/35 dark:border-orange-500/30',
   openai: 'border-green-500/35 dark:border-green-500/30',
+  openai_bps: 'border-green-500/35 dark:border-green-500/30',
   antigravity: 'border-purple-500/35 dark:border-purple-500/30',
   gemini: 'border-blue-500/35 dark:border-blue-500/30',
   grok: 'border-zinc-800/35 dark:border-zinc-500/35',
   kimi: 'border-pink-500/35 dark:border-pink-500/30',
   zhipu: 'border-indigo-500/35 dark:border-indigo-500/30',
   deepseek: 'border-teal-500/35 dark:border-teal-500/30',
+  minimax: 'border-rose-500/35 dark:border-rose-500/30',
+  opencode_go: 'border-amber-500/35 dark:border-amber-500/30',
   composite: 'border-cyan-500/35 dark:border-cyan-500/30',
 }
 const BORDER_STRONG_DEFAULT = 'border-gray-300 dark:border-dark-600'
@@ -76,12 +91,15 @@ const BORDER_STRONG_DEFAULT = 'border-gray-300 dark:border-dark-600'
 const ACCENT: Record<Platform, string> = {
   anthropic: '#f97316', // orange-500
   openai: '#22c55e', // green-500
+  openai_bps: '#22c55e', // green-500
   antigravity: '#a855f7', // purple-500
   gemini: '#3b82f6', // blue-500
   grok: '#71717a', // zinc-500
   kimi: '#ec4899', // pink-500
   zhipu: '#6366f1', // indigo-500
   deepseek: '#14b8a6', // teal-500
+  minimax: '#f43f5e', // rose-500
+  opencode_go: '#f59e0b', // amber-500
   composite: '#06b6d4', // cyan-500
 }
 const ACCENT_DEFAULT = '#14b8a6' // primary-500 (teal)
@@ -90,12 +108,15 @@ const ACCENT_DEFAULT = '#14b8a6' // primary-500 (teal)
 const ACCENT_BAR: Record<Platform, string> = {
   anthropic: 'bg-gradient-to-r from-orange-400 to-orange-500',
   openai: 'bg-gradient-to-r from-emerald-400 to-emerald-500',
+  openai_bps: 'bg-gradient-to-r from-emerald-400 to-emerald-500',
   antigravity: 'bg-gradient-to-r from-purple-400 to-purple-500',
   gemini: 'bg-gradient-to-r from-blue-400 to-blue-500',
   grok: 'bg-gradient-to-r from-zinc-700 to-zinc-900',
   kimi: 'bg-gradient-to-r from-pink-400 to-pink-500',
   zhipu: 'bg-gradient-to-r from-indigo-400 to-indigo-500',
   deepseek: 'bg-gradient-to-r from-teal-400 to-teal-500',
+  minimax: 'bg-gradient-to-r from-rose-400 to-rose-500',
+  opencode_go: 'bg-gradient-to-r from-amber-400 to-amber-500',
   composite: 'bg-gradient-to-r from-slate-500 to-cyan-500',
 }
 const ACCENT_BAR_DEFAULT = 'bg-gradient-to-r from-primary-400 to-primary-500'
@@ -104,12 +125,15 @@ const ACCENT_BAR_DEFAULT = 'bg-gradient-to-r from-primary-400 to-primary-500'
 const TEXT: Record<Platform, string> = {
   anthropic: 'text-orange-600 dark:text-orange-400',
   openai: 'text-emerald-600 dark:text-emerald-400',
+  openai_bps: 'text-emerald-600 dark:text-emerald-400',
   antigravity: 'text-purple-600 dark:text-purple-400',
   gemini: 'text-blue-600 dark:text-blue-400',
   grok: 'text-zinc-800 dark:text-zinc-200',
   kimi: 'text-pink-600 dark:text-pink-400',
   zhipu: 'text-indigo-600 dark:text-indigo-400',
   deepseek: 'text-teal-600 dark:text-teal-400',
+  minimax: 'text-rose-600 dark:text-rose-400',
+  opencode_go: 'text-amber-700 dark:text-amber-300',
   composite: 'text-cyan-700 dark:text-cyan-300',
 }
 const TEXT_DEFAULT = 'text-primary-600 dark:text-primary-400'
@@ -118,12 +142,15 @@ const TEXT_DEFAULT = 'text-primary-600 dark:text-primary-400'
 const ICON: Record<Platform, string> = {
   anthropic: 'text-orange-500 dark:text-orange-400',
   openai: 'text-emerald-500 dark:text-emerald-400',
+  openai_bps: 'text-emerald-500 dark:text-emerald-400',
   antigravity: 'text-purple-500 dark:text-purple-400',
   gemini: 'text-blue-500 dark:text-blue-400',
   grok: 'text-zinc-800 dark:text-zinc-200',
   kimi: 'text-pink-500 dark:text-pink-400',
   zhipu: 'text-indigo-500 dark:text-indigo-400',
   deepseek: 'text-teal-500 dark:text-teal-400',
+  minimax: 'text-rose-500 dark:text-rose-400',
+  opencode_go: 'text-amber-500 dark:text-amber-300',
   composite: 'text-cyan-600 dark:text-cyan-300',
 }
 const ICON_DEFAULT = 'text-primary-500 dark:text-primary-400'
@@ -132,12 +159,15 @@ const ICON_DEFAULT = 'text-primary-500 dark:text-primary-400'
 const BUTTON: Record<Platform, string> = {
   anthropic: 'bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 dark:bg-orange-500/80 dark:hover:bg-orange-500',
   openai: 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800 dark:bg-green-600/80 dark:hover:bg-green-600',
+  openai_bps: 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800 dark:bg-green-600/80 dark:hover:bg-green-600',
   antigravity: 'bg-purple-500 text-white hover:bg-purple-600 active:bg-purple-700 dark:bg-purple-500/80 dark:hover:bg-purple-500',
   gemini: 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 dark:bg-blue-500/80 dark:hover:bg-blue-500',
   grok: 'bg-zinc-800 text-white hover:bg-zinc-900 active:bg-black dark:bg-zinc-700 dark:hover:bg-zinc-600',
   kimi: 'bg-pink-500 text-white hover:bg-pink-600 active:bg-pink-700 dark:bg-pink-500/80 dark:hover:bg-pink-500',
   zhipu: 'bg-indigo-500 text-white hover:bg-indigo-600 active:bg-indigo-700 dark:bg-indigo-500/80 dark:hover:bg-indigo-500',
   deepseek: 'bg-teal-500 text-white hover:bg-teal-600 active:bg-teal-700 dark:bg-teal-500/80 dark:hover:bg-teal-500',
+  minimax: 'bg-rose-500 text-white hover:bg-rose-600 active:bg-rose-700 dark:bg-rose-500/80 dark:hover:bg-rose-500',
+  opencode_go: 'bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700 dark:bg-amber-500/80 dark:hover:bg-amber-500',
   composite: 'bg-cyan-700 text-white hover:bg-cyan-800 active:bg-cyan-900 dark:bg-cyan-600 dark:hover:bg-cyan-500',
 }
 const BUTTON_DEFAULT = 'bg-primary-500 text-white hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-500'
@@ -146,12 +176,15 @@ const BUTTON_DEFAULT = 'bg-primary-500 text-white hover:bg-primary-600 dark:bg-p
 const DISCOUNT: Record<Platform, string> = {
   anthropic: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
   openai: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  openai_bps: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   antigravity: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
   gemini: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
   grok: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200',
   kimi: 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300',
   zhipu: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
   deepseek: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+  minimax: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+  opencode_go: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
   composite: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300',
 }
 const DISCOUNT_DEFAULT = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
@@ -160,12 +193,15 @@ const DISCOUNT_DEFAULT = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-r
 const GRADIENT: Record<Platform, string> = {
   anthropic: 'from-orange-500 to-orange-600',
   openai: 'from-emerald-500 to-emerald-600',
+  openai_bps: 'from-emerald-500 to-emerald-600',
   antigravity: 'from-purple-500 to-purple-600',
   gemini: 'from-blue-500 to-blue-600',
   grok: 'from-zinc-700 to-zinc-900',
   kimi: 'from-pink-500 to-pink-600',
   zhipu: 'from-indigo-500 to-indigo-600',
   deepseek: 'from-teal-500 to-teal-600',
+  minimax: 'from-rose-500 to-rose-600',
+  opencode_go: 'from-amber-500 to-amber-600',
   composite: 'from-slate-600 to-cyan-600',
 }
 const GRADIENT_DEFAULT = 'from-primary-500 to-primary-600'
@@ -174,12 +210,15 @@ const GRADIENT_DEFAULT = 'from-primary-500 to-primary-600'
 const GRADIENT_TEXT: Record<Platform, string> = {
   anthropic: 'text-orange-100',
   openai: 'text-emerald-100',
+  openai_bps: 'text-emerald-100',
   antigravity: 'text-purple-100',
   gemini: 'text-blue-100',
   grok: 'text-zinc-100',
   kimi: 'text-pink-100',
   zhipu: 'text-indigo-100',
   deepseek: 'text-teal-100',
+  minimax: 'text-rose-100',
+  opencode_go: 'text-amber-100',
   composite: 'text-cyan-100',
 }
 const GRADIENT_TEXT_DEFAULT = 'text-primary-100'
@@ -187,12 +226,15 @@ const GRADIENT_TEXT_DEFAULT = 'text-primary-100'
 const GRADIENT_SUBTEXT: Record<Platform, string> = {
   anthropic: 'text-orange-200',
   openai: 'text-emerald-200',
+  openai_bps: 'text-emerald-200',
   antigravity: 'text-purple-200',
   gemini: 'text-blue-200',
   grok: 'text-zinc-300',
   kimi: 'text-pink-200',
   zhipu: 'text-indigo-200',
   deepseek: 'text-teal-200',
+  minimax: 'text-rose-200',
+  opencode_go: 'text-amber-200',
   composite: 'text-cyan-200',
 }
 const GRADIENT_SUBTEXT_DEFAULT = 'text-primary-200'
@@ -209,6 +251,9 @@ function isPlatform(p: string): p is Platform {
     p === 'kimi' ||
     p === 'zhipu' ||
     p === 'deepseek' ||
+    p === 'minimax' ||
+    p === 'opencode_go' ||
+    p === 'openai_bps' ||
     p === 'composite'
   )
 }
@@ -275,6 +320,9 @@ export function platformLabel(p: string): string {
     case 'kimi': return 'Kimi'
     case 'zhipu': return 'Zhipu GLM'
     case 'deepseek': return 'DeepSeek'
+    case 'minimax': return 'MiniMax'
+    case 'opencode_go': return 'OpenCode'
+    case 'openai_bps': return 'OpenAI BPS'
     case 'composite': return 'Composite'
     default: return p || 'API'
   }

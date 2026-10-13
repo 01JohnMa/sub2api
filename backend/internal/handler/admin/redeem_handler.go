@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/handler/dto"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
+	"github.com/MACOS-DO/sub4api/internal/pkg/response"
+	"github.com/MACOS-DO/sub4api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -228,7 +228,7 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 			return nil, createErr
 		}
 
-		redeemed, redeemErr := h.redeemService.Redeem(ctx, req.UserID, req.Code)
+		redeemed, redeemErr := h.redeemService.RedeemForAdminFulfillment(ctx, req.UserID, req.Code)
 		if redeemErr != nil {
 			return nil, redeemErr
 		}
@@ -246,7 +246,7 @@ func (h *RedeemHandler) resolveCreateAndRedeemExisting(ctx context.Context, exis
 		return nil, service.ErrRedeemCodeExpired
 	}
 	if existing.CanUse() {
-		redeemed, err := h.redeemService.Redeem(ctx, userID, existing.Code)
+		redeemed, err := h.redeemService.RedeemForAdminFulfillment(ctx, userID, existing.Code)
 		if err == nil {
 			return gin.H{"redeem_code": dto.RedeemCodeFromServiceAdmin(redeemed)}, nil
 		}

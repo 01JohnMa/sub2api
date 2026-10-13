@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/handler/dto"
+	"github.com/MACOS-DO/sub4api/internal/pkg/openai"
+	"github.com/MACOS-DO/sub4api/internal/pkg/response"
+	"github.com/MACOS-DO/sub4api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,12 +21,15 @@ type OpenAIOAuthHandler struct {
 	openaiOAuthService *service.OpenAIOAuthService
 	adminService       service.AdminService
 	quotaService       openAIQuotaService
+	referralService    openAIReferralService
 	rateLimitService   openAIAccountStateRecoverer
 }
 
 type openAIQuotaService interface {
 	QueryUsage(ctx context.Context, accountID int64) (*service.OpenAIQuotaUsage, error)
 	CacheResetCreditsSnapshot(ctx context.Context, accountID int64, credits *service.OpenAIRateLimitResetCredits) error
+	CacheCreditsSnapshot(ctx context.Context, accountID int64, usage *service.OpenAIQuotaUsage) error
+	CachePostResetSnapshot(ctx context.Context, accountID int64, usage *service.OpenAIQuotaUsage) error
 	ResetCredit(ctx context.Context, accountID int64) (*service.OpenAIQuotaResetResult, error)
 }
 
@@ -56,7 +59,8 @@ type openAIQuotaResetResponse struct {
 // failed display-cache write must never discard a successful upstream read.
 type openAIQuotaRefreshResponse struct {
 	service.OpenAIQuotaUsage
-	CachePersisted bool `json:"cache_persisted"`
+	CachePersisted        bool `json:"cache_persisted"`
+	CreditsCachePersisted bool `json:"credits_cache_persisted"`
 }
 
 // openAIQuotaResetPostProcessContext detaches the post-reset bookkeeping from the
@@ -91,6 +95,7 @@ func NewOpenAIOAuthHandler(
 	// `== nil` capability guards below and panic instead of returning 400.
 	if quotaService != nil {
 		h.quotaService = quotaService
+		h.referralService = quotaService
 	}
 	if rateLimitService != nil {
 		h.rateLimitService = rateLimitService
@@ -521,6 +526,11 @@ func (h *OpenAIOAuthHandler) RefreshQuota(c *gin.Context) {
 	service.NotifyOpenAIAutoResetCredit(accountID)
 
 	refreshResponse := openAIQuotaRefreshResponse{OpenAIQuotaUsage: *usage}
+	if err := h.quotaService.CacheCreditsSnapshot(c.Request.Context(), accountID, usage); err != nil {
+		slog.Warn("openai_quota_credits_cache_persist_failed", "account_id", accountID, "error", err)
+	} else {
+		refreshResponse.CreditsCachePersisted = true
+	}
 	// A failed snapshot write leaves the previous cache intact — report it as a
 	// partial success instead of discarding the usage payload we just fetched,
 	// which would leave the card without a credit count at all.

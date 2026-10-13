@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/pkg/logger"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -1102,10 +1102,12 @@ func (c *concurrencyCache) reconcileExpiredIndexCandidates(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	members, err := c.rdb.ZRangeByScore(ctx, spec.indexKey, &redis.ZRangeBy{
-		Min:   "-inf",
-		Max:   strconv.FormatInt(now, 10),
-		Count: activeIndexCleanupBatchSize,
+	members, err := c.rdb.ZRangeArgs(ctx, redis.ZRangeArgs{
+		Key:     spec.indexKey,
+		Start:   "-inf",
+		Stop:    strconv.FormatInt(now, 10),
+		ByScore: true,
+		Count:   activeIndexCleanupBatchSize,
 	}).Result()
 	if err != nil {
 		return fmt.Errorf("read expired index %s: %w", spec.indexKey, err)

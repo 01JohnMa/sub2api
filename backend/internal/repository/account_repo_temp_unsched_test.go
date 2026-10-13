@@ -10,7 +10,7 @@ import (
 	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,6 +21,18 @@ func TestAccountRepository_SetTempUnschedulable_NoRowsAffectedDoesNotWriteOutbox
 
 	err := repo.SetTempUnschedulable(context.Background(), 42, until, "retry")
 	require.NoError(t, err)
+	require.Len(t, exec.execQueries, 1)
+	require.Contains(t, exec.execQueries[0], "UPDATE accounts")
+	require.NotContains(t, strings.Join(exec.execQueries, "\n"), "scheduler_outbox")
+}
+
+func TestAccountRepository_ResetQuotaUsedAndClearRateLimitCooldown_NoRowsAffectedReturnsNotFoundWithoutOutbox(t *testing.T) {
+	exec := &recordingSQLExecutor{result: rowsAffectedResult(0)}
+	repo := newAccountRepositoryWithSQL(nil, exec, nil)
+
+	err := repo.ResetQuotaUsedAndClearRateLimitCooldown(context.Background(), 42)
+
+	require.ErrorIs(t, err, service.ErrAccountNotFound)
 	require.Len(t, exec.execQueries, 1)
 	require.Contains(t, exec.execQueries[0], "UPDATE accounts")
 	require.NotContains(t, strings.Join(exec.execQueries, "\n"), "scheduler_outbox")
@@ -276,8 +288,8 @@ func TestAccountRepository_ListOAuthRefreshCandidatePage_SQLFilter(t *testing.T)
 
 	normalized := normalizeSQLWhitespace(capturedSQL)
 	require.Contains(t, normalized, "deleted_at IS NULL")
-	require.Contains(t, normalized, "schedulable = TRUE",
-		"permanently unschedulable accounts must not remain OAuth refresh candidates")
+	require.NotContains(t, normalized, "schedulable = TRUE",
+		"paused (schedulable=false, status=active) accounts must remain OAuth refresh candidates: excluding them lets their stored access_token expire and the usage-window probe then reports a false 'needs re-auth'; permanent rejection is already covered by status = 'active' and refresh failures are bounded by the retry-cooldown exclusion")
 	require.Contains(t, normalized, "status = 'active'")
 	// setup-token 的 access_token 同为 8h 短期令牌，必须与 oauth 一起纳入后台刷新候选
 	require.Contains(t, normalized, "type IN ('oauth', 'setup-token')")

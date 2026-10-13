@@ -5,8 +5,8 @@ package service
 import (
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/domain"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
+	"github.com/MACOS-DO/sub4api/internal/domain"
+	"github.com/MACOS-DO/sub4api/internal/pkg/xai"
 )
 
 func TestGrokAccountModelMappingCacheInvalidatesWithRuntimeSettings(t *testing.T) {
@@ -230,6 +230,82 @@ func TestAccountIsModelSupported(t *testing.T) {
 			},
 			requestedModel: "gemini-3-flash",
 			expected:       false,
+		},
+
+		// DeepSeek 空映射：官方模型白名单（不再是「允许所有」）
+		{
+			name:           "deepseek empty mapping allows official flash",
+			platform:       PlatformDeepseek,
+			credentials:    map[string]any{},
+			requestedModel: "deepseek-flash",
+			expected:       true,
+		},
+		{
+			name:           "deepseek empty mapping normalizes claude code long context suffix",
+			platform:       PlatformDeepseek,
+			credentials:    map[string]any{},
+			requestedModel: "deepseek-flash[1m]",
+			expected:       true,
+		},
+		{
+			name:           "deepseek empty mapping matches case-insensitively",
+			platform:       PlatformDeepseek,
+			credentials:    map[string]any{},
+			requestedModel: "deepseek-FLASH",
+			expected:       true,
+		},
+		{
+			name:           "deepseek empty mapping allows versioned pro name",
+			platform:       PlatformDeepseek,
+			credentials:    map[string]any{},
+			requestedModel: "deepseek-v4-pro-0813",
+			expected:       true,
+		},
+		{
+			name:           "deepseek empty mapping rejects retired chat model",
+			platform:       PlatformDeepseek,
+			credentials:    map[string]any{},
+			requestedModel: "deepseek-chat",
+			expected:       false,
+		},
+		{
+			name:           "deepseek empty mapping rejects foreign claude model",
+			platform:       PlatformDeepseek,
+			credentials:    map[string]any{},
+			requestedModel: "claude-sonnet-4-6",
+			expected:       false,
+		},
+		{
+			name:           "deepseek empty mapping rejects unknown gpt model",
+			platform:       PlatformDeepseek,
+			credentials:    map[string]any{},
+			requestedModel: "gpt-future-model",
+			expected:       false,
+		},
+		{
+			name:           "deepseek empty mapping rejects typo",
+			platform:       PlatformDeepseek,
+			credentials:    map[string]any{},
+			requestedModel: "deepseek-flas",
+			expected:       false,
+		},
+		{
+			name:     "deepseek explicit mapping wins over whitelist",
+			platform: PlatformDeepseek,
+			credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"foo-bar": "deepseek-flash",
+				},
+			},
+			requestedModel: "foo-bar",
+			expected:       true,
+		},
+		{
+			name:           "non deepseek empty mapping still allows all",
+			platform:       PlatformAnthropic,
+			credentials:    map[string]any{},
+			requestedModel: "any-model",
+			expected:       true,
 		},
 	}
 

@@ -8,8 +8,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
+	"github.com/MACOS-DO/sub4api/internal/pkg/pagination"
 	"image"
 	"image/color"
 	stddraw "image/draw"
@@ -113,6 +113,8 @@ type UserUpdateFields struct {
 	BalanceNotifyExtraEmails bool
 	// AllowedGroups 为 true 时才同步 user_allowed_groups 关联表。
 	AllowedGroups bool
+	// RestrictPublicGroups 覆盖 restrict_public_groups 列。
+	RestrictPublicGroups bool
 }
 
 // BalanceChange 记录一次余额变更前后的值。

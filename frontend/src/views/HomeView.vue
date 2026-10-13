@@ -538,7 +538,7 @@ const sanitizedHomeContent = computed(() =>
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
 // GitHub URL
-const githubUrl = 'https://github.com/Wei-Shaw/sub2api'
+const githubUrl = 'https://github.com/MACOS-DO/sub4api'
 
 // Auth state
 const isAuthenticated = computed(() => authStore.isAuthenticated)

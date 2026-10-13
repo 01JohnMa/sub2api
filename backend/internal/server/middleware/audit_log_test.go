@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -187,4 +187,11 @@ func TestOllamaCloudUsageSessionRouteOmitsAuditBody(t *testing.T) {
 	require.Len(t, logs, 1)
 	require.Equal(t, "<credential-bearing body omitted>", logs[0].RequestBody)
 	require.NotContains(t, logs[0].RequestBody, "audit-canary")
+}
+
+func TestZhipuResetCardUseHasStableAuditAction(t *testing.T) {
+	route := "POST /api/v1/admin/cn-providers/accounts/:id/reset-quota"
+	require.Equal(t, "admin.cn_providers.reset_card.use", auditActionOverrides[route])
+	// 请求体只有 reset_type / record_id，没有凭证，照常入库便于追溯用了哪张卡。
+	require.NotContains(t, auditBodyOmittedRoutes, route)
 }

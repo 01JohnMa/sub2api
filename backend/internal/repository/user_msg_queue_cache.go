@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/pkg/logger"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -186,10 +186,12 @@ func (c *userMsgQueueCache) ReconcileExpiredLockCandidates(ctx context.Context, 
 	if err != nil {
 		return 0, err
 	}
-	members, err := c.rdb.ZRangeByScore(ctx, umqLockIndexKey, &redis.ZRangeBy{
-		Min:   "-inf",
-		Max:   strconv.FormatInt(nowMs, 10),
-		Count: int64(maxCount),
+	members, err := c.rdb.ZRangeArgs(ctx, redis.ZRangeArgs{
+		Key:     umqLockIndexKey,
+		Start:   "-inf",
+		Stop:    strconv.FormatInt(nowMs, 10),
+		ByScore: true,
+		Count:   int64(maxCount),
 	}).Result()
 	if err != nil {
 		return 0, fmt.Errorf("umq read lock index: %w", err)

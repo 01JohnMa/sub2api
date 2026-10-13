@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/MACOS-DO/sub4api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -75,6 +75,7 @@ func TestEmailOAuthAuto_SnapshotsPlatformQuotaDefaults(t *testing.T) {
 	require.Len(t, quotaRepo.bulkInsertCalls, 1, "createEmailOAuthUser must snapshot platform quotas via BulkInsertInitial")
 
 	records := quotaRepo.bulkInsertCalls[0]
+	require.Len(t, records, 1, "only platforms with a configured limit get a row")
 	var geminiRecord *UserPlatformQuotaRecord
 	for i := range records {
 		if records[i].Platform == "gemini" {

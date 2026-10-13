@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
-	"github.com/Wei-Shaw/sub2api/ent/user"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	dbent "github.com/MACOS-DO/sub4api/ent"
+	"github.com/MACOS-DO/sub4api/ent/redeemcode"
+	"github.com/MACOS-DO/sub4api/ent/user"
+	"github.com/MACOS-DO/sub4api/internal/pkg/pagination"
+	"github.com/MACOS-DO/sub4api/internal/service"
 
 	entsql "entgo.io/ent/dialect/sql"
 )
@@ -347,7 +347,7 @@ func (r *redeemCodeRepository) ListByUser(ctx context.Context, userID int64, lim
 	codes, err := r.client.RedeemCode.Query().
 		Where(redeemcode.UsedByEQ(userID)).
 		WithGroup().
-		Order(dbent.Desc(redeemcode.FieldUsedAt)).
+		Order(dbent.Desc(redeemcode.FieldUsedAt), dbent.Desc(redeemcode.FieldID)).
 		Limit(limit).
 		All(ctx)
 	if err != nil {
@@ -377,7 +377,7 @@ func (r *redeemCodeRepository) ListByUserPaginated(ctx context.Context, userID i
 		WithGroup().
 		Offset(params.Offset()).
 		Limit(params.Limit()).
-		Order(dbent.Desc(redeemcode.FieldUsedAt)).
+		Order(dbent.Desc(redeemcode.FieldUsedAt), dbent.Desc(redeemcode.FieldID)).
 		All(ctx)
 	if err != nil {
 		return nil, nil, err

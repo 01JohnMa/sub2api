@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/MACOS-DO/sub4api/internal/pkg/ctxkey"
 )
 
 // WithResolvedTargetPlatform stores the concrete provider chosen for a request
@@ -112,6 +112,8 @@ func DetectModelPlatform(model string) (string, bool) {
 			return PlatformZhipu, true
 		case "deepseek":
 			return PlatformDeepseek, true
+		case "minimax":
+			return PlatformMiniMax, true
 		}
 		if rest != "" {
 			normalized = strings.TrimPrefix(rest, "models/")
@@ -148,6 +150,11 @@ func DetectModelPlatform(model string) (string, bool) {
 		return PlatformZhipu, true
 	case strings.HasPrefix(normalized, "deepseek-"):
 		return PlatformDeepseek, true
+	case strings.HasPrefix(normalized, "minimax-"),
+		strings.HasPrefix(normalized, "abab5"),
+		strings.HasPrefix(normalized, "abab6"),
+		strings.HasPrefix(normalized, "abab7"):
+		return PlatformMiniMax, true
 	default:
 		return "", false
 	}
@@ -195,7 +202,7 @@ func (s *GatewayService) resolveCompositeRouteDecision(ctx context.Context, grou
 func isConcreteRequestPlatform(platform string) bool {
 	switch platform {
 	case PlatformAnthropic, PlatformOpenAI, PlatformGemini, PlatformAntigravity, PlatformGrok,
-		PlatformKimi, PlatformZhipu, PlatformDeepseek:
+		PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo, PlatformOpenAIBPS:
 		return true
 	default:
 		return false

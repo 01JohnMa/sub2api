@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	middleware2 "github.com/MACOS-DO/sub4api/internal/server/middleware"
+	"github.com/MACOS-DO/sub4api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -88,6 +88,10 @@ func claudeCodeBodyMapFromParsedRequest(parsedReq *service.ParsedRequest) map[st
 	}
 	bodyMap := map[string]any{
 		"model": parsedReq.Model,
+	}
+	// 探测识别（max_tokens=1）需要看到该字段，复用已解析请求时一并带上。
+	if parsedReq.MaxTokens > 0 {
+		bodyMap["max_tokens"] = parsedReq.MaxTokens
 	}
 	if parsedReq.HasSystem {
 		if system, ok := parsedReq.SystemValue(); ok {

@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
+	"github.com/MACOS-DO/sub4api/internal/pkg/pagination"
 )
 
 var (
 	ErrGroupNotFound = infraerrors.NotFound("GROUP_NOT_FOUND", "group not found")
 	ErrGroupExists   = infraerrors.Conflict("GROUP_EXISTS", "group name already exists")
+	ErrGroupNotEmpty = infraerrors.Conflict("GROUP_NOT_EMPTY", "group contains accounts")
 )
 
 type GroupRepository interface {
@@ -51,6 +52,12 @@ type GroupDuplicateRepository interface {
 type AdminGroupRepository interface {
 	GroupRepository
 	GroupDuplicateRepository
+	EmptyGroupDeleteRepository
+}
+
+// EmptyGroupDeleteRepository provides the guarded cascade used by simple mode.
+type EmptyGroupDeleteRepository interface {
+	DeleteCascadeIfEmpty(ctx context.Context, id int64) ([]int64, error)
 }
 
 // GroupSortOrderUpdate 分组排序更新

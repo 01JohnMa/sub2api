@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
+	"github.com/MACOS-DO/sub4api/internal/pkg/response"
+	"github.com/MACOS-DO/sub4api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,7 +26,7 @@ func NewChannelMonitorRequestTemplateHandler(templateService *service.ChannelMon
 
 type channelMonitorTemplateCreateRequest struct {
 	Name             string            `json:"name" binding:"required,max=100"`
-	Provider         string            `json:"provider" binding:"required,oneof=openai anthropic gemini grok"`
+	Provider         string            `json:"provider" binding:"required,oneof=openai openai_bps anthropic gemini grok"`
 	APIMode          string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
 	Description      string            `json:"description" binding:"max=500"`
 	ExtraHeaders     map[string]string `json:"extra_headers"`

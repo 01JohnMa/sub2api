@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	"github.com/MACOS-DO/sub4api/internal/pkg/ctxkey"
+	"github.com/MACOS-DO/sub4api/internal/pkg/openai"
+	"github.com/MACOS-DO/sub4api/internal/pkg/usagestats"
 	gocache "github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/require"
 )
@@ -564,6 +565,46 @@ func TestGetAvailableModels_UsesShortCacheAndSupportsInvalidation(t *testing.T) 
 	require.Equal(t, int64(2), store)
 }
 
+// Scenario: 账号模型变更会失效所属平台缓存
+func TestResolveCompositeModelOwnershipUsesModelsCacheInvalidation(t *testing.T) {
+	groupID := int64(9)
+	repo := &modelsListAccountRepoStub{
+		byGroup: map[int64][]Account{
+			groupID: {{
+				ID:          1,
+				Platform:    PlatformDeepseek,
+				Credentials: map[string]any{"model_mapping": map[string]any{"company-model": "deepseek-v4-pro"}},
+			}},
+		},
+	}
+	svc := &GatewayService{
+		accountRepo:        repo,
+		modelsListCache:    gocache.New(time.Minute, time.Minute),
+		modelsListCacheTTL: time.Minute,
+	}
+
+	first, err := svc.resolveCompositeModelOwnership(context.Background(), groupID, "company-model")
+	require.NoError(t, err)
+	require.Equal(t, CompositeModelOwnership{TargetPlatform: PlatformDeepseek, Matched: true}, first)
+	require.Equal(t, int64(1), repo.listByGroupCalls.Load())
+
+	repo.byGroup[groupID] = []Account{{
+		ID:          2,
+		Platform:    PlatformOpenAI,
+		Credentials: map[string]any{"model_mapping": map[string]any{"company-model": "gpt-5"}},
+	}}
+	cached, err := svc.resolveCompositeModelOwnership(context.Background(), groupID, "company-model")
+	require.NoError(t, err)
+	require.Equal(t, first, cached)
+	require.Equal(t, int64(1), repo.listByGroupCalls.Load())
+
+	svc.InvalidateAvailableModelsCache(&groupID, PlatformDeepseek)
+	refreshed, err := svc.resolveCompositeModelOwnership(context.Background(), groupID, "company-model")
+	require.NoError(t, err)
+	require.Equal(t, CompositeModelOwnership{TargetPlatform: PlatformOpenAI, Matched: true}, refreshed)
+	require.Equal(t, int64(2), repo.listByGroupCalls.Load())
+}
+
 func TestGetAvailableModels_ErrorAndGlobalListBranches(t *testing.T) {
 	resetGatewayHotpathStatsForTest()
 
@@ -630,7 +671,9 @@ func TestGetAvailableModels_OpenAIPassthroughUsesDefaultFallback(t *testing.T) {
 			want: nil,
 		},
 		{
-			name: "passthrough wins over ordinary account mapping",
+			// The passthrough account serves the default set (its stale mapping is
+			// ignored), while the ordinary account's mapping still reaches the list.
+			name: "passthrough contributes defaults alongside ordinary account mapping",
 			accounts: []Account{
 				{
 					ID:          2,
@@ -644,7 +687,7 @@ func TestGetAvailableModels_OpenAIPassthroughUsesDefaultFallback(t *testing.T) {
 					Extra:       map[string]any{"openai_passthrough": true},
 				},
 			},
-			want: nil,
+			want: dedupeAndSortModelIDs(append([]string{"configured-model"}, openai.DefaultModelIDs()...)),
 		},
 		{
 			name: "ordinary accounts preserve mapped whitelist",
@@ -668,7 +711,9 @@ func TestGetAvailableModels_OpenAIPassthroughUsesDefaultFallback(t *testing.T) {
 				modelsListCacheTTL: time.Minute,
 			}
 
-			require.Equal(t, tt.want, svc.GetAvailableModels(context.Background(), &groupID, PlatformOpenAI))
+			got := svc.GetAvailableModels(context.Background(), &groupID, PlatformOpenAI)
+			require.Equal(t, tt.want, got)
+			require.NotContains(t, got, "stale-model", "passthrough mapping must never reach the public list")
 		})
 	}
 }

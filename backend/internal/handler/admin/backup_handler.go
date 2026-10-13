@@ -1,9 +1,9 @@
 package admin
 
 import (
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/pkg/response"
+	"github.com/MACOS-DO/sub4api/internal/server/middleware"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -140,7 +140,13 @@ func (h *BackupHandler) DeleteBackup(c *gin.Context) {
 		response.BadRequest(c, "backup ID is required")
 		return
 	}
-	if err := h.backupService.DeleteBackup(c.Request.Context(), backupID); err != nil {
+	var err error
+	if c.Query("delete_archived") == "true" {
+		err = h.backupService.DeleteArchivedBackup(c.Request.Context(), backupID)
+	} else {
+		err = h.backupService.DeleteBackup(c.Request.Context(), backupID)
+	}
+	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}

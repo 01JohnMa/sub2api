@@ -10,10 +10,10 @@ import (
 
 	"log/slog"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
+	"github.com/MACOS-DO/sub4api/internal/pkg/openai"
+	"github.com/MACOS-DO/sub4api/internal/pkg/response"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -205,7 +205,7 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 			Platform:           acc.Platform,
 			Type:               acc.Type,
 			Credentials:        acc.Credentials,
-			Extra:              acc.Extra,
+			Extra:              service.RedactOpenAICodexTicketExtra(acc.Extra),
 			ProxyKey:           proxyKey,
 			Concurrency:        acc.Concurrency,
 			Priority:           acc.Priority,
@@ -309,15 +309,17 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 					_, _ = h.adminService.UpdateProxy(ctx, existingID, &service.UpdateProxyInput{
 						Status:         normalizedStatus,
 						ExpiresAt:      existingExpiresAt,
+						ClearExpiresAt: existingExpiresAt == nil,
 						FallbackMode:   existingFallbackMode,
 						BackupProxyID:  existingBackupProxyID,
-						ExpiryWarnDays: item.ExpiryWarnDays,
+						ClearBackupID:  existingBackupProxyID == nil,
+						ExpiryWarnDays: &item.ExpiryWarnDays,
 						Name:           proxy.Name,
 						Protocol:       proxy.Protocol,
 						Host:           proxy.Host,
 						Port:           proxy.Port,
-						Username:       proxy.Username,
-						Password:       proxy.Password,
+						Username:       &proxy.Username,
+						Password:       &proxy.Password,
 					})
 				}
 			}
@@ -383,15 +385,17 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 			_, _ = h.adminService.UpdateProxy(ctx, created.ID, &service.UpdateProxyInput{
 				Status:         normalizedStatus,
 				ExpiresAt:      expiresAt,
+				ClearExpiresAt: expiresAt == nil,
 				FallbackMode:   fallbackMode,
 				BackupProxyID:  backupProxyID,
-				ExpiryWarnDays: item.ExpiryWarnDays,
+				ClearBackupID:  backupProxyID == nil,
+				ExpiryWarnDays: &item.ExpiryWarnDays,
 				Name:           created.Name,
 				Protocol:       created.Protocol,
 				Host:           created.Host,
 				Port:           created.Port,
-				Username:       created.Username,
-				Password:       created.Password,
+				Username:       &created.Username,
+				Password:       &created.Password,
 			})
 		}
 	}

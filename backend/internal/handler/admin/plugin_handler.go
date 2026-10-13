@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/pkg/response"
+	"github.com/MACOS-DO/sub4api/internal/server/middleware"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -178,6 +178,22 @@ func (h *PluginHandler) Test(c *gin.Context) {
 	result, err := h.manager.Test(c.Request.Context(), id)
 	if err != nil {
 		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, result)
+}
+
+// Status returns the plugin's passive runtime status for the config UI. It is
+// read-only (no config apply, no upstream call) and therefore not step-up gated,
+// so a status UI can poll it without a 2FA prompt or a "test" side effect.
+func (h *PluginHandler) Status(c *gin.Context) {
+	id, ok := pluginIDParam(c)
+	if !ok {
+		return
+	}
+	result, err := h.manager.Status(c.Request.Context(), id)
+	if err != nil {
+		response.ErrorFrom(c, err)
 		return
 	}
 	response.Success(c, result)

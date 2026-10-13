@@ -4,12 +4,15 @@ import { CONCRETE_PLATFORM_OPTIONS, GROUP_PLATFORM_OPTIONS } from '@/constants/p
 const concretePlatforms = [
   'anthropic',
   'openai',
+  'openai_bps',
   'gemini',
   'antigravity',
   'grok',
   'kimi',
   'zhipu',
-  'deepseek'
+  'deepseek',
+  'minimax',
+  'opencode_go'
 ]
 
 describe('platform option catalogs', () => {

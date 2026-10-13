@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/MACOS-DO/sub4api/internal/config"
 )
 
 func TestGetOpsAdvancedSettings_DefaultSnapshotHidesOpenAITokenStats(t *testing.T) {
@@ -23,8 +23,26 @@ func TestGetOpsAdvancedSettings_DefaultSnapshotHidesOpenAITokenStats(t *testing.
 	if !cfg.DisplayAlertEvents {
 		t.Fatalf("DisplayAlertEvents = false, want true by default")
 	}
+	if !cfg.DataRetention.CleanupEnabled {
+		t.Fatal("data cleanup should be enabled by default")
+	}
 	if repo.getValueCalls != 0 || repo.getMultipleCalls != 0 {
 		t.Fatalf("hot-path snapshot read touched repository: get=%d get_multiple=%d", repo.getValueCalls, repo.getMultipleCalls)
+	}
+}
+
+func TestGetOpsAdvancedSettings_DefaultCleanupFollowsDeploymentConfig(t *testing.T) {
+	svc := &OpsService{cfg: &config.Config{Ops: config.OpsConfig{
+		Cleanup: config.OpsCleanupConfig{Enabled: false},
+	}}}
+	svc.initRuntimeSettings(context.Background())
+
+	cfg, err := svc.GetOpsAdvancedSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetOpsAdvancedSettings() error = %v", err)
+	}
+	if cfg.DataRetention.CleanupEnabled {
+		t.Fatal("data cleanup should follow the disabled deployment baseline")
 	}
 }
 

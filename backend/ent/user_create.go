@@ -11,19 +11,19 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/Wei-Shaw/sub2api/ent/announcementread"
-	"github.com/Wei-Shaw/sub2api/ent/apikey"
-	"github.com/Wei-Shaw/sub2api/ent/authidentity"
-	"github.com/Wei-Shaw/sub2api/ent/group"
-	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
-	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
-	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
-	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
-	"github.com/Wei-Shaw/sub2api/ent/usagelog"
-	"github.com/Wei-Shaw/sub2api/ent/user"
-	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
-	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
-	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/MACOS-DO/sub4api/ent/announcementread"
+	"github.com/MACOS-DO/sub4api/ent/apikey"
+	"github.com/MACOS-DO/sub4api/ent/authidentity"
+	"github.com/MACOS-DO/sub4api/ent/group"
+	"github.com/MACOS-DO/sub4api/ent/paymentorder"
+	"github.com/MACOS-DO/sub4api/ent/pendingauthsession"
+	"github.com/MACOS-DO/sub4api/ent/promocodeusage"
+	"github.com/MACOS-DO/sub4api/ent/redeemcode"
+	"github.com/MACOS-DO/sub4api/ent/usagelog"
+	"github.com/MACOS-DO/sub4api/ent/user"
+	"github.com/MACOS-DO/sub4api/ent/userattributevalue"
+	"github.com/MACOS-DO/sub4api/ent/userplatformquota"
+	"github.com/MACOS-DO/sub4api/ent/usersubscription"
 )
 
 // UserCreate is the builder for creating a User entity.
@@ -266,6 +266,20 @@ func (_c *UserCreate) SetLastActiveAt(v time.Time) *UserCreate {
 func (_c *UserCreate) SetNillableLastActiveAt(v *time.Time) *UserCreate {
 	if v != nil {
 		_c.SetLastActiveAt(*v)
+	}
+	return _c
+}
+
+// SetRestrictPublicGroups sets the "restrict_public_groups" field.
+func (_c *UserCreate) SetRestrictPublicGroups(v bool) *UserCreate {
+	_c.mutation.SetRestrictPublicGroups(v)
+	return _c
+}
+
+// SetNillableRestrictPublicGroups sets the "restrict_public_groups" field if the given value is not nil.
+func (_c *UserCreate) SetNillableRestrictPublicGroups(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetRestrictPublicGroups(*v)
 	}
 	return _c
 }
@@ -636,6 +650,10 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultSignupSource
 		_c.mutation.SetSignupSource(v)
 	}
+	if _, ok := _c.mutation.RestrictPublicGroups(); !ok {
+		v := user.DefaultRestrictPublicGroups
+		_c.mutation.SetRestrictPublicGroups(v)
+	}
 	if _, ok := _c.mutation.BalanceNotifyEnabled(); !ok {
 		v := user.DefaultBalanceNotifyEnabled
 		_c.mutation.SetBalanceNotifyEnabled(v)
@@ -729,6 +747,9 @@ func (_c *UserCreate) check() error {
 		if err := user.SignupSourceValidator(v); err != nil {
 			return &ValidationError{Name: "signup_source", err: fmt.Errorf(`ent: validator failed for field "User.signup_source": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.RestrictPublicGroups(); !ok {
+		return &ValidationError{Name: "restrict_public_groups", err: errors.New(`ent: missing required field "User.restrict_public_groups"`)}
 	}
 	if _, ok := _c.mutation.BalanceNotifyEnabled(); !ok {
 		return &ValidationError{Name: "balance_notify_enabled", err: errors.New(`ent: missing required field "User.balance_notify_enabled"`)}
@@ -843,6 +864,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.LastActiveAt(); ok {
 		_spec.SetField(user.FieldLastActiveAt, field.TypeTime, value)
 		_node.LastActiveAt = &value
+	}
+	if value, ok := _c.mutation.RestrictPublicGroups(); ok {
+		_spec.SetField(user.FieldRestrictPublicGroups, field.TypeBool, value)
+		_node.RestrictPublicGroups = value
 	}
 	if value, ok := _c.mutation.BalanceNotifyEnabled(); ok {
 		_spec.SetField(user.FieldBalanceNotifyEnabled, field.TypeBool, value)
@@ -1384,6 +1409,18 @@ func (u *UserUpsert) ClearLastActiveAt() *UserUpsert {
 	return u
 }
 
+// SetRestrictPublicGroups sets the "restrict_public_groups" field.
+func (u *UserUpsert) SetRestrictPublicGroups(v bool) *UserUpsert {
+	u.Set(user.FieldRestrictPublicGroups, v)
+	return u
+}
+
+// UpdateRestrictPublicGroups sets the "restrict_public_groups" field to the value that was provided on create.
+func (u *UserUpsert) UpdateRestrictPublicGroups() *UserUpsert {
+	u.SetExcluded(user.FieldRestrictPublicGroups)
+	return u
+}
+
 // SetBalanceNotifyEnabled sets the "balance_notify_enabled" field.
 func (u *UserUpsert) SetBalanceNotifyEnabled(v bool) *UserUpsert {
 	u.Set(user.FieldBalanceNotifyEnabled, v)
@@ -1816,6 +1853,20 @@ func (u *UserUpsertOne) UpdateLastActiveAt() *UserUpsertOne {
 func (u *UserUpsertOne) ClearLastActiveAt() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.ClearLastActiveAt()
+	})
+}
+
+// SetRestrictPublicGroups sets the "restrict_public_groups" field.
+func (u *UserUpsertOne) SetRestrictPublicGroups(v bool) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetRestrictPublicGroups(v)
+	})
+}
+
+// UpdateRestrictPublicGroups sets the "restrict_public_groups" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateRestrictPublicGroups() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateRestrictPublicGroups()
 	})
 }
 
@@ -2433,6 +2484,20 @@ func (u *UserUpsertBulk) UpdateLastActiveAt() *UserUpsertBulk {
 func (u *UserUpsertBulk) ClearLastActiveAt() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.ClearLastActiveAt()
+	})
+}
+
+// SetRestrictPublicGroups sets the "restrict_public_groups" field.
+func (u *UserUpsertBulk) SetRestrictPublicGroups(v bool) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetRestrictPublicGroups(v)
+	})
+}
+
+// UpdateRestrictPublicGroups sets the "restrict_public_groups" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateRestrictPublicGroups() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateRestrictPublicGroups()
 	})
 }
 

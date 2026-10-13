@@ -39,6 +39,7 @@ func apiKeyAuthWithSubscription(
 	cfg *config.Config,
 	organizationSpending *service.OrganizationSpendingCapabilityRegistry,
 ) gin.HandlerFunc {
+	_ = organizationSpending
 	return func(c *gin.Context) {
 		// ── 1. 提取 API Key ──────────────────────────────────────────
 
@@ -88,9 +89,6 @@ func apiKeyAuthWithSubscription(
 		// apiKey 已加载（含 User/Group）。即便后续因分组停用/Key 停用/用户停用/
 		// IP 限制等早退中断，也让 Ops 错误日志能回退取到 user/group/platform。
 		SetOpsFallbackAPIKey(c, apiKey)
-		if ensureOrganizationKeyAuthorizationContext(c, apiKey, false) {
-			return
-		}
 
 		// ── 3. 基础鉴权（始终执行） ─────────────────────────────────
 
@@ -128,29 +126,11 @@ func apiKeyAuthWithSubscription(
 			AbortWithError(c, 401, "USER_INACTIVE", "User account is not active")
 			return
 		}
+		setOrganizationReportingContext(c, apiKey)
 		if abortIfAPIKeyGroupUnavailable(c, apiKey) {
 			return
 		}
 		if abortIfAPIKeyGroupNotAllowed(c, apiKey) {
-			return
-		}
-		if abortIfOrganizationKeyAdmissionDenied(c, apiKey, organizationSpending, false) {
-			return
-		}
-		if hasOrganizationKeyAttribution(apiKey) {
-			if cfg.RunMode == config.RunModeSimple && !isOrganizationResponsesHTTPPost(c) {
-				writeAPIKeyAuthError(c, http.StatusServiceUnavailable, "ORGANIZATION_BILLING_UNAVAILABLE", "organization billing is not available in simple mode", false)
-				return
-			}
-			c.Set(string(ContextKeyAPIKey), apiKey)
-			c.Set(string(ContextKeyUser), AuthSubject{
-				UserID:      apiKey.User.ID,
-				Concurrency: apiKey.User.Concurrency,
-			})
-			c.Set(string(ContextKeyUserRole), apiKey.User.Role)
-			setGroupContext(c, apiKey.Group)
-			_ = apiKeyService.TouchLastUsed(c.Request.Context(), apiKey.ID)
-			c.Next()
 			return
 		}
 
@@ -344,6 +324,24 @@ func abortIfOrganizationKeyAdmissionDenied(
 		writeAPIKeyAuthError(c, http.StatusForbidden, "ORGANIZATION_UNAVAILABLE", "organization is unavailable", google)
 		return true
 	}
+	if isOrganizationNonBillableRequest(c) {
+		if err := requireOrganizationNonBillableCapabilities(c, registry); err != nil {
+			message := infraerrors.Message(err)
+			if infraerrors.Reason(err) == "ORGANIZATION_SPENDING_DISABLED" {
+				message = "organization spending is not enabled"
+			}
+			writeAPIKeyAuthError(c, infraerrors.Code(err), infraerrors.Reason(err), message, google)
+			return true
+		}
+		if !organizationNonBillableGroupAllowed(c, apiKey) {
+			writeAPIKeyAuthError(c, http.StatusBadRequest, "ORGANIZATION_SPENDING_UNSUPPORTED_REQUEST", "organization spending does not support this endpoint route", google)
+			return true
+		}
+		if abortIfAPIKeyBillingStateInvalid(c, apiKey, google) {
+			return true
+		}
+		return false
+	}
 	if !google && isOrganizationResponsesHTTPPost(c) {
 		return false
 	}
@@ -364,11 +362,31 @@ func abortIfOrganizationKeyAdmissionDenied(
 		)
 		return true
 	}
-	if apiKey.Group == nil || apiKey.Group.Platform != service.PlatformOpenAI {
+	if !organizationSpendingGroupAllowed(c, apiKey) {
 		writeAPIKeyAuthError(c, http.StatusBadRequest, "ORGANIZATION_SPENDING_UNSUPPORTED_REQUEST", "organization spending does not support this endpoint route", google)
 		return true
 	}
 	return false
+}
+
+func organizationSpendingGroupAllowed(c *gin.Context, apiKey *service.APIKey) bool {
+	if apiKey == nil || apiKey.Group == nil {
+		return false
+	}
+	path := ""
+	method := ""
+	if c != nil && c.Request != nil {
+		method = c.Request.Method
+		if c.Request.URL != nil {
+			path = c.Request.URL.Path
+		}
+	}
+	if method == http.MethodPost && path == "/v1/messages" {
+		return apiKey.Group.Platform == service.PlatformOpenAI ||
+			apiKey.Group.Platform == service.PlatformAnthropic ||
+			apiKey.Group.Platform == service.PlatformGemini
+	}
+	return apiKey.Group.Platform == service.PlatformOpenAI
 }
 
 func hasOrganizationKeyAttribution(apiKey *service.APIKey) bool {
@@ -423,6 +441,52 @@ func setOrganizationKeyAuthorizationContext(c *gin.Context, authorization *servi
 	c.Set(string(ContextKeyOrganizationKeyAuthorization), authorization)
 	ctx := context.WithValue(c.Request.Context(), ctxkey.OrganizationKeyAuthorization, authorization)
 	c.Request = c.Request.WithContext(ctx)
+}
+
+// setOrganizationReportingContext captures only the current organization
+// dimension. Organization requests continue through the existing personal
+// billing/routing pipeline; this value is consumed by telemetry writers.
+func setOrganizationReportingContext(c *gin.Context, apiKey *service.APIKey) {
+	if c == nil || apiKey == nil {
+		return
+	}
+	if apiKey.OrganizationAuthorization != nil &&
+		apiKey.OrganizationAuthorization.OrganizationStatus != "" &&
+		apiKey.OrganizationAuthorization.OrganizationStatus != service.OrganizationStatusActive {
+		return
+	}
+	var organizationID int64
+	switch {
+	case apiKey.OrganizationID != nil:
+		organizationID = *apiKey.OrganizationID
+	case apiKey.User != nil && apiKey.User.OrganizationID != nil:
+		organizationID = *apiKey.User.OrganizationID
+	default:
+		return
+	}
+	if organizationID <= 0 {
+		return
+	}
+	c.Set(string(ContextKeyOrganizationReportingID), organizationID)
+	ctx := context.WithValue(c.Request.Context(), ctxkey.OrganizationReportingID, organizationID)
+	c.Request = c.Request.WithContext(ctx)
+}
+
+// GetOrganizationReportingIDFromContext returns the server-derived nullable
+// organization dimension for existing usage/error attribution.
+func GetOrganizationReportingIDFromContext(c *gin.Context) (*int64, bool) {
+	if c == nil {
+		return nil, false
+	}
+	value, exists := c.Get(string(ContextKeyOrganizationReportingID))
+	if !exists {
+		return nil, false
+	}
+	organizationID, ok := value.(int64)
+	if !ok || organizationID <= 0 {
+		return nil, false
+	}
+	return &organizationID, true
 }
 
 // GetOrganizationKeyAuthorizationFromContext returns only the authoritative
@@ -486,6 +550,70 @@ func requireOrganizationSpendingCapabilities(c *gin.Context, registry *service.O
 		}
 	}
 	return nil
+}
+
+func requireOrganizationNonBillableCapabilities(c *gin.Context, registry *service.OrganizationSpendingCapabilityRegistry) error {
+	requests := organizationNonBillableCapabilityRequests(c)
+	if len(requests) == 0 {
+		return registry.RequireNonBillable("", "")
+	}
+	for _, request := range requests {
+		if err := registry.RequireNonBillable(request.family, request.shape); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isOrganizationNonBillableRequest(c *gin.Context) bool {
+	return len(organizationNonBillableCapabilityRequests(c)) > 0
+}
+
+func organizationNonBillableCapabilityRequests(c *gin.Context) []organizationCapabilityRequest {
+	if c == nil || c.Request == nil || c.Request.URL == nil {
+		return nil
+	}
+	path := c.Request.URL.Path
+	if c.Request.Method == http.MethodGet && (path == "/v1/models" || path == "/models" || path == "/antigravity/models" || path == "/antigravity/v1/models") {
+		return []organizationCapabilityRequest{{family: service.OrganizationEndpointFamilyModels, shape: service.OrganizationRequestShapeHTTP}}
+	}
+	if c.Request.Method == http.MethodGet && (path == "/v1/usage" || path == "/usage" || path == "/antigravity/v1/usage") {
+		return []organizationCapabilityRequest{{family: service.OrganizationEndpointFamilyUsage, shape: service.OrganizationRequestShapeHTTP}}
+	}
+	if strings.HasSuffix(path, "/messages/count_tokens") && c.Request.Method == http.MethodPost {
+		return []organizationCapabilityRequest{{family: service.OrganizationEndpointFamilyTokenCounting, shape: service.OrganizationRequestShapeProbe}}
+	}
+	if c.Request.Method == http.MethodGet && (path == "/v1beta/models" || strings.HasPrefix(path, "/v1beta/models/")) {
+		return []organizationCapabilityRequest{{family: service.OrganizationEndpointFamilyModels, shape: service.OrganizationRequestShapeHTTP}}
+	}
+	if c.Request.Method == http.MethodGet && (path == "/antigravity/v1beta/models" || strings.HasPrefix(path, "/antigravity/v1beta/models/")) {
+		return []organizationCapabilityRequest{{family: service.OrganizationEndpointFamilyModels, shape: service.OrganizationRequestShapeHTTP}}
+	}
+	if c.Request.Method == http.MethodPost && (strings.HasPrefix(path, "/v1beta/models/") || strings.HasPrefix(path, "/antigravity/v1beta/models/")) && isGeminiCountTokensPath(path) {
+		return []organizationCapabilityRequest{{family: service.OrganizationEndpointFamilyTokenCounting, shape: service.OrganizationRequestShapeProbe}}
+	}
+	return nil
+}
+
+func isGeminiCountTokensPath(path string) bool {
+	return strings.Contains(path, ":countTokens") || strings.Contains(path, "/countTokens")
+}
+
+func organizationNonBillableGroupAllowed(c *gin.Context, apiKey *service.APIKey) bool {
+	if apiKey == nil || apiKey.Group == nil {
+		return false
+	}
+	path := ""
+	if c != nil && c.Request != nil && c.Request.URL != nil {
+		path = c.Request.URL.Path
+	}
+	if strings.HasPrefix(path, "/antigravity/") {
+		return true
+	}
+	if strings.HasPrefix(path, "/v1beta/") {
+		return apiKey.Group.Platform == service.PlatformGemini
+	}
+	return true
 }
 
 func organizationCapabilityRequests(c *gin.Context) []organizationCapabilityRequest {

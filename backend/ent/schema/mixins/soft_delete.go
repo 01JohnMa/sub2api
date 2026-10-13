@@ -4,6 +4,7 @@ package mixins
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -58,6 +59,10 @@ func (SoftDeleteMixin) Fields() []ent.Field {
 // 使用空结构体作为键可以避免与其他包的键冲突。
 type softDeleteKey struct{}
 
+type userDeletionAuthorizationKey struct{}
+
+var ErrUserDeletionRequiresGuard = errors.New("user deletion requires the guarded repository transaction")
+
 // SkipSoftDelete 返回一个新的 context，用于跳过软删除的拦截器和变更器。
 //
 // 使用场景：
@@ -74,6 +79,19 @@ type softDeleteKey struct{}
 //	client.User.DeleteOneID(id).Exec(mixins.SkipSoftDelete(ctx))
 func SkipSoftDelete(parent context.Context) context.Context {
 	return context.WithValue(parent, softDeleteKey{}, true)
+}
+
+// AuthorizeUserDeletion is reserved for the User repository after it locks the
+// target row and verifies organization membership and allocation state. It
+// also forces soft-delete semantics even if the caller supplied SkipSoftDelete.
+func AuthorizeUserDeletion(parent context.Context) context.Context {
+	parent = context.WithValue(parent, softDeleteKey{}, false)
+	return context.WithValue(parent, userDeletionAuthorizationKey{}, true)
+}
+
+func IsUserDeletionAuthorized(ctx context.Context) bool {
+	authorized, _ := ctx.Value(userDeletionAuthorizationKey{}).(bool)
+	return authorized
 }
 
 // Interceptors 返回查询拦截器列表。

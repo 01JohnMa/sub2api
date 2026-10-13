@@ -195,6 +195,60 @@
       <section
         v-if="selectedOrganization"
         class="mt-6 border-t border-gray-200 pt-5 dark:border-dark-700"
+        data-test="organization-lifecycle-section"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.organizations.lifecycle.title') }}</h4>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.organizations.lifecycle.description') }}</p>
+          </div>
+          <div v-if="selectedOrganization.status !== 'archived'" class="flex flex-wrap gap-2">
+            <button
+              v-if="selectedOrganization.status === 'active'"
+              type="button"
+              class="btn btn-secondary"
+              :disabled="lifecycleSubmitting"
+              data-test="organization-disable"
+              @click="requestLifecycleAction('disable')"
+            >
+              {{ t('admin.organizations.lifecycle.disable') }}
+            </button>
+            <button
+              v-else
+              type="button"
+              class="btn btn-secondary"
+              :disabled="lifecycleSubmitting"
+              data-test="organization-reactivate"
+              @click="requestLifecycleAction('reactivate')"
+            >
+              {{ t('admin.organizations.lifecycle.reactivate') }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-danger"
+              :disabled="lifecycleSubmitting"
+              data-test="organization-archive"
+              @click="requestLifecycleAction('archive')"
+            >
+              {{ t('admin.organizations.lifecycle.archive') }}
+            </button>
+          </div>
+        </div>
+        <dl v-if="archivePreview" class="mt-4 grid grid-cols-2 gap-3 border-y border-red-100 py-3 text-sm dark:border-red-950/50">
+          <div>
+            <dt class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.organizations.lifecycle.frozenUnallocated') }}</dt>
+            <dd class="mt-1 font-mono font-semibold text-red-700 dark:text-red-300">{{ archivePreview.unallocated }} USD</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.organizations.lifecycle.balanceVersion') }}</dt>
+            <dd class="mt-1 font-mono text-gray-900 dark:text-white">{{ archivePreview.balance_version }}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section
+        v-if="selectedOrganization"
+        class="mt-6 border-t border-gray-200 pt-5 dark:border-dark-700"
         data-test="organization-funding-section"
       >
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -335,6 +389,72 @@
             :page-size="ledgerPagination.page_size"
             @update:page="handleLedgerPageChange"
             @update:pageSize="handleLedgerPageSizeChange"
+          />
+        </div>
+      </section>
+
+      <section
+        v-if="selectedOrganization"
+        class="mt-6 border-t border-gray-200 pt-5 dark:border-dark-700"
+        data-test="organization-reconciliation-section"
+      >
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.organizations.reconciliation.title') }}</h4>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.organizations.reconciliation.description') }}</p>
+          </div>
+          <button type="button" class="btn btn-secondary" :disabled="reconciliationLoading" :title="t('common.refresh')" @click="loadPendingReconciliations(selectedOrganization.id)">
+            <Icon name="refresh" size="sm" :class="reconciliationLoading ? 'animate-spin' : ''" />
+          </button>
+        </div>
+        <div v-if="reconciliationLoading" class="py-4 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('common.loading') }}</div>
+        <div v-else-if="pendingReconciliations.length === 0" class="border border-dashed border-gray-300 px-4 py-4 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400" data-test="organization-reconciliation-empty">
+          {{ t('admin.organizations.reconciliation.empty') }}
+        </div>
+        <div v-else class="divide-y divide-gray-100 border-y border-gray-100 dark:divide-dark-700 dark:border-dark-700">
+          <div v-for="item in pendingReconciliations" :key="item.execution_id" class="py-3" data-test="organization-reconciliation-item">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <button type="button" class="min-w-0 text-left" @click="loadPendingReconciliationDetail(item.execution_id)">
+                <span class="block truncate font-mono text-xs text-gray-700 dark:text-gray-200">{{ item.execution_id }}</span>
+                <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">{{ item.reserved_amount }} USD · {{ formatDateTime(item.accepted_at) }} · {{ t('admin.organizations.reconciliation.attemptCount', { count: item.attempt_count }) }}</span>
+              </button>
+              <div class="flex items-center gap-2">
+                <span v-if="item.conflict" class="badge badge-warning">{{ t('admin.organizations.reconciliation.conflict') }}</span>
+                <span v-else-if="!item.allowed_resolution" class="badge badge-gray">{{ t('admin.organizations.reconciliation.awaitingEvidence') }}</span>
+                <button v-else type="button" class="btn btn-primary" data-test="organization-reconciliation-resolve" @click="requestPendingReconciliationResolution(item)">
+                  {{ t('admin.organizations.reconciliation.resolve') }}
+                </button>
+              </div>
+            </div>
+            <div v-if="item.allowed_resolution" class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
+              <span>{{ t('admin.organizations.reconciliation.allowedResolution') }}: {{ item.allowed_resolution }}</span>
+              <span>{{ t('admin.organizations.reconciliation.computedAmount') }}: {{ item.computed_organization_amount || '0.00000000' }} USD</span>
+              <span>{{ t('admin.organizations.reconciliation.candidateCeiling') }}: {{ item.candidate_ceiling }} USD</span>
+            </div>
+            <dl v-if="pendingReconciliationDetail?.execution_id === item.execution_id" class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-gray-100 pt-3 text-xs dark:border-dark-700">
+              <template v-for="attempt in pendingReconciliationDetail.attempts" :key="attempt.attempt_id">
+                <dt class="text-gray-500 dark:text-gray-400">{{ t('admin.organizations.reconciliation.attempt') }} #{{ attempt.attempt_sequence }}</dt>
+                <dd class="font-mono text-gray-700 dark:text-gray-200">{{ reconciliationAttemptStatusLabel(attempt.status) }} · {{ attempt.attempt_id }}</dd>
+              </template>
+              <template v-for="evidence in pendingReconciliationDetail.evidence" :key="`${evidence.attempt_id}-${evidence.evidence_source}`">
+                <dt class="text-gray-500 dark:text-gray-400">{{ reconciliationEvidenceSourceLabel(evidence.evidence_source) }} · {{ reconciliationOutcomeLabel(evidence.terminal_outcome) }}</dt>
+                <dd class="font-mono text-gray-700 dark:text-gray-200">{{ evidence.raw_actual_cost }} USD · {{ evidence.input_tokens + evidence.output_tokens }} tokens</dd>
+              </template>
+            </dl>
+          </div>
+        </div>
+        <div
+          v-if="pendingReconciliationPagination.total > 0"
+          class="mt-4"
+          data-test="organization-reconciliation-pagination"
+        >
+          <Pagination
+            :page="pendingReconciliationPagination.page"
+            :total="pendingReconciliationPagination.total"
+            :page-size="pendingReconciliationPagination.page_size"
+            :page-size-options="[10, 20, 50, 100]"
+            @update:page="handlePendingReconciliationPageChange"
+            @update:pageSize="handlePendingReconciliationPageSizeChange"
           />
         </div>
       </section>
@@ -896,6 +1016,17 @@
     </BaseDialog>
 
     <ConfirmDialog
+      :show="lifecycleAction !== null"
+      :title="lifecycleConfirmationTitle"
+      :message="lifecycleConfirmationMessage"
+      :confirm-text="lifecycleConfirmationText"
+      :danger="lifecycleAction === 'archive'"
+      data-test="organization-lifecycle-confirmation"
+      @confirm="confirmLifecycleAction"
+      @cancel="cancelLifecycleAction"
+    />
+
+    <ConfirmDialog
       :show="showMemberAdditionConfirmation"
       :title="t('admin.organizations.members.addMemberWarningTitle')"
       :message="t('admin.organizations.members.addMemberWarning')"
@@ -903,6 +1034,16 @@
       data-test="organization-add-member-confirmation"
       @confirm="confirmMemberAddition"
       @cancel="cancelMemberAdditionConfirmation"
+    />
+
+    <ConfirmDialog
+      :show="pendingReconciliationResolution !== null"
+      :title="t('admin.organizations.reconciliation.confirmTitle')"
+      :message="t('admin.organizations.reconciliation.confirmMessage')"
+      :confirm-text="t('admin.organizations.reconciliation.resolve')"
+      data-test="organization-reconciliation-confirmation"
+      @confirm="resolvePendingReconciliation"
+      @cancel="pendingReconciliationResolution = null"
     />
 
     <ConfirmDialog
@@ -929,9 +1070,11 @@ import type {
   Organization,
   OrganizationAllocationPreview,
   OrganizationAllocationResult,
+	OrganizationArchivePreview,
   OrganizationBalanceSummary,
   OrganizationLedgerEntry,
   OrganizationMember,
+	OrganizationPendingReconciliation,
   OrganizationRole,
   OrganizationStatus
 } from '@/types'
@@ -969,10 +1112,23 @@ const sortState = reactive({
 const showDetailDialog = ref(false)
 const detailLoading = ref(false)
 const selectedOrganization = ref<Organization | null>(null)
+const lifecycleAction = ref<'disable' | 'reactivate' | 'archive' | null>(null)
+const lifecycleSubmitting = ref(false)
+const archivePreview = ref<OrganizationArchivePreview | null>(null)
+let detailRequestGeneration = 0
+let archivePreviewGeneration = 0
 const balanceLoading = ref(false)
 const balanceSummary = ref<OrganizationBalanceSummary | null>(null)
 const ledgerLoading = ref(false)
 const ledgerEntries = ref<OrganizationLedgerEntry[]>([])
+const pendingReconciliations = ref<OrganizationPendingReconciliation[]>([])
+const pendingReconciliationPagination = reactive({ page: 1, page_size: 20, total: 0, pages: 0 })
+const pendingReconciliationDetail = ref<OrganizationPendingReconciliation | null>(null)
+const reconciliationLoading = ref(false)
+const reconciliationResolving = ref(false)
+const pendingReconciliationResolution = ref<OrganizationPendingReconciliation | null>(null)
+const reconciliationAttempt = ref({ executionID: '', idempotencyKey: '' })
+let pendingReconciliationDetailRequest = 0
 const ledgerPagination = reactive({
   page: 1,
   page_size: getPersistedPageSize(),
@@ -1048,6 +1204,21 @@ const memberRemovalMessage = computed(() => {
     amount: member.allocation.available
   })
 })
+const lifecycleConfirmationTitle = computed(() => {
+  if (lifecycleAction.value === 'disable') return t('admin.organizations.lifecycle.disableTitle')
+  if (lifecycleAction.value === 'reactivate') return t('admin.organizations.lifecycle.reactivateTitle')
+  return t('admin.organizations.lifecycle.archiveTitle')
+})
+const lifecycleConfirmationText = computed(() => {
+  if (lifecycleAction.value === 'disable') return t('admin.organizations.lifecycle.disable')
+  if (lifecycleAction.value === 'reactivate') return t('admin.organizations.lifecycle.reactivate')
+  return t('admin.organizations.lifecycle.archive')
+})
+const lifecycleConfirmationMessage = computed(() => {
+  if (lifecycleAction.value === 'disable') return t('admin.organizations.lifecycle.disableConfirmation')
+  if (lifecycleAction.value === 'reactivate') return t('admin.organizations.lifecycle.reactivateConfirmation')
+  return t('admin.organizations.lifecycle.archiveConfirmation', { amount: archivePreview.value?.unallocated || '0.00000000' })
+})
 const columns = computed<Column[]>(() => [
   { key: 'name', label: t('admin.organizations.columns.name'), sortable: true },
   { key: 'code', label: t('admin.organizations.columns.code'), sortable: true },
@@ -1086,6 +1257,18 @@ function organizationRoleLabel(role: OrganizationRole): string {
 
 function memberStatusLabel(status: OrganizationMember['status']): string {
   return status === 'active' ? t('common.active') : t('admin.users.disabled')
+}
+
+function reconciliationAttemptStatusLabel(status: string): string {
+  return t(`admin.organizations.reconciliation.attemptStatuses.${status}`)
+}
+
+function reconciliationEvidenceSourceLabel(source: string): string {
+  return t(`admin.organizations.reconciliation.evidenceSources.${source}`)
+}
+
+function reconciliationOutcomeLabel(outcome: string): string {
+  return t(`admin.organizations.reconciliation.outcomes.${outcome}`)
 }
 
 let listController: AbortController | null = null
@@ -1193,11 +1376,21 @@ function closeFormDialog() {
 }
 
 async function openDetailDialog(organization: Organization) {
+  const requestGeneration = ++detailRequestGeneration
+  archivePreviewGeneration += 1
+  pendingReconciliationDetailRequest += 1
   selectedOrganization.value = organization
+	archivePreview.value = null
+	lifecycleAction.value = null
   resetAllocationState()
   balanceSummary.value = null
   balanceLoading.value = true
   ledgerEntries.value = []
+  pendingReconciliations.value = []
+  pendingReconciliationDetail.value = null
+  pendingReconciliationPagination.page = 1
+  pendingReconciliationPagination.total = 0
+  pendingReconciliationPagination.pages = 0
   ledgerPagination.page = 1
   ledgerPagination.total = 0
   ledgerPagination.pages = 0
@@ -1210,16 +1403,43 @@ async function openDetailDialog(organization: Organization) {
   showDetailDialog.value = true
   detailLoading.value = true
   try {
-    selectedOrganization.value = await adminAPI.organizations.getById(organization.id)
+    const loadedOrganization = await adminAPI.organizations.getById(organization.id)
+    if (
+      requestGeneration !== detailRequestGeneration ||
+      !showDetailDialog.value ||
+      selectedOrganization.value?.id !== organization.id
+    ) {
+      return
+    }
+    selectedOrganization.value = loadedOrganization
   } catch (error: unknown) {
     const requestError = error as { message?: string; response?: { data?: { detail?: string } } }
-    appStore.showError(requestError.response?.data?.detail || requestError.message || t('admin.organizations.failedToLoadDetail'))
+    if (
+      requestGeneration === detailRequestGeneration &&
+      showDetailDialog.value &&
+      selectedOrganization.value?.id === organization.id
+    ) {
+      appStore.showError(requestError.response?.data?.detail || requestError.message || t('admin.organizations.failedToLoadDetail'))
+    }
   } finally {
-    detailLoading.value = false
+    if (requestGeneration === detailRequestGeneration && selectedOrganization.value?.id === organization.id) {
+      detailLoading.value = false
+    }
   }
+	if (
+		requestGeneration !== detailRequestGeneration ||
+		!showDetailDialog.value ||
+		selectedOrganization.value?.id !== organization.id
+	) {
+		return
+	}
 
-  if (selectedOrganization.value?.id === organization.id) {
-    await Promise.all([loadMembers(organization.id), reloadFunding(organization.id)])
+	if (
+		requestGeneration === detailRequestGeneration &&
+		showDetailDialog.value &&
+		selectedOrganization.value?.id === organization.id
+	) {
+	await Promise.all([loadMembers(organization.id), reloadFunding(organization.id), loadPendingReconciliations(organization.id)])
   } else {
     balanceLoading.value = false
     ledgerLoading.value = false
@@ -1228,12 +1448,23 @@ async function openDetailDialog(organization: Organization) {
 }
 
 function closeDetailDialog() {
+  detailRequestGeneration += 1
+  archivePreviewGeneration += 1
+  pendingReconciliationDetailRequest += 1
   showDetailDialog.value = false
   selectedOrganization.value = null
+	archivePreview.value = null
+	lifecycleAction.value = null
   detailLoading.value = false
   balanceSummary.value = null
   balanceLoading.value = false
   ledgerEntries.value = []
+  pendingReconciliations.value = []
+  pendingReconciliationDetail.value = null
+  pendingReconciliationResolution.value = null
+  pendingReconciliationPagination.page = 1
+  pendingReconciliationPagination.total = 0
+  pendingReconciliationPagination.pages = 0
   ledgerLoading.value = false
   ledgerPagination.page = 1
   ledgerPagination.total = 0
@@ -1248,6 +1479,209 @@ function closeDetailDialog() {
   closeCreditDialog()
   showMemberAdditionConfirmation.value = false
   resetMemberRemoval()
+}
+
+async function requestLifecycleAction(action: 'disable' | 'reactivate' | 'archive') {
+  const organization = selectedOrganization.value
+  if (!organization || lifecycleSubmitting.value) return
+  if (action === 'archive') {
+    const organizationID = organization.id
+    const requestGeneration = ++archivePreviewGeneration
+    archivePreview.value = null
+    try {
+      const preview = await adminAPI.organizations.getArchivePreview(organizationID)
+      if (
+        requestGeneration !== archivePreviewGeneration ||
+        !showDetailDialog.value ||
+        selectedOrganization.value?.id !== organizationID
+      ) {
+        return
+      }
+      if (preview.organization_id !== organizationID) {
+        appStore.showError(t('admin.organizations.lifecycle.failedToLoadPreview'))
+        return
+      }
+      archivePreview.value = preview
+    } catch (error: unknown) {
+      const requestError = error as { message?: string; response?: { data?: { detail?: string } } }
+      if (
+        requestGeneration === archivePreviewGeneration &&
+        showDetailDialog.value &&
+        selectedOrganization.value?.id === organizationID
+      ) {
+        appStore.showError(requestError.response?.data?.detail || requestError.message || t('admin.organizations.lifecycle.failedToLoadPreview'))
+      }
+      return
+    }
+  } else {
+    archivePreviewGeneration += 1
+    archivePreview.value = null
+  }
+  lifecycleAction.value = action
+}
+
+function cancelLifecycleAction() {
+  if (!lifecycleSubmitting.value) lifecycleAction.value = null
+}
+
+async function refreshLifecycleState(organizationID: number) {
+  const [organization] = await Promise.all([
+    adminAPI.organizations.getById(organizationID),
+    loadOrganizations(),
+    reloadFunding(organizationID),
+    loadMembers(organizationID),
+    loadPendingReconciliations(organizationID)
+  ])
+  if (selectedOrganization.value?.id === organizationID) selectedOrganization.value = organization
+}
+
+async function confirmLifecycleAction() {
+  const organization = selectedOrganization.value
+  const action = lifecycleAction.value
+  if (!organization || !action || lifecycleSubmitting.value) return
+  if (
+    action === 'archive' &&
+    (!archivePreview.value || archivePreview.value.organization_id !== organization.id)
+  ) {
+    lifecycleAction.value = null
+    archivePreview.value = null
+    appStore.showError(t('admin.organizations.lifecycle.failedToLoadPreview'))
+    return
+  }
+  lifecycleSubmitting.value = true
+  try {
+    let updated: Organization
+    if (action === 'disable') {
+      updated = await adminAPI.organizations.disable(organization.id)
+    } else if (action === 'reactivate') {
+      updated = await adminAPI.organizations.reactivate(organization.id)
+    } else {
+      updated = await adminAPI.organizations.archive(organization.id, {
+        balance_version: archivePreview.value!.balance_version,
+        updated_at: archivePreview.value!.updated_at,
+        confirm_archive: true
+      })
+    }
+    if (selectedOrganization.value?.id === organization.id) selectedOrganization.value = updated
+    lifecycleAction.value = null
+    archivePreview.value = null
+    await refreshLifecycleState(organization.id)
+    appStore.showSuccess(t(`admin.organizations.lifecycle.${action}Succeeded`))
+  } catch (error: unknown) {
+    const status = errorStatus(error)
+    const code = errorCode(error).toUpperCase()
+    if (status === 403) {
+      lifecycleAction.value = null
+      closeDetailDialog()
+      await loadOrganizations()
+    } else if (status === 409) {
+      lifecycleAction.value = null
+      if (action === 'archive') {
+        await requestLifecycleAction('archive')
+      } else {
+        await refreshLifecycleState(organization.id)
+      }
+    }
+    const requestError = error as { message?: string; response?: { data?: { detail?: string } } }
+    appStore.showError(requestError.response?.data?.detail || requestError.message || (code.includes('VERSION') ? t('admin.organizations.lifecycle.versionConflict') : t('admin.organizations.lifecycle.failed')))
+  } finally {
+    lifecycleSubmitting.value = false
+  }
+}
+
+async function loadPendingReconciliations(organizationId: number) {
+	reconciliationLoading.value = true
+	try {
+    const response = await adminAPI.organizations.listPendingReconciliations(
+      organizationId,
+      pendingReconciliationPagination.page,
+      pendingReconciliationPagination.page_size
+    )
+    if (selectedOrganization.value?.id === organizationId) {
+      pendingReconciliations.value = response.items
+      pendingReconciliationPagination.total = response.total
+      pendingReconciliationPagination.page = response.page
+      pendingReconciliationPagination.page_size = response.page_size
+      pendingReconciliationPagination.pages = response.pages
+    }
+	} catch (error: unknown) {
+		const requestError = error as { message?: string; response?: { status?: number; data?: { detail?: string } } }
+		appStore.showError(requestError.response?.data?.detail || requestError.message || t('admin.organizations.reconciliation.failedToLoad'))
+	} finally {
+		if (selectedOrganization.value?.id === organizationId) reconciliationLoading.value = false
+	}
+}
+
+function handlePendingReconciliationPageChange(page: number) {
+  const organization = selectedOrganization.value
+  if (!organization) return
+  pendingReconciliationPagination.page = Math.max(1, Math.min(page, pendingReconciliationPagination.pages || 1))
+  void loadPendingReconciliations(organization.id)
+}
+
+function handlePendingReconciliationPageSizeChange(pageSize: number) {
+  const organization = selectedOrganization.value
+  if (!organization) return
+  pendingReconciliationPagination.page_size = pageSize
+  pendingReconciliationPagination.page = 1
+  void loadPendingReconciliations(organization.id)
+}
+
+async function loadPendingReconciliationDetail(executionID: string) {
+  const organization = selectedOrganization.value
+  if (!organization) return
+  const requestID = ++pendingReconciliationDetailRequest
+  try {
+    const detail = await adminAPI.organizations.getPendingReconciliation(organization.id, executionID)
+    if (requestID === pendingReconciliationDetailRequest && selectedOrganization.value?.id === organization.id) {
+      pendingReconciliationDetail.value = detail
+    }
+  } catch (error: unknown) {
+    const requestError = error as { message?: string; response?: { data?: { detail?: string } } }
+    if (requestID === pendingReconciliationDetailRequest && selectedOrganization.value?.id === organization.id) {
+      appStore.showError(requestError.response?.data?.detail || requestError.message || t('admin.organizations.reconciliation.failedToLoad'))
+    }
+  }
+}
+
+function requestPendingReconciliationResolution(item: OrganizationPendingReconciliation) {
+	if (!item.allowed_resolution || item.conflict) return
+	if (reconciliationAttempt.value.executionID !== item.execution_id) {
+		reconciliationAttempt.value = { executionID: item.execution_id, idempotencyKey: `organization-reconciliation-${globalThis.crypto.randomUUID?.() || Date.now()}` }
+	}
+	pendingReconciliationResolution.value = item
+}
+
+async function resolvePendingReconciliation() {
+  const organization = selectedOrganization.value
+  const item = pendingReconciliationResolution.value
+  if (!organization || !item || !reconciliationAttempt.value.idempotencyKey || reconciliationResolving.value) return
+  reconciliationResolving.value = true
+  try {
+    await adminAPI.organizations.resolvePendingReconciliation(
+      organization.id,
+      item.execution_id,
+      reconciliationAttempt.value.idempotencyKey
+    )
+    pendingReconciliationResolution.value = null
+    pendingReconciliationDetail.value = null
+    await loadPendingReconciliations(organization.id)
+    appStore.showSuccess(t('admin.organizations.reconciliation.resolved'))
+  } catch (error: unknown) {
+    const requestError = error as { message?: string; response?: { status?: number; data?: { detail?: string } } }
+    const status = requestError.response?.status
+    if (status === 403 || status === 409) {
+      pendingReconciliationResolution.value = null
+      pendingReconciliationDetail.value = null
+      await loadPendingReconciliations(organization.id)
+      if (status === 409 && pendingReconciliations.value.some((entry) => entry.execution_id === item.execution_id)) {
+        await loadPendingReconciliationDetail(item.execution_id)
+      }
+    }
+    appStore.showError(requestError.response?.data?.detail || requestError.message || t('admin.organizations.reconciliation.failedToResolve'))
+  } finally {
+    reconciliationResolving.value = false
+  }
 }
 
 async function loadBalance(organizationId: number) {

@@ -453,6 +453,78 @@ func TestRelay_OnTurnComplete_PerTerminalEvent(t *testing.T) {
 	require.Equal(t, 5, result.Usage.OutputTokens)
 }
 
+func TestRelay_OnTurnComplete_BindsConcurrentRequestsByIngressTurn(t *testing.T) {
+	clientConn := newPassthroughTestFrameConn([]passthroughTestFrame{{
+		msgType: coderws.MessageText,
+		payload: []byte(`{"type":"response.create","model":"gpt-5.3-codex","input":["second"]}`),
+	}}, false)
+	upstreamConn := newPassthroughTestFrameConn(nil, false)
+	firstPayload := []byte(`{"type":"response.create","model":"gpt-5.3-codex","input":["first"]}`)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	resultCh := make(chan struct {
+		result RelayResult
+		exit   *RelayExit
+	}, 1)
+	turns := make(chan RelayTurnResult, 2)
+	go func() {
+		result, relayExit := Relay(ctx, clientConn, upstreamConn, firstPayload, RelayOptions{
+			FirstRequestTurn: 1,
+			NextRequestTurn:  func() int { return 2 },
+			OnTurnComplete:   func(turn RelayTurnResult) { turns <- turn },
+		})
+		resultCh <- struct {
+			result RelayResult
+			exit   *RelayExit
+		}{result: result, exit: relayExit}
+	}()
+
+	// response.created starts the client reader. Wait until its second create
+	// has reached the upstream before associating response IDs out of order.
+	upstreamConn.readCh <- passthroughTestFrame{msgType: coderws.MessageText, payload: []byte(`{"type":"response.created","response":{"id":"resp_first"}}`)}
+	require.Eventually(t, func() bool { return len(upstreamConn.Writes()) == 2 }, time.Second, 10*time.Millisecond)
+	upstreamConn.readCh <- passthroughTestFrame{msgType: coderws.MessageText, payload: []byte(`{"type":"response.created","response":{"id":"resp_second"}}`)}
+	upstreamConn.readCh <- passthroughTestFrame{msgType: coderws.MessageText, payload: []byte(`{"type":"response.completed","response":{"id":"resp_second","usage":{"input_tokens":3,"output_tokens":1}}}`)}
+	upstreamConn.readCh <- passthroughTestFrame{msgType: coderws.MessageText, payload: []byte(`{"type":"response.completed","response":{"id":"resp_first","usage":{"input_tokens":2,"output_tokens":1}}}`)}
+	_ = upstreamConn.Close()
+
+	firstCompleted := <-turns
+	secondCompleted := <-turns
+	require.Equal(t, 2, firstCompleted.RequestTurn)
+	require.Equal(t, "resp_second", firstCompleted.RequestID)
+	require.Equal(t, 1, secondCompleted.RequestTurn)
+	require.Equal(t, "resp_first", secondCompleted.RequestID)
+	finished := <-resultCh
+	require.Nil(t, finished.exit)
+	require.Empty(t, finished.result.PendingRequestTurns)
+}
+
+func TestRelay_PreservesEveryUnfinishedIngressTurnForRecovery(t *testing.T) {
+	clientConn := newPassthroughTestFrameConn([]passthroughTestFrame{{
+		msgType: coderws.MessageText,
+		payload: []byte(`{"type":"response.create","model":"gpt-5.3-codex","input":["second"]}`),
+	}}, false)
+	upstreamConn := newPassthroughTestFrameConn(nil, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	resultCh := make(chan RelayResult, 1)
+	go func() {
+		result, _ := Relay(ctx, clientConn, upstreamConn, []byte(`{"type":"response.create","model":"gpt-5.3-codex","input":["first"]}`), RelayOptions{
+			FirstRequestTurn: 1,
+			NextRequestTurn:  func() int { return 2 },
+		})
+		resultCh <- result
+	}()
+
+	upstreamConn.readCh <- passthroughTestFrame{msgType: coderws.MessageText, payload: []byte(`{"type":"response.created","response":{"id":"resp_first"}}`)}
+	require.Eventually(t, func() bool { return len(upstreamConn.Writes()) == 2 }, time.Second, 10*time.Millisecond)
+	_ = upstreamConn.Close()
+
+	result := <-resultCh
+	require.Equal(t, []int{1, 2}, result.PendingRequestTurns)
+}
+
 func TestRelay_OnTurnComplete_ProvidesTurnMetrics(t *testing.T) {
 	t.Parallel()
 

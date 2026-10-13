@@ -22,6 +22,37 @@ type authRepoStub struct {
 	listKeysByGroupID func(ctx context.Context, groupID int64) ([]string, error)
 }
 
+func TestAPIKeyService_GetByKeyAuthoritativeAlwaysReloadsAttribution(t *testing.T) {
+	organizationID := int64(42)
+	organizationRole := OrganizationRoleMember
+	var calls atomic.Int64
+	repo := &authRepoStub{getByKeyForAuth: func(context.Context, string) (*APIKey, error) {
+		call := calls.Add(1)
+		apiKey := &APIKey{
+			ID:     1,
+			UserID: 2,
+			Status: StatusActive,
+			User:   &User{ID: 2, Status: StatusActive, Role: RoleUser},
+		}
+		if call > 1 {
+			apiKey.OrganizationID = &organizationID
+			apiKey.User.OrganizationID = &organizationID
+			apiKey.User.OrganizationRole = &organizationRole
+		}
+		return apiKey, nil
+	}}
+	svc := NewAPIKeyService(repo, nil, nil, nil, nil, nil, &config.Config{})
+
+	first, err := svc.GetByKeyAuthoritative(context.Background(), "key")
+	require.NoError(t, err)
+	require.Nil(t, first.OrganizationID)
+
+	second, err := svc.GetByKeyAuthoritative(context.Background(), "key")
+	require.NoError(t, err)
+	require.Equal(t, organizationID, *second.OrganizationID)
+	require.Equal(t, int64(2), calls.Load())
+}
+
 func (s *authRepoStub) Create(ctx context.Context, key *APIKey) error {
 	panic("unexpected Create call")
 }
@@ -124,9 +155,11 @@ func (s *authRepoStub) GetRateLimitData(ctx context.Context, id int64) (*APIKeyR
 }
 
 type authCacheStub struct {
-	getAuthCache   func(ctx context.Context, key string) (*APIKeyAuthCacheEntry, error)
-	setAuthKeys    []string
-	deleteAuthKeys []string
+	getAuthCache      func(ctx context.Context, key string) (*APIKeyAuthCacheEntry, error)
+	setAuthKeys       []string
+	deleteAuthKeys    []string
+	publishedAuthKeys []string
+	authSubscribers   []func(cacheKey string)
 }
 
 func (s *authCacheStub) GetCreateAttemptCount(ctx context.Context, userID int64) (int, error) {
@@ -167,10 +200,15 @@ func (s *authCacheStub) DeleteAuthCache(ctx context.Context, key string) error {
 }
 
 func (s *authCacheStub) PublishAuthCacheInvalidation(ctx context.Context, cacheKey string) error {
+	s.publishedAuthKeys = append(s.publishedAuthKeys, cacheKey)
+	for _, subscriber := range s.authSubscribers {
+		subscriber(cacheKey)
+	}
 	return nil
 }
 
 func (s *authCacheStub) SubscribeAuthCacheInvalidation(ctx context.Context, handler func(cacheKey string)) error {
+	s.authSubscribers = append(s.authSubscribers, handler)
 	return nil
 }
 
@@ -453,6 +491,59 @@ func TestAPIKeyService_GetByKey_UsesL1Cache(t *testing.T) {
 	require.Equal(t, int32(1), atomic.LoadInt32(&calls))
 }
 
+func TestAPIKeyService_UserInvalidationClearsOtherInstanceL1AndReloadsPersonalKey(t *testing.T) {
+	var organizationAssigned atomic.Bool
+	organizationAssigned.Store(true)
+	organizationID := int64(42)
+	organizationRole := OrganizationRoleMember
+	var repoCalls atomic.Int64
+	repo := &authRepoStub{
+		getByKeyForAuth: func(context.Context, string) (*APIKey, error) {
+			repoCalls.Add(1)
+			apiKey := &APIKey{
+				ID:     21,
+				UserID: 7,
+				Status: StatusActive,
+				User:   &User{ID: 7, Status: StatusActive, Role: RoleUser},
+			}
+			if organizationAssigned.Load() {
+				apiKey.OrganizationID = &organizationID
+				apiKey.User.OrganizationID = &organizationID
+				apiKey.User.OrganizationRole = &organizationRole
+			}
+			return apiKey, nil
+		},
+		listKeysByUserID: func(context.Context, int64) ([]string, error) {
+			return []string{"membership-key"}, nil
+		},
+	}
+	cache := &authCacheStub{}
+	cfg := &config.Config{APIKeyAuth: config.APIKeyAuthCacheConfig{L1Size: 1000, L1TTLSeconds: 60}}
+	instanceA := NewAPIKeyService(repo, nil, nil, nil, nil, cache, cfg)
+	instanceB := NewAPIKeyService(repo, nil, nil, nil, nil, cache, cfg)
+	instanceB.StartAuthCacheInvalidationSubscriber(context.Background())
+
+	organizationKey, err := instanceB.GetByKey(context.Background(), "membership-key")
+	require.NoError(t, err)
+	require.Equal(t, organizationID, *organizationKey.OrganizationID)
+	instanceB.authCacheL1.Wait()
+	cacheKey := instanceB.authCacheKey("membership-key")
+	_, cached := instanceB.authCacheL1.Get(cacheKey)
+	require.True(t, cached)
+
+	organizationAssigned.Store(false)
+	instanceA.InvalidateAuthCacheByUserID(context.Background(), 7)
+	instanceB.authCacheL1.Wait()
+	_, cached = instanceB.authCacheL1.Get(cacheKey)
+	require.False(t, cached)
+
+	personalKey, err := instanceB.GetByKey(context.Background(), "membership-key")
+	require.NoError(t, err)
+	require.Nil(t, personalKey.OrganizationID)
+	require.Nil(t, personalKey.User.OrganizationID)
+	require.Equal(t, int64(2), repoCalls.Load())
+}
+
 func TestAPIKeyService_InvalidateAuthCacheByUserID(t *testing.T) {
 	cache := &authCacheStub{}
 	repo := &authRepoStub{
@@ -470,6 +561,7 @@ func TestAPIKeyService_InvalidateAuthCacheByUserID(t *testing.T) {
 
 	svc.InvalidateAuthCacheByUserID(context.Background(), 7)
 	require.Len(t, cache.deleteAuthKeys, 2)
+	require.ElementsMatch(t, cache.deleteAuthKeys, cache.publishedAuthKeys)
 }
 
 func TestAPIKeyService_InvalidateAuthCacheByGroupID(t *testing.T) {

@@ -703,6 +703,7 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			entry := &service.OpsInsertErrorLogInput{
 				RequestID:       requestID,
 				ClientRequestID: clientRequestID,
+				OrganizationID:  service.OrganizationReportingIDFromContext(c.Request.Context()),
 
 				AccountID: accountID,
 				Platform:  platform,
@@ -845,6 +846,7 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		entry := &service.OpsInsertErrorLogInput{
 			RequestID:       requestID,
 			ClientRequestID: clientRequestID,
+			OrganizationID:  service.OrganizationReportingIDFromContext(c.Request.Context()),
 
 			AccountID: accountID,
 			Platform:  platform,

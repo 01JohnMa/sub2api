@@ -9,8 +9,10 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -52,6 +54,107 @@ func (s *APIKeyRepoSuite) TestCreate() {
 	got, err := s.repo.GetByID(s.ctx, key.ID)
 	s.Require().NoError(err, "GetByID")
 	s.Require().Equal("sk-create-test", got.Key)
+}
+
+func (s *APIKeyRepoSuite) TestCreateInheritsLockedOwnerOrganizationAttribution() {
+	member := s.mustCreateUser("organization-key-owner@test.com")
+	organization, err := s.client.Organization.Create().
+		SetName("Key Attribution").
+		SetCode("key-attribution").
+		SetStatus(domain.OrganizationStatusActive).
+		SetCreatedBy(member.ID).
+		Save(s.ctx)
+	s.Require().NoError(err)
+
+	_, err = s.client.User.UpdateOneID(member.ID).
+		SetOrganizationID(organization.ID).
+		SetOrganizationRole(domain.OrganizationRoleMember).
+		Save(s.ctx)
+	s.Require().NoError(err)
+	_, err = s.client.OrganizationAllocation.Create().
+		SetOrganizationID(organization.ID).
+		SetUserIDSnapshot(member.ID).
+		SetUserRefID(member.ID).
+		SetStatus(domain.OrganizationAllocationStatusActive).
+		SetAvailable(decimal.Zero).
+		SetReserved(decimal.Zero).
+		Save(s.ctx)
+	s.Require().NoError(err)
+
+	key := &service.APIKey{
+		UserID: member.ID,
+		Key:    "sk-organization-attribution",
+		Name:   "Organization Key",
+		Status: service.StatusActive,
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, key))
+	s.Require().Equal(&organization.ID, key.OrganizationID)
+
+	stored, err := s.client.APIKey.Get(s.ctx, key.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(&organization.ID, stored.OrganizationID)
+	authorized, err := s.repo.GetByKeyForAuth(s.ctx, key.Key)
+	s.Require().NoError(err)
+	s.Require().Equal(&organization.ID, authorized.OrganizationID)
+}
+
+func (s *APIKeyRepoSuite) TestCreateRejectsPersonalUserWithActiveAllocation() {
+	member := s.mustCreateUser("inconsistent-key-owner@test.com")
+	organization, err := s.client.Organization.Create().
+		SetName("Key Consistency").
+		SetCode("key-consistency").
+		SetStatus(domain.OrganizationStatusActive).
+		SetCreatedBy(member.ID).
+		Save(s.ctx)
+	s.Require().NoError(err)
+	_, err = s.client.OrganizationAllocation.Create().
+		SetOrganizationID(organization.ID).
+		SetUserIDSnapshot(member.ID).
+		SetUserRefID(member.ID).
+		SetStatus(domain.OrganizationAllocationStatusActive).
+		SetAvailable(decimal.Zero).
+		SetReserved(decimal.Zero).
+		Save(s.ctx)
+	s.Require().NoError(err)
+
+	err = s.repo.Create(s.ctx, &service.APIKey{
+		UserID: member.ID,
+		Key:    "sk-inconsistent-organization",
+		Name:   "Inconsistent Key",
+		Status: service.StatusActive,
+	})
+	s.Require().ErrorIs(err, service.ErrOrganizationMembershipInconsistent)
+}
+
+func (s *APIKeyRepoSuite) TestGetByKeyForAuthRejectsPersonalAttributionWithActiveAllocation() {
+	member := s.mustCreateUser("inconsistent-auth-owner@test.com")
+	key := &service.APIKey{
+		UserID: member.ID,
+		Key:    "sk-inconsistent-auth-organization",
+		Name:   "Inconsistent Auth Key",
+		Status: service.StatusActive,
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, key))
+
+	organization, err := s.client.Organization.Create().
+		SetName("Auth Consistency").
+		SetCode("auth-consistency").
+		SetStatus(domain.OrganizationStatusActive).
+		SetCreatedBy(member.ID).
+		Save(s.ctx)
+	s.Require().NoError(err)
+	_, err = s.client.OrganizationAllocation.Create().
+		SetOrganizationID(organization.ID).
+		SetUserIDSnapshot(member.ID).
+		SetUserRefID(member.ID).
+		SetStatus(domain.OrganizationAllocationStatusActive).
+		SetAvailable(decimal.Zero).
+		SetReserved(decimal.Zero).
+		Save(s.ctx)
+	s.Require().NoError(err)
+
+	_, err = s.repo.GetByKeyForAuth(s.ctx, key.Key)
+	s.Require().ErrorIs(err, service.ErrOrganizationMembershipInconsistent)
 }
 
 func (s *APIKeyRepoSuite) TestGetByID_NotFound() {
@@ -507,6 +610,7 @@ func (s *APIKeyRepoSuite) TestIncrementQuotaUsedAndGetState() {
 func TestIncrementQuotaUsed_Concurrent(t *testing.T) {
 	client := testEntClient(t)
 	repo := NewAPIKeyRepository(client, integrationDB).(*apiKeyRepository)
+	userRepo := NewUserRepository(client, integrationDB)
 	ctx := context.Background()
 
 	// 创建测试用户和 API Key
@@ -527,7 +631,7 @@ func TestIncrementQuotaUsed_Concurrent(t *testing.T) {
 	require.NoError(t, repo.Create(ctx, k), "create api key")
 	t.Cleanup(func() {
 		_ = client.APIKey.DeleteOneID(k.ID).Exec(ctx)
-		_ = client.User.DeleteOneID(u.ID).Exec(ctx)
+		_ = userRepo.Delete(ctx, u.ID)
 	})
 
 	// 10 个 goroutine 各递增 1.0，总计应为 10.0

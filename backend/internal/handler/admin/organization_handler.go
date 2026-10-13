@@ -6,6 +6,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
@@ -25,6 +26,8 @@ type OrganizationHandler struct {
 	membershipService   service.OrganizationMembershipManager
 	fundingService      *service.OrganizationFundingService
 	allocationService   service.OrganizationAllocationManager
+	recoveryService     *service.OrganizationExecutionRecoveryService
+	lifecycleService    service.OrganizationLifecycleManager
 }
 
 func NewOrganizationHandler(
@@ -39,6 +42,82 @@ func NewOrganizationHandler(
 		fundingService:      fundingService,
 		allocationService:   allocationService,
 	}
+}
+
+func (h *OrganizationHandler) SetRecoveryService(recoveryService *service.OrganizationExecutionRecoveryService) {
+	if h != nil {
+		h.recoveryService = recoveryService
+	}
+}
+
+func (h *OrganizationHandler) SetLifecycleService(lifecycleService service.OrganizationLifecycleManager) {
+	if h != nil {
+		h.lifecycleService = lifecycleService
+	}
+}
+
+func (h *OrganizationHandler) ListPendingReconciliations(c *gin.Context) {
+	organizationID, ok := organizationIDFromParam(c)
+	if !ok {
+		return
+	}
+	if h == nil || h.recoveryService == nil {
+		response.ErrorFrom(c, service.ErrOrganizationExecutionRepositoryUnavailable)
+		return
+	}
+	page, pageSize := response.ParsePagination(c)
+	items, pageResult, err := h.recoveryService.ListPending(c.Request.Context(), organizationID, service.OrganizationPendingReconciliationListParams{Page: page, PageSize: pageSize})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	result := make([]dto.OrganizationPendingReconciliation, 0, len(items))
+	for i := range items {
+		result = append(result, *dto.OrganizationPendingReconciliationFromService(&items[i]))
+	}
+	response.PaginatedWithResult(c, result, &response.PaginationResult{Total: pageResult.Total, Page: pageResult.Page, PageSize: pageResult.PageSize, Pages: pageResult.Pages})
+}
+
+func (h *OrganizationHandler) GetPendingReconciliation(c *gin.Context) {
+	organizationID, ok := organizationIDFromParam(c)
+	if !ok {
+		return
+	}
+	if h == nil || h.recoveryService == nil {
+		response.ErrorFrom(c, service.ErrOrganizationExecutionRepositoryUnavailable)
+		return
+	}
+	item, err := h.recoveryService.GetPending(c.Request.Context(), organizationID, c.Param("execution_id"))
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.OrganizationPendingReconciliationFromService(item))
+}
+
+func (h *OrganizationHandler) ResolvePendingReconciliation(c *gin.Context) {
+	organizationID, ok := organizationIDFromParam(c)
+	if !ok {
+		return
+	}
+	if h == nil || h.recoveryService == nil {
+		response.ErrorFrom(c, service.ErrOrganizationExecutionRepositoryUnavailable)
+		return
+	}
+	actor, ok := organizationReconciliationActorFromContext(c)
+	if !ok {
+		response.ErrorFrom(c, service.ErrOrganizationExecutionReconciliationForbidden)
+		return
+	}
+	result, err := h.recoveryService.ReconcilePendingInOrganization(c.Request.Context(), actor, organizationID, c.Param("execution_id"), c.GetHeader("Idempotency-Key"))
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if result.Replayed {
+		c.Header("X-Idempotency-Replayed", "true")
+	}
+	response.Success(c, dto.OrganizationPendingReconciliationResolutionFromService(result))
 }
 
 type createOrganizationRequest struct {
@@ -70,6 +149,12 @@ type creditOrganizationRequest struct {
 	Amount         string `json:"amount" binding:"required"`
 	PublicReason   string `json:"public_reason"`
 	InternalReason string `json:"internal_reason" binding:"required"`
+}
+
+type archiveOrganizationRequest struct {
+	BalanceVersion int64  `json:"balance_version" binding:"required,gte=0"`
+	UpdatedAt      string `json:"updated_at" binding:"required"`
+	ConfirmArchive bool   `json:"confirm_archive"`
 }
 
 func (h *OrganizationHandler) List(c *gin.Context) {
@@ -141,6 +226,89 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 	}
 	organization, err := h.organizationService.Update(c.Request.Context(), id, service.UpdateOrganizationInput{
 		Name: request.Name, Code: request.Code, Description: request.Description,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.OrganizationFromService(organization))
+}
+
+func (h *OrganizationHandler) Disable(c *gin.Context) {
+	organizationID, ok := organizationIDFromParam(c)
+	if !ok {
+		return
+	}
+	if h == nil || h.lifecycleService == nil {
+		response.ErrorFrom(c, service.ErrOrganizationLifecycleUnavailable)
+		return
+	}
+	organization, err := h.lifecycleService.Disable(c.Request.Context(), organizationID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.OrganizationFromService(organization))
+}
+
+func (h *OrganizationHandler) Reactivate(c *gin.Context) {
+	organizationID, ok := organizationIDFromParam(c)
+	if !ok {
+		return
+	}
+	if h == nil || h.lifecycleService == nil {
+		response.ErrorFrom(c, service.ErrOrganizationLifecycleUnavailable)
+		return
+	}
+	organization, err := h.lifecycleService.Reactivate(c.Request.Context(), organizationID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.OrganizationFromService(organization))
+}
+
+func (h *OrganizationHandler) GetArchivePreview(c *gin.Context) {
+	organizationID, ok := organizationIDFromParam(c)
+	if !ok {
+		return
+	}
+	if h == nil || h.lifecycleService == nil {
+		response.ErrorFrom(c, service.ErrOrganizationLifecycleUnavailable)
+		return
+	}
+	preview, err := h.lifecycleService.GetArchivePreview(c.Request.Context(), organizationID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.OrganizationArchivePreviewFromService(preview))
+}
+
+func (h *OrganizationHandler) Archive(c *gin.Context) {
+	organizationID, ok := organizationIDFromParam(c)
+	if !ok {
+		return
+	}
+	if h == nil || h.lifecycleService == nil {
+		response.ErrorFrom(c, service.ErrOrganizationLifecycleUnavailable)
+		return
+	}
+	var request archiveOrganizationRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("VALIDATION_ERROR", err.Error()))
+		return
+	}
+	updatedAt, err := time.Parse(time.RFC3339Nano, request.UpdatedAt)
+	if err != nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("VALIDATION_ERROR", "updated_at must be RFC3339"))
+		return
+	}
+	organization, err := h.lifecycleService.Archive(c.Request.Context(), service.OrganizationLifecycleCommand{
+		OrganizationID:         organizationID,
+		ExpectedBalanceVersion: request.BalanceVersion,
+		ExpectedUpdatedAt:      updatedAt,
+		ConfirmArchive:         request.ConfirmArchive,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -310,6 +478,71 @@ func (h *OrganizationHandler) GetBalance(c *gin.Context) {
 	response.Success(c, dto.OrganizationBalanceSummaryFromService(summary))
 }
 
+func (h *OrganizationHandler) GetReport(c *gin.Context) {
+	organizationID, ok := organizationIDFromParam(c)
+	if !ok {
+		return
+	}
+	reportRange, ok := organizationReportRangeFromQuery(c)
+	if !ok {
+		return
+	}
+	if h == nil || h.fundingService == nil {
+		response.ErrorFrom(c, service.ErrOrganizationFundingRepositoryUnavailable)
+		return
+	}
+	report, err := h.fundingService.GetReport(c.Request.Context(), organizationID, reportRange)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.OrganizationReportFromService(report))
+}
+
+func (h *OrganizationHandler) ListReportMembers(c *gin.Context) {
+	organizationID, ok := organizationIDFromParam(c)
+	if !ok {
+		return
+	}
+	reportRange, ok := organizationReportRangeFromQuery(c)
+	if !ok {
+		return
+	}
+	if h == nil || h.fundingService == nil {
+		response.ErrorFrom(c, service.ErrOrganizationFundingRepositoryUnavailable)
+		return
+	}
+	page, pageSize := response.ParsePagination(c)
+	items, departed, pageResult, err := h.fundingService.ListReportMembers(c.Request.Context(), organizationID, reportRange, pagination.PaginationParams{Page: page, PageSize: pageSize})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	result := make([]dto.OrganizationReportMemberUsage, 0, len(items))
+	for i := range items {
+		result = append(result, *dto.OrganizationReportMemberUsageFromService(&items[i]))
+	}
+	response.Success(c, struct {
+		Items    []dto.OrganizationReportMemberUsage `json:"items"`
+		Departed *dto.OrganizationReportMemberUsage  `json:"departed"`
+		Total    int64                               `json:"total"`
+		Page     int                                 `json:"page"`
+		PageSize int                                 `json:"page_size"`
+		Pages    int                                 `json:"pages"`
+	}{Items: result, Departed: dto.OrganizationReportMemberUsageFromService(departed), Total: pageResult.Total, Page: pageResult.Page, PageSize: pageResult.PageSize, Pages: pageResult.Pages})
+}
+
+func organizationReportRangeFromQuery(c *gin.Context) (service.OrganizationReportRange, bool) {
+	start, startErr := time.Parse(time.RFC3339, strings.TrimSpace(c.Query("start")))
+	end, endErr := time.Parse(time.RFC3339, strings.TrimSpace(c.Query("end")))
+	reportRange := service.OrganizationReportRange{Start: start, End: end}
+	if startErr != nil || endErr != nil || !reportRange.Valid() {
+		response.ErrorFrom(c, service.ErrOrganizationReportRangeInvalid)
+		return service.OrganizationReportRange{}, false
+	}
+	return reportRange, true
+}
+
 func (h *OrganizationHandler) ListLedger(c *gin.Context) {
 	organizationID, ok := organizationIDFromParam(c)
 	if !ok {
@@ -473,6 +706,17 @@ func organizationMemberRemovalActorFromContext(c *gin.Context) (service.Organiza
 		PlatformRole:       role,
 		AuthorizationScope: domain.OrganizationFundingAuthorizationPlatformAdminJWT,
 		Active:             true,
+	}, true
+}
+
+func organizationReconciliationActorFromContext(c *gin.Context) (service.OrganizationReconciliationActor, bool) {
+	actor, ok := organizationFundingActorFromContext(c)
+	if !ok {
+		return service.OrganizationReconciliationActor{}, false
+	}
+	return service.OrganizationReconciliationActor{
+		UserID: actor.UserID, DisplayName: actor.DisplayName, PlatformRole: actor.PlatformRole,
+		AuthorizationScope: actor.AuthorizationScope, Active: actor.Active,
 	}, true
 }
 

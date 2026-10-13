@@ -15,6 +15,9 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/organization"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecution"
+	"github.com/Wei-Shaw/sub2api/ent/organizationfinalexecutionevidence"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
@@ -23,14 +26,17 @@ import (
 // APIKeyQuery is the builder for querying APIKey entities.
 type APIKeyQuery struct {
 	config
-	ctx           *QueryContext
-	order         []apikey.OrderOption
-	inters        []Interceptor
-	predicates    []predicate.APIKey
-	withUser      *UserQuery
-	withGroup     *GroupQuery
-	withUsageLogs *UsageLogQuery
-	modifiers     []func(*sql.Selector)
+	ctx                                     *QueryContext
+	order                                   []apikey.OrderOption
+	inters                                  []Interceptor
+	predicates                              []predicate.APIKey
+	withUser                                *UserQuery
+	withGroup                               *GroupQuery
+	withOrganization                        *OrganizationQuery
+	withUsageLogs                           *UsageLogQuery
+	withOrganizationExecutions              *OrganizationExecutionQuery
+	withOrganizationFinalExecutionEvidences *OrganizationFinalExecutionEvidenceQuery
+	modifiers                               []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -111,6 +117,28 @@ func (_q *APIKeyQuery) QueryGroup() *GroupQuery {
 	return query
 }
 
+// QueryOrganization chains the current query on the "organization" edge.
+func (_q *APIKeyQuery) QueryOrganization() *OrganizationQuery {
+	query := (&OrganizationClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(apikey.Table, apikey.FieldID, selector),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, apikey.OrganizationTable, apikey.OrganizationColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // QueryUsageLogs chains the current query on the "usage_logs" edge.
 func (_q *APIKeyQuery) QueryUsageLogs() *UsageLogQuery {
 	query := (&UsageLogClient{config: _q.config}).Query()
@@ -126,6 +154,50 @@ func (_q *APIKeyQuery) QueryUsageLogs() *UsageLogQuery {
 			sqlgraph.From(apikey.Table, apikey.FieldID, selector),
 			sqlgraph.To(usagelog.Table, usagelog.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, apikey.UsageLogsTable, apikey.UsageLogsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryOrganizationExecutions chains the current query on the "organization_executions" edge.
+func (_q *APIKeyQuery) QueryOrganizationExecutions() *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(apikey.Table, apikey.FieldID, selector),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, apikey.OrganizationExecutionsTable, apikey.OrganizationExecutionsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryOrganizationFinalExecutionEvidences chains the current query on the "organization_final_execution_evidences" edge.
+func (_q *APIKeyQuery) QueryOrganizationFinalExecutionEvidences() *OrganizationFinalExecutionEvidenceQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(apikey.Table, apikey.FieldID, selector),
+			sqlgraph.To(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, apikey.OrganizationFinalExecutionEvidencesTable, apikey.OrganizationFinalExecutionEvidencesColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -320,14 +392,17 @@ func (_q *APIKeyQuery) Clone() *APIKeyQuery {
 		return nil
 	}
 	return &APIKeyQuery{
-		config:        _q.config,
-		ctx:           _q.ctx.Clone(),
-		order:         append([]apikey.OrderOption{}, _q.order...),
-		inters:        append([]Interceptor{}, _q.inters...),
-		predicates:    append([]predicate.APIKey{}, _q.predicates...),
-		withUser:      _q.withUser.Clone(),
-		withGroup:     _q.withGroup.Clone(),
-		withUsageLogs: _q.withUsageLogs.Clone(),
+		config:                                  _q.config,
+		ctx:                                     _q.ctx.Clone(),
+		order:                                   append([]apikey.OrderOption{}, _q.order...),
+		inters:                                  append([]Interceptor{}, _q.inters...),
+		predicates:                              append([]predicate.APIKey{}, _q.predicates...),
+		withUser:                                _q.withUser.Clone(),
+		withGroup:                               _q.withGroup.Clone(),
+		withOrganization:                        _q.withOrganization.Clone(),
+		withUsageLogs:                           _q.withUsageLogs.Clone(),
+		withOrganizationExecutions:              _q.withOrganizationExecutions.Clone(),
+		withOrganizationFinalExecutionEvidences: _q.withOrganizationFinalExecutionEvidences.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -356,6 +431,17 @@ func (_q *APIKeyQuery) WithGroup(opts ...func(*GroupQuery)) *APIKeyQuery {
 	return _q
 }
 
+// WithOrganization tells the query-builder to eager-load the nodes that are connected to
+// the "organization" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *APIKeyQuery) WithOrganization(opts ...func(*OrganizationQuery)) *APIKeyQuery {
+	query := (&OrganizationClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withOrganization = query
+	return _q
+}
+
 // WithUsageLogs tells the query-builder to eager-load the nodes that are connected to
 // the "usage_logs" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *APIKeyQuery) WithUsageLogs(opts ...func(*UsageLogQuery)) *APIKeyQuery {
@@ -364,6 +450,28 @@ func (_q *APIKeyQuery) WithUsageLogs(opts ...func(*UsageLogQuery)) *APIKeyQuery 
 		opt(query)
 	}
 	_q.withUsageLogs = query
+	return _q
+}
+
+// WithOrganizationExecutions tells the query-builder to eager-load the nodes that are connected to
+// the "organization_executions" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *APIKeyQuery) WithOrganizationExecutions(opts ...func(*OrganizationExecutionQuery)) *APIKeyQuery {
+	query := (&OrganizationExecutionClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withOrganizationExecutions = query
+	return _q
+}
+
+// WithOrganizationFinalExecutionEvidences tells the query-builder to eager-load the nodes that are connected to
+// the "organization_final_execution_evidences" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *APIKeyQuery) WithOrganizationFinalExecutionEvidences(opts ...func(*OrganizationFinalExecutionEvidenceQuery)) *APIKeyQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withOrganizationFinalExecutionEvidences = query
 	return _q
 }
 
@@ -445,10 +553,13 @@ func (_q *APIKeyQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*APIKe
 	var (
 		nodes       = []*APIKey{}
 		_spec       = _q.querySpec()
-		loadedTypes = [3]bool{
+		loadedTypes = [6]bool{
 			_q.withUser != nil,
 			_q.withGroup != nil,
+			_q.withOrganization != nil,
 			_q.withUsageLogs != nil,
+			_q.withOrganizationExecutions != nil,
+			_q.withOrganizationFinalExecutionEvidences != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -484,10 +595,34 @@ func (_q *APIKeyQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*APIKe
 			return nil, err
 		}
 	}
+	if query := _q.withOrganization; query != nil {
+		if err := _q.loadOrganization(ctx, query, nodes, nil,
+			func(n *APIKey, e *Organization) { n.Edges.Organization = e }); err != nil {
+			return nil, err
+		}
+	}
 	if query := _q.withUsageLogs; query != nil {
 		if err := _q.loadUsageLogs(ctx, query, nodes,
 			func(n *APIKey) { n.Edges.UsageLogs = []*UsageLog{} },
 			func(n *APIKey, e *UsageLog) { n.Edges.UsageLogs = append(n.Edges.UsageLogs, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withOrganizationExecutions; query != nil {
+		if err := _q.loadOrganizationExecutions(ctx, query, nodes,
+			func(n *APIKey) { n.Edges.OrganizationExecutions = []*OrganizationExecution{} },
+			func(n *APIKey, e *OrganizationExecution) {
+				n.Edges.OrganizationExecutions = append(n.Edges.OrganizationExecutions, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withOrganizationFinalExecutionEvidences; query != nil {
+		if err := _q.loadOrganizationFinalExecutionEvidences(ctx, query, nodes,
+			func(n *APIKey) { n.Edges.OrganizationFinalExecutionEvidences = []*OrganizationFinalExecutionEvidence{} },
+			func(n *APIKey, e *OrganizationFinalExecutionEvidence) {
+				n.Edges.OrganizationFinalExecutionEvidences = append(n.Edges.OrganizationFinalExecutionEvidences, e)
+			}); err != nil {
 			return nil, err
 		}
 	}
@@ -555,6 +690,38 @@ func (_q *APIKeyQuery) loadGroup(ctx context.Context, query *GroupQuery, nodes [
 	}
 	return nil
 }
+func (_q *APIKeyQuery) loadOrganization(ctx context.Context, query *OrganizationQuery, nodes []*APIKey, init func(*APIKey), assign func(*APIKey, *Organization)) error {
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*APIKey)
+	for i := range nodes {
+		if nodes[i].OrganizationID == nil {
+			continue
+		}
+		fk := *nodes[i].OrganizationID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(organization.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "organization_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 func (_q *APIKeyQuery) loadUsageLogs(ctx context.Context, query *UsageLogQuery, nodes []*APIKey, init func(*APIKey), assign func(*APIKey, *UsageLog)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[int64]*APIKey)
@@ -580,6 +747,72 @@ func (_q *APIKeyQuery) loadUsageLogs(ctx context.Context, query *UsageLogQuery, 
 		node, ok := nodeids[fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "api_key_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *APIKeyQuery) loadOrganizationExecutions(ctx context.Context, query *OrganizationExecutionQuery, nodes []*APIKey, init func(*APIKey), assign func(*APIKey, *OrganizationExecution)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*APIKey)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(organizationexecution.FieldAPIKeyRefID)
+	}
+	query.Where(predicate.OrganizationExecution(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(apikey.OrganizationExecutionsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.APIKeyRefID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "api_key_ref_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "api_key_ref_id" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *APIKeyQuery) loadOrganizationFinalExecutionEvidences(ctx context.Context, query *OrganizationFinalExecutionEvidenceQuery, nodes []*APIKey, init func(*APIKey), assign func(*APIKey, *OrganizationFinalExecutionEvidence)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*APIKey)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(organizationfinalexecutionevidence.FieldAPIKeyRefID)
+	}
+	query.Where(predicate.OrganizationFinalExecutionEvidence(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(apikey.OrganizationFinalExecutionEvidencesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.APIKeyRefID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "api_key_ref_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "api_key_ref_id" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
 	}
@@ -619,6 +852,9 @@ func (_q *APIKeyQuery) querySpec() *sqlgraph.QuerySpec {
 		}
 		if _q.withGroup != nil {
 			_spec.Node.AddColumnOnce(apikey.FieldGroupID)
+		}
+		if _q.withOrganization != nil {
+			_spec.Node.AddColumnOnce(apikey.FieldOrganizationID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

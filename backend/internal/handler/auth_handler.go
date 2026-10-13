@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -27,13 +29,14 @@ type AuthHandler struct {
 	redeemService        *service.RedeemService
 	totpService          *service.TotpService
 	userAttributeService *service.UserAttributeService
+	organizationService  service.OrganizationReader
 
 	dingTalkClientInstance *DingTalkClient
 	dingTalkClientMu       sync.Mutex
 }
 
 // NewAuthHandler creates a new AuthHandler
-func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService, redeemService *service.RedeemService, totpService *service.TotpService, userAttributeService *service.UserAttributeService) *AuthHandler {
+func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService, redeemService *service.RedeemService, totpService *service.TotpService, userAttributeService *service.UserAttributeService, organizationService service.OrganizationReader) *AuthHandler {
 	return &AuthHandler{
 		cfg:                  cfg,
 		authService:          authService,
@@ -43,6 +46,7 @@ func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userSe
 		redeemService:        redeemService,
 		totpService:          totpService,
 		userAttributeService: userAttributeService,
+		organizationService:  organizationService,
 	}
 }
 
@@ -78,11 +82,18 @@ type LoginRequest struct {
 
 // AuthResponse 认证响应格式（匹配前端期望）
 type AuthResponse struct {
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token,omitempty"` // 新增：Refresh Token
-	ExpiresIn    int       `json:"expires_in,omitempty"`    // 新增：Access Token有效期（秒）
-	TokenType    string    `json:"token_type"`
-	User         *dto.User `json:"user"`
+	AccessToken  string                     `json:"access_token"`
+	RefreshToken string                     `json:"refresh_token,omitempty"` // 新增：Refresh Token
+	ExpiresIn    int                        `json:"expires_in,omitempty"`    // 新增：Access Token有效期（秒）
+	TokenType    string                     `json:"token_type"`
+	User         *authenticatedUserResponse `json:"user"`
+}
+
+type authenticatedUserResponse struct {
+	dto.AuthenticatedUser
+	Organization     *dto.OrganizationSummary `json:"organization"`
+	OrganizationRole *string                  `json:"organization_role"`
+	RunMode          string                   `json:"run_mode,omitempty"`
 }
 
 func ensureLoginUserActive(user *service.User) error {
@@ -102,6 +113,11 @@ func (h *AuthHandler) respondWithTokenPair(c *gin.Context, user *service.User) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	userResponse, err := h.authenticatedUserResponse(c.Request.Context(), user)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 
 	tokenPair, err := h.authService.GenerateTokenPair(c.Request.Context(), user, "")
 	if err != nil {
@@ -115,7 +131,7 @@ func (h *AuthHandler) respondWithTokenPair(c *gin.Context, user *service.User) {
 		response.Success(c, AuthResponse{
 			AccessToken: token,
 			TokenType:   "Bearer",
-			User:        dto.UserFromService(user),
+			User:        userResponse,
 		})
 		return
 	}
@@ -124,8 +140,63 @@ func (h *AuthHandler) respondWithTokenPair(c *gin.Context, user *service.User) {
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresIn:    tokenPair.ExpiresIn,
 		TokenType:    "Bearer",
-		User:         dto.UserFromService(user),
+		User:         userResponse,
 	})
+}
+
+func (h *AuthHandler) authenticatedUserResponse(ctx context.Context, user *service.User) (*authenticatedUserResponse, error) {
+	organization, role, err := h.currentOrganizationIdentity(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	base := dto.AuthenticatedUserFromService(user, personalAccountFieldsAllowed(user, organization))
+	if base == nil {
+		return nil, infraerrors.Unauthorized("INVALID_USER", "user not found")
+	}
+	runMode := config.RunModeStandard
+	if h != nil && h.cfg != nil {
+		runMode = h.cfg.RunMode
+	}
+	return &authenticatedUserResponse{
+		AuthenticatedUser: *base,
+		Organization:      organization,
+		OrganizationRole:  role,
+		RunMode:           runMode,
+	}, nil
+}
+
+func personalAccountFieldsAllowed(user *service.User, _ *dto.OrganizationSummary) bool {
+	if user == nil || user.IsAdmin() {
+		return true
+	}
+	return user.OrganizationRole == nil || *user.OrganizationRole != service.OrganizationRoleAdmin
+}
+
+func (h *AuthHandler) currentOrganizationIdentity(ctx context.Context, user *service.User) (*dto.OrganizationSummary, *string, error) {
+	if user == nil {
+		return nil, nil, infraerrors.Unauthorized("INVALID_USER", "user not found")
+	}
+	if user.OrganizationID == nil && user.OrganizationRole == nil {
+		return nil, nil, nil
+	}
+	if user.OrganizationID == nil || user.OrganizationRole == nil {
+		return nil, nil, service.ErrOrganizationMembershipInconsistent
+	}
+	if h == nil || h.organizationService == nil {
+		return nil, nil, fmt.Errorf("load current organization: organization reader unavailable")
+	}
+	organization, err := h.organizationService.Get(ctx, *user.OrganizationID)
+	if err != nil {
+		if errors.Is(err, service.ErrOrganizationNotFound) {
+			return nil, nil, service.ErrOrganizationMembershipInconsistent.WithCause(err)
+		}
+		return nil, nil, fmt.Errorf("load current organization: %w", err)
+	}
+	if organization == nil || organization.ID != *user.OrganizationID {
+		return nil, nil, service.ErrOrganizationMembershipInconsistent
+	}
+	role := *user.OrganizationRole
+	return dto.OrganizationSummaryFromService(organization), &role, nil
 }
 
 func (h *AuthHandler) ensureBackendModeAllowsUser(ctx context.Context, user *service.User) error {
@@ -423,7 +494,9 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 
 	type UserResponse struct {
 		userProfileResponse
-		RunMode string `json:"run_mode"`
+		RunMode          string                   `json:"run_mode"`
+		Organization     *dto.OrganizationSummary `json:"organization"`
+		OrganizationRole *string                  `json:"organization_role"`
 	}
 
 	runMode := config.RunModeStandard
@@ -431,9 +504,17 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 		runMode = h.cfg.RunMode
 	}
 
+	organization, role, err := h.currentOrganizationIdentity(c.Request.Context(), user)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
 	response.Success(c, UserResponse{
-		userProfileResponse: userProfileResponseFromService(user, identities),
+		userProfileResponse: userProfileResponseFromService(user, identities, personalAccountFieldsAllowed(user, organization)),
 		RunMode:             runMode,
+		Organization:        organization,
+		OrganizationRole:    role,
 	})
 }
 

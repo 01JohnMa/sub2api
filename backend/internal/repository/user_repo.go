@@ -15,15 +15,18 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	dbgroup "github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/organizationallocation"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
 
+	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 )
 
@@ -391,6 +394,10 @@ func (r *userRepository) Delete(ctx context.Context, id int64) error {
 
 // deleteUser 在给定 client（可能是外部事务 client）上删除用户及其身份关联记录，自身不开启/提交事务。
 func (r *userRepository) deleteUser(ctx context.Context, exec *dbent.Client, id int64) error {
+	if _, err := r.lockUserForDeletion(ctx, exec, id); err != nil {
+		return err
+	}
+
 	identityIDs, err := exec.AuthIdentity.Query().
 		Where(authidentity.UserIDEQ(id)).
 		IDs(ctx)
@@ -416,14 +423,56 @@ func (r *userRepository) deleteUser(ctx context.Context, exec *dbent.Client, id 
 		}
 	}
 
-	affected, err := exec.User.Delete().Where(dbuser.IDEQ(id)).Exec(ctx)
+	affected, err := exec.User.Delete().Where(dbuser.IDEQ(id)).Exec(mixins.AuthorizeUserDeletion(ctx))
 	if err != nil {
+		if errors.Is(err, dbent.ErrUserDeletionOrganizationMember) {
+			return service.ErrOrganizationMembershipMustBeRemoved
+		}
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
 	if affected == 0 {
 		return service.ErrUserNotFound
 	}
 	return nil
+}
+
+// LockUserForDeletion is deliberately outside UserRepository. Production callers
+// can opt into the User lock without expanding the mock-heavy public interface.
+// It must be called in a transaction so the lock spans the related Key changes.
+func (r *userRepository) LockUserForDeletion(ctx context.Context, id int64) (*service.User, error) {
+	return r.lockUserForDeletion(ctx, clientFromContext(ctx, r.client), id)
+}
+
+func (r *userRepository) lockUserForDeletion(ctx context.Context, client *dbent.Client, id int64) (*service.User, error) {
+	query := client.User.Query().Where(dbuser.IDEQ(id))
+	// SQLite does not support SELECT .. FOR UPDATE. Production PostgreSQL
+	// uses the row lock to serialize user deletion with membership changes.
+	if client.Driver().Dialect() == dialect.Postgres {
+		query = query.ForUpdate()
+	}
+	entity, err := query.Only(ctx)
+	if err != nil {
+		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+
+	if entity.OrganizationID != nil {
+		return nil, service.ErrOrganizationMembershipMustBeRemoved
+	}
+
+	hasActiveAllocation, err := client.OrganizationAllocation.Query().
+		Where(
+			organizationallocation.UserRefIDEQ(id),
+			organizationallocation.StatusEQ(domain.OrganizationAllocationStatusActive),
+		).
+		Exist(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if hasActiveAllocation {
+		return nil, service.ErrOrganizationMembershipMustBeRemoved
+	}
+
+	return userEntityToService(entity), nil
 }
 
 func (r *userRepository) List(ctx context.Context, params pagination.PaginationParams) ([]service.User, *pagination.PaginationResult, error) {

@@ -11,6 +11,15 @@ type JWTAuthMiddleware gin.HandlerFunc
 // AdminAuthMiddleware 管理员认证中间件类型
 type AdminAuthMiddleware gin.HandlerFunc
 
+// OrganizationAdminAuthMiddleware contains the two current-user boundary
+// handlers derived from the same server-side User/Organization reader:
+// Require authorizes organization APIs, while PersonalAccountAccess rejects
+// personal-account APIs for active non-platform organization administrators.
+type OrganizationAdminAuthMiddleware struct {
+	Require               gin.HandlerFunc
+	PersonalAccountAccess gin.HandlerFunc
+}
+
 // APIKeyAuthMiddleware API Key 认证中间件类型
 type APIKeyAuthMiddleware gin.HandlerFunc
 
@@ -18,5 +27,6 @@ type APIKeyAuthMiddleware gin.HandlerFunc
 var ProviderSet = wire.NewSet(
 	NewJWTAuthMiddleware,
 	NewAdminAuthMiddleware,
+	NewOrganizationAdminAuthMiddleware,
 	NewAPIKeyAuthMiddleware,
 )

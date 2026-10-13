@@ -14,15 +14,23 @@ vi.mock('@/api/client', () => ({
 import {
   addMember,
   create,
+	disable,
+	reactivate,
+	getArchivePreview,
+	archive,
   credit,
   executeAllocation,
   getBalance,
+	getReport,
+	getPendingReconciliation,
   getById,
   list,
   listLedger,
+	listPendingReconciliations,
   listMembers,
 	previewAllocation,
 	removeMember,
+	resolvePendingReconciliation,
 	update,
   updateMemberRole
 } from '@/api/admin/organizations'
@@ -97,6 +105,33 @@ describe('admin organizations API', () => {
     })
     expect(put).toHaveBeenCalledWith('/admin/organizations/7', { description: '' })
   })
+
+	it('uses explicit lifecycle endpoints and archive confirmation versions', async () => {
+		const organization = { id: 7, status: 'disabled' as const }
+		const preview = {
+			organization_id: 7,
+			status: 'disabled' as const,
+			unallocated: '12.50000000',
+			balance_version: 4,
+			updated_at: '2026-07-30T00:00:00Z'
+		}
+		post.mockResolvedValue({ data: organization })
+		get.mockResolvedValue({ data: preview })
+
+		await expect(disable(7)).resolves.toEqual(organization)
+		await expect(reactivate(7)).resolves.toEqual(organization)
+		await expect(getArchivePreview(7)).resolves.toEqual(preview)
+		await expect(archive(7, { balance_version: 4, updated_at: preview.updated_at, confirm_archive: true })).resolves.toEqual(organization)
+
+		expect(post).toHaveBeenNthCalledWith(1, '/admin/organizations/7/disable')
+		expect(post).toHaveBeenNthCalledWith(2, '/admin/organizations/7/reactivate')
+		expect(get).toHaveBeenCalledWith('/admin/organizations/7/archive-preview')
+		expect(post).toHaveBeenNthCalledWith(3, '/admin/organizations/7/archive', {
+			balance_version: 4,
+			updated_at: preview.updated_at,
+			confirm_archive: true
+		})
+	})
 
 	it('uses only organization-scoped member endpoints and role payloads', async () => {
     const member = {
@@ -205,6 +240,13 @@ describe('admin organizations API', () => {
       { headers: { 'Idempotency-Key': 'credit-retry-1' } }
     )
   })
+
+	it('loads a platform-scoped organization report with an explicit half-open range', async () => {
+		const report = { organization_id: 7, request_count_total: 0 }
+		get.mockResolvedValue({ data: report })
+		await expect(getReport(7, '2026-07-01T00:00:00Z', '2026-08-01T00:00:00Z')).resolves.toEqual(report)
+		expect(get).toHaveBeenCalledWith('/admin/organizations/7/report', { params: { start: '2026-07-01T00:00:00Z', end: '2026-08-01T00:00:00Z' } })
+	})
 
   it('uses organization-scoped custom and reclaim allocation preview and execute endpoints', async () => {
     const confirmation = {
@@ -325,4 +367,26 @@ describe('admin organizations API', () => {
       { headers: { 'Idempotency-Key': 'reclaim-retry-1' } }
     )
   })
+
+	it('uses scoped pending reconciliation endpoints and an idempotency header for resolution', async () => {
+		const pending = { items: [], total: 0, page: 1, page_size: 20, pages: 0 }
+		const resolution = { execution_id: 'execution-id', reservation_state: 'released', replayed: false }
+		get.mockResolvedValue({ data: pending })
+		post.mockResolvedValue({ data: resolution })
+
+		await expect(listPendingReconciliations(7)).resolves.toEqual(pending)
+		get.mockResolvedValueOnce({ data: { execution_id: 'execution-id' } })
+		await expect(getPendingReconciliation(7, 'execution-id')).resolves.toEqual({ execution_id: 'execution-id' })
+		await expect(resolvePendingReconciliation(7, 'execution-id', 'reconcile-1')).resolves.toEqual(resolution)
+
+		expect(get).toHaveBeenCalledWith('/admin/organizations/7/pending-reconciliations', {
+			params: { page: 1, page_size: 20 }
+		})
+		expect(get).toHaveBeenCalledWith('/admin/organizations/7/pending-reconciliations/execution-id')
+		expect(post).toHaveBeenCalledWith(
+			'/admin/organizations/7/pending-reconciliations/execution-id/resolve',
+			{},
+			{ headers: { 'Idempotency-Key': 'reconcile-1' } }
+		)
+	})
 })

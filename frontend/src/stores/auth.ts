@@ -6,7 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, readonly } from 'vue'
 import { authAPI, isTotp2FARequired, type LoginResponse } from '@/api'
-import type { User, LoginRequest, RegisterRequest, AuthResponse } from '@/types'
+import type { AuthenticatedUser, LoginRequest, RegisterRequest, AuthResponse } from '@/types'
 
 const AUTH_TOKEN_KEY = 'auth_token'
 const AUTH_USER_KEY = 'auth_user'
@@ -71,7 +71,7 @@ function clearPendingAuthSessionStorage(): void {
 export const useAuthStore = defineStore('auth', () => {
   // ==================== State ====================
 
-  const user = ref<User | null>(null)
+  const user = ref<AuthenticatedUser | null>(null)
   const token = ref<string | null>(null)
   const refreshTokenValue = ref<string | null>(null)
   const tokenExpiresAt = ref<number | null>(null) // 过期时间戳（毫秒）
@@ -88,6 +88,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAdmin = computed(() => {
     return user.value?.role === 'admin'
+  })
+
+  const isOrganizationAdmin = computed(() => {
+    return user.value?.organization_role === 'organization_admin' && user.value.organization?.status === 'active'
   })
 
   const isSimpleMode = computed(() => runMode.value === 'simple')
@@ -264,7 +268,7 @@ export const useAuthStore = defineStore('auth', () => {
    * @returns Promise resolving to the authenticated user
    * @throws Error if 2FA verification fails
    */
-  async function login2FA(tempToken: string, totpCode: string): Promise<User> {
+  async function login2FA(tempToken: string, totpCode: string): Promise<AuthenticatedUser> {
     try {
       const response = await authAPI.login2FA({ temp_token: tempToken, totp_code: totpCode })
       setAuthFromResponse(response)
@@ -317,7 +321,7 @@ export const useAuthStore = defineStore('auth', () => {
    * @returns Promise resolving to the newly registered and authenticated user
    * @throws Error if registration fails
    */
-  async function register(userData: RegisterRequest): Promise<User> {
+  async function register(userData: RegisterRequest): Promise<AuthenticatedUser> {
     try {
       const response = await authAPI.register(userData)
 
@@ -337,7 +341,7 @@ export const useAuthStore = defineStore('auth', () => {
    * 会自动读取 localStorage 中已设置的 refresh_token 和 token_expires_in
    * @param newToken - 后端签发的 JWT access token
    */
-  async function setToken(newToken: string): Promise<User> {
+  async function setToken(newToken: string): Promise<AuthenticatedUser> {
     // Clear any previous state first (avoid mixing sessions)
     // Note: Don't clear localStorage here as OAuth callback may have set refresh_token
     stopAutoRefresh()
@@ -410,7 +414,7 @@ export const useAuthStore = defineStore('auth', () => {
    * @returns Promise resolving to the updated user
    * @throws Error if not authenticated or request fails
    */
-  async function refreshUser(): Promise<User> {
+  async function refreshUser(): Promise<AuthenticatedUser> {
     if (!token.value) {
       throw new Error('Not authenticated')
     }
@@ -476,6 +480,7 @@ export const useAuthStore = defineStore('auth', () => {
     // Computed
     isAuthenticated,
     isAdmin,
+    isOrganizationAdmin,
     isSimpleMode,
     hasPendingAuthSession,
 

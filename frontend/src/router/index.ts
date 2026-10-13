@@ -187,6 +187,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Dashboard',
       titleKey: 'dashboard.title',
       descriptionKey: 'dashboard.welcomeMessage'
@@ -199,6 +200,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'API Keys',
       titleKey: 'keys.title',
       descriptionKey: 'keys.description'
@@ -211,6 +213,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Usage Records',
       titleKey: 'usage.title',
       descriptionKey: 'usage.description'
@@ -223,6 +226,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Redeem Code',
       titleKey: 'redeem.title',
       descriptionKey: 'redeem.description'
@@ -235,6 +239,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Affiliate',
       titleKey: 'affiliate.title',
       descriptionKey: 'affiliate.description'
@@ -247,6 +252,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Available Channels',
       titleKey: 'availableChannels.title',
       descriptionKey: 'availableChannels.description'
@@ -259,6 +265,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Profile',
       titleKey: 'profile.title',
       descriptionKey: 'profile.description'
@@ -271,6 +278,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'My Subscriptions',
       titleKey: 'userSubscriptions.title',
       descriptionKey: 'userSubscriptions.description'
@@ -283,6 +291,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Purchase Subscription',
       titleKey: 'nav.buySubscription',
       descriptionKey: 'purchase.description',
@@ -296,6 +305,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'My Orders',
       titleKey: 'nav.myOrders',
       requiresPayment: true
@@ -308,6 +318,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Payment',
       titleKey: 'payment.qr.scanToPay',
       requiresPayment: true
@@ -320,6 +331,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: false,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Payment Result',
       titleKey: 'payment.result.success',
       requiresPayment: false
@@ -332,6 +344,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: false,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Stripe Payment',
       titleKey: 'payment.stripePay',
       requiresPayment: false
@@ -344,6 +357,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: false,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Airwallex Payment',
       titleKey: 'payment.airwallexPay',
       requiresPayment: false
@@ -356,6 +370,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: false,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Payment',
       requiresPayment: false
     }
@@ -426,6 +441,30 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/organizations',
+    name: 'AdminOrganizations',
+    component: () => import('@/views/admin/OrganizationsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Organization Management',
+      titleKey: 'admin.organizations.title',
+      descriptionKey: 'admin.organizations.description'
+    }
+  },
+  {
+    path: '/organization/overview',
+    name: 'OrganizationOverview',
+    component: () => import('@/views/organization/OverviewView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresOrganizationAdmin: true,
+      title: 'Organization Overview',
+      titleKey: 'organization.overview.title',
+      descriptionKey: 'organization.overview.description'
+    }
+  },
+  {
     path: '/admin/channels',
     redirect: '/admin/channels/pricing'
   },
@@ -460,6 +499,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      forbidsOrganizationAdmin: true,
       title: 'Channel Status',
       titleKey: 'nav.channelStatus'
     }
@@ -751,6 +791,18 @@ router.beforeEach(async (to, _from, next) => {
   // Check if route requires authentication
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
   const requiresAdmin = to.meta.requiresAdmin === true
+  const requiresOrganizationAdmin = to.meta.requiresOrganizationAdmin === true
+  const forbidsOrganizationAdmin = to.meta.forbidsOrganizationAdmin === true
+
+  if (
+    forbidsOrganizationAdmin &&
+    authStore.isAuthenticated &&
+    authStore.isOrganizationAdmin &&
+    !authStore.isAdmin
+  ) {
+    next('/organization/overview')
+    return
+  }
 
   if (to.path === '/setup') {
     try {
@@ -804,6 +856,11 @@ router.beforeEach(async (to, _from, next) => {
   if (requiresAdmin && !authStore.isAdmin) {
     // User is authenticated but not admin, redirect to user dashboard
     next('/dashboard')
+    return
+  }
+
+  if (requiresOrganizationAdmin && !authStore.isOrganizationAdmin) {
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
     return
   }
 

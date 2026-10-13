@@ -34,6 +34,7 @@ var (
 		{Name: "window_1d_start", Type: field.TypeTime, Nullable: true},
 		{Name: "window_7d_start", Type: field.TypeTime, Nullable: true},
 		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "organization_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "user_id", Type: field.TypeInt64},
 	}
 	// APIKeysTable holds the schema information for the "api_keys" table.
@@ -49,8 +50,14 @@ var (
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "api_keys_users_api_keys",
+				Symbol:     "api_keys_organizations_api_keys",
 				Columns:    []*schema.Column{APIKeysColumns[23]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "api_keys_users_api_keys",
+				Columns:    []*schema.Column{APIKeysColumns[24]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -59,12 +66,17 @@ var (
 			{
 				Name:    "apikey_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[23]},
+				Columns: []*schema.Column{APIKeysColumns[24]},
 			},
 			{
 				Name:    "apikey_group_id",
 				Unique:  false,
 				Columns: []*schema.Column{APIKeysColumns[22]},
+			},
+			{
+				Name:    "apikey_organization_id",
+				Unique:  false,
+				Columns: []*schema.Column{APIKeysColumns[23]},
 			},
 			{
 				Name:    "apikey_status",
@@ -792,6 +804,908 @@ var (
 			},
 		},
 	}
+	// OrganizationsColumns holds the columns for the "organizations" table.
+	OrganizationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "code", Type: field.TypeString, Size: 64},
+		{Name: "description", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "created_by", Type: field.TypeInt64},
+		{Name: "unallocated_pool", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "numeric"}},
+		{Name: "balance_version", Type: field.TypeInt64, Default: 0},
+	}
+	// OrganizationsTable holds the schema information for the "organizations" table.
+	OrganizationsTable = &schema.Table{
+		Name:       "organizations",
+		Columns:    OrganizationsColumns,
+		PrimaryKey: []*schema.Column{OrganizationsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organization_code",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationsColumns[4]},
+			},
+			{
+				Name:    "organization_status",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationsColumns[6]},
+			},
+			{
+				Name:    "organization_created_by",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationsColumns[7]},
+			},
+		},
+	}
+	// OrganizationAllocationsColumns holds the columns for the "organization_allocations" table.
+	OrganizationAllocationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "user_id_snapshot", Type: field.TypeInt64},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "available", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "numeric"}},
+		{Name: "reserved", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "numeric"}},
+		{Name: "version", Type: field.TypeInt64, Default: 0},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "user_ref_id", Type: field.TypeInt64, Nullable: true},
+	}
+	// OrganizationAllocationsTable holds the schema information for the "organization_allocations" table.
+	OrganizationAllocationsTable = &schema.Table{
+		Name:       "organization_allocations",
+		Columns:    OrganizationAllocationsColumns,
+		PrimaryKey: []*schema.Column{OrganizationAllocationsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "organization_allocations_organizations_allocations",
+				Columns:    []*schema.Column{OrganizationAllocationsColumns[8]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_allocations_users_organization_allocations",
+				Columns:    []*schema.Column{OrganizationAllocationsColumns[9]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationallocation_organization_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationAllocationsColumns[8], OrganizationAllocationsColumns[4]},
+			},
+			{
+				Name:    "organizationallocation_user_ref_id",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationAllocationsColumns[9]},
+			},
+			{
+				Name:    "organizationallocation_user_id_snapshot",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationAllocationsColumns[3]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'active'",
+				},
+			},
+		},
+	}
+	// OrganizationAttemptAccountEffectsColumns holds the columns for the "organization_attempt_account_effects" table.
+	OrganizationAttemptAccountEffectsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "attempt_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "attempt_ref_id", Type: field.TypeInt64},
+		{Name: "execution_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "execution_ref_id", Type: field.TypeInt64},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "account_id_snapshot", Type: field.TypeInt64},
+		{Name: "account_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "selected_evidence_id_snapshot", Type: field.TypeInt64, Nullable: true},
+		{Name: "selected_evidence_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "posting_id_snapshot", Type: field.TypeInt64, Nullable: true},
+		{Name: "posting_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "raw_actual_cost", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric", "sqlite3": "numeric"}},
+		{Name: "platform_overage_cost", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric", "sqlite3": "numeric"}},
+		{Name: "status", Type: field.TypeString, Size: 32, Default: "pending"},
+		{Name: "audit_reason", Type: field.TypeString, Nullable: true, Size: 2000},
+		{Name: "applied_at", Type: field.TypeTime, Nullable: true},
+	}
+	// OrganizationAttemptAccountEffectsTable holds the schema information for the "organization_attempt_account_effects" table.
+	OrganizationAttemptAccountEffectsTable = &schema.Table{
+		Name:       "organization_attempt_account_effects",
+		Columns:    OrganizationAttemptAccountEffectsColumns,
+		PrimaryKey: []*schema.Column{OrganizationAttemptAccountEffectsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationattemptaccounteffect_attempt_ref_id",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationAttemptAccountEffectsColumns[4]},
+			},
+			{
+				Name:    "organizationattemptaccounteffect_attempt_id_snapshot",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationAttemptAccountEffectsColumns[3]},
+			},
+			{
+				Name:    "organizationattemptaccounteffect_status_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationAttemptAccountEffectsColumns[16], OrganizationAttemptAccountEffectsColumns[1]},
+			},
+		},
+	}
+	// OrganizationAttemptAccountPostingsColumns holds the columns for the "organization_attempt_account_postings" table.
+	OrganizationAttemptAccountPostingsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "attempt_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "attempt_ref_id", Type: field.TypeInt64},
+		{Name: "evidence_id_snapshot", Type: field.TypeInt64},
+		{Name: "evidence_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "execution_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "execution_ref_id", Type: field.TypeInt64},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "account_id_snapshot", Type: field.TypeInt64},
+		{Name: "account_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "raw_actual_cost", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric", "sqlite3": "numeric"}},
+		{Name: "reservation_ceiling", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "numeric"}},
+		{Name: "platform_overage_cost", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric", "sqlite3": "numeric"}},
+		{Name: "classification", Type: field.TypeString, Size: 32, Default: "normal"},
+		{Name: "occurred_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// OrganizationAttemptAccountPostingsTable holds the schema information for the "organization_attempt_account_postings" table.
+	OrganizationAttemptAccountPostingsTable = &schema.Table{
+		Name:       "organization_attempt_account_postings",
+		Columns:    OrganizationAttemptAccountPostingsColumns,
+		PrimaryKey: []*schema.Column{OrganizationAttemptAccountPostingsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationattemptaccountposting_attempt_ref_id",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationAttemptAccountPostingsColumns[2]},
+			},
+			{
+				Name:    "organizationattemptaccountposting_attempt_id_snapshot",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationAttemptAccountPostingsColumns[1]},
+			},
+			{
+				Name:    "organizationattemptaccountposting_evidence_id_snapshot",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationAttemptAccountPostingsColumns[3]},
+			},
+			{
+				Name:    "organizationattemptaccountposting_organization_id_occurred_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationAttemptAccountPostingsColumns[7], OrganizationAttemptAccountPostingsColumns[14]},
+			},
+		},
+	}
+	// OrganizationAttemptEvidencesColumns holds the columns for the "organization_attempt_evidences" table.
+	OrganizationAttemptEvidencesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "attempt_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "execution_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "account_id_snapshot", Type: field.TypeInt64, Nullable: true},
+		{Name: "route_snapshot", Type: field.TypeJSON},
+		{Name: "route_snapshot_hash", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "pricing_snapshot", Type: field.TypeJSON},
+		{Name: "pricing_snapshot_hash", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "provider_correlation_id", Type: field.TypeString, Size: 255},
+		{Name: "provider_request_id", Type: field.TypeString, Size: 255},
+		{Name: "evidence_source", Type: field.TypeString, Size: 32, Default: "fake_adapter"},
+		{Name: "terminal_outcome", Type: field.TypeString, Size: 16, Default: "unknown"},
+		{Name: "provenance_hash", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "evidence", Type: field.TypeJSON},
+		{Name: "evidence_hash", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "input_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "output_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "cache_creation_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "cache_read_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "raw_actual_cost", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric", "sqlite3": "numeric"}},
+		{Name: "provider_observed_at", Type: field.TypeTime},
+		{Name: "ingested_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "account_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "execution_ref_id", Type: field.TypeInt64},
+		{Name: "attempt_ref_id", Type: field.TypeInt64},
+	}
+	// OrganizationAttemptEvidencesTable holds the schema information for the "organization_attempt_evidences" table.
+	OrganizationAttemptEvidencesTable = &schema.Table{
+		Name:       "organization_attempt_evidences",
+		Columns:    OrganizationAttemptEvidencesColumns,
+		PrimaryKey: []*schema.Column{OrganizationAttemptEvidencesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "organization_attempt_evidences_organizations_attempt_evidences",
+				Columns:    []*schema.Column{OrganizationAttemptEvidencesColumns[23]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_attempt_evidences_accounts_account_ref",
+				Columns:    []*schema.Column{OrganizationAttemptEvidencesColumns[24]},
+				RefColumns: []*schema.Column{AccountsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "organization_attempt_evidences_organization_executions_attempt_evidences",
+				Columns:    []*schema.Column{OrganizationAttemptEvidencesColumns[25]},
+				RefColumns: []*schema.Column{OrganizationExecutionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "organization_attempt_evidences_organization_execution_attempts_evidence",
+				Columns:    []*schema.Column{OrganizationAttemptEvidencesColumns[26]},
+				RefColumns: []*schema.Column{OrganizationExecutionAttemptsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationattemptevidence_attempt_ref_id",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationAttemptEvidencesColumns[26]},
+			},
+			{
+				Name:    "organizationattemptevidence_attempt_id_snapshot_evidence_source_provenance_hash",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationAttemptEvidencesColumns[1], OrganizationAttemptEvidencesColumns[10], OrganizationAttemptEvidencesColumns[12]},
+			},
+			{
+				Name:    "organizationattemptevidence_organization_id_provider_observed_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationAttemptEvidencesColumns[23], OrganizationAttemptEvidencesColumns[20]},
+			},
+		},
+	}
+	// OrganizationExecutionsColumns holds the columns for the "organization_executions" table.
+	OrganizationExecutionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "execution_id", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "correlation_id", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "allocation_id_snapshot", Type: field.TypeInt64, Nullable: true},
+		{Name: "user_id_snapshot", Type: field.TypeInt64},
+		{Name: "api_key_id_snapshot", Type: field.TypeInt64},
+		{Name: "endpoint_family", Type: field.TypeString, Size: 128},
+		{Name: "request_shape", Type: field.TypeString, Size: 128},
+		{Name: "model", Type: field.TypeString, Nullable: true, Size: 255},
+		{Name: "client_request_id", Type: field.TypeString, Nullable: true, Size: 512},
+		{Name: "billing_fingerprint", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "candidate_snapshot", Type: field.TypeJSON},
+		{Name: "candidate_set_hash", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "pricing_snapshot", Type: field.TypeJSON},
+		{Name: "pricing_snapshot_hash", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "candidate_ceiling", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "numeric"}},
+		{Name: "is_billable", Type: field.TypeBool, Default: true},
+		{Name: "status", Type: field.TypeString, Size: 32, Default: "accepted"},
+		{Name: "accepted_at", Type: field.TypeTime},
+		{Name: "terminalized_at", Type: field.TypeTime, Nullable: true},
+		{Name: "api_key_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "allocation_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "user_ref_id", Type: field.TypeInt64, Nullable: true},
+	}
+	// OrganizationExecutionsTable holds the schema information for the "organization_executions" table.
+	OrganizationExecutionsTable = &schema.Table{
+		Name:       "organization_executions",
+		Columns:    OrganizationExecutionsColumns,
+		PrimaryKey: []*schema.Column{OrganizationExecutionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "organization_executions_api_keys_organization_executions",
+				Columns:    []*schema.Column{OrganizationExecutionsColumns[22]},
+				RefColumns: []*schema.Column{APIKeysColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "organization_executions_organizations_executions",
+				Columns:    []*schema.Column{OrganizationExecutionsColumns[23]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_executions_organization_allocations_executions",
+				Columns:    []*schema.Column{OrganizationExecutionsColumns[24]},
+				RefColumns: []*schema.Column{OrganizationAllocationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_executions_users_organization_executions",
+				Columns:    []*schema.Column{OrganizationExecutionsColumns[25]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationexecution_execution_id",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationExecutionsColumns[3]},
+			},
+			{
+				Name:    "organizationexecution_correlation_id",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationExecutionsColumns[4]},
+			},
+			{
+				Name:    "organizationexecution_organization_id_status_accepted_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationExecutionsColumns[23], OrganizationExecutionsColumns[19], OrganizationExecutionsColumns[20]},
+			},
+			{
+				Name:    "organizationexecution_allocation_id_snapshot_accepted_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationExecutionsColumns[5], OrganizationExecutionsColumns[20]},
+			},
+		},
+	}
+	// OrganizationExecutionAttemptsColumns holds the columns for the "organization_execution_attempts" table.
+	OrganizationExecutionAttemptsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "attempt_id", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "execution_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "attempt_sequence", Type: field.TypeInt},
+		{Name: "account_id_snapshot", Type: field.TypeInt64, Nullable: true},
+		{Name: "route_snapshot", Type: field.TypeJSON},
+		{Name: "route_snapshot_hash", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "pricing_snapshot", Type: field.TypeJSON},
+		{Name: "pricing_snapshot_hash", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "provider_correlation_id", Type: field.TypeString, Size: 255},
+		{Name: "provider_request_id", Type: field.TypeString, Size: 255},
+		{Name: "status", Type: field.TypeString, Size: 32, Default: "created"},
+		{Name: "dispatched_at", Type: field.TypeTime, Nullable: true},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "execution_ref_id", Type: field.TypeInt64},
+		{Name: "account_ref_id", Type: field.TypeInt64, Nullable: true},
+	}
+	// OrganizationExecutionAttemptsTable holds the schema information for the "organization_execution_attempts" table.
+	OrganizationExecutionAttemptsTable = &schema.Table{
+		Name:       "organization_execution_attempts",
+		Columns:    OrganizationExecutionAttemptsColumns,
+		PrimaryKey: []*schema.Column{OrganizationExecutionAttemptsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "organization_execution_attempts_organizations_execution_attempts",
+				Columns:    []*schema.Column{OrganizationExecutionAttemptsColumns[15]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_execution_attempts_organization_executions_attempts",
+				Columns:    []*schema.Column{OrganizationExecutionAttemptsColumns[16]},
+				RefColumns: []*schema.Column{OrganizationExecutionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "organization_execution_attempts_accounts_account_ref",
+				Columns:    []*schema.Column{OrganizationExecutionAttemptsColumns[17]},
+				RefColumns: []*schema.Column{AccountsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationexecutionattempt_attempt_id",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationExecutionAttemptsColumns[3]},
+			},
+			{
+				Name:    "organizationexecutionattempt_execution_ref_id_attempt_sequence",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationExecutionAttemptsColumns[16], OrganizationExecutionAttemptsColumns[5]},
+			},
+			{
+				Name:    "organizationexecutionattempt_execution_id_snapshot_attempt_sequence",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationExecutionAttemptsColumns[4], OrganizationExecutionAttemptsColumns[5]},
+			},
+			{
+				Name:    "organizationexecutionattempt_organization_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationExecutionAttemptsColumns[15], OrganizationExecutionAttemptsColumns[1]},
+			},
+		},
+	}
+	// OrganizationExecutionIncidentsColumns holds the columns for the "organization_execution_incidents" table.
+	OrganizationExecutionIncidentsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "execution_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "execution_ref_id", Type: field.TypeInt64},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "attempt_id_snapshot", Type: field.TypeString, Nullable: true, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "attempt_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "incident_type", Type: field.TypeString, Size: 64},
+		{Name: "public_reason", Type: field.TypeString, Size: 255},
+		{Name: "internal_reason", Type: field.TypeString, Size: 2000},
+		{Name: "details", Type: field.TypeJSON},
+		{Name: "status", Type: field.TypeString, Size: 16, Default: "open"},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// OrganizationExecutionIncidentsTable holds the schema information for the "organization_execution_incidents" table.
+	OrganizationExecutionIncidentsTable = &schema.Table{
+		Name:       "organization_execution_incidents",
+		Columns:    OrganizationExecutionIncidentsColumns,
+		PrimaryKey: []*schema.Column{OrganizationExecutionIncidentsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationexecutionincident_execution_ref_id_incident_type_attempt_id_snapshot",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationExecutionIncidentsColumns[2], OrganizationExecutionIncidentsColumns[6], OrganizationExecutionIncidentsColumns[4]},
+			},
+			{
+				Name:    "organizationexecutionincident_organization_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationExecutionIncidentsColumns[3], OrganizationExecutionIncidentsColumns[11]},
+			},
+		},
+	}
+	// OrganizationExecutionOutboxesColumns holds the columns for the "organization_execution_outboxes" table.
+	OrganizationExecutionOutboxesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "execution_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "final_evidence_id_snapshot", Type: field.TypeInt64},
+		{Name: "event_type", Type: field.TypeString, Size: 32},
+		{Name: "payload", Type: field.TypeJSON},
+		{Name: "status", Type: field.TypeString, Size: 32, Default: "pending"},
+		{Name: "occurred_at", Type: field.TypeTime},
+		{Name: "applied_at", Type: field.TypeTime, Nullable: true},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "execution_ref_id", Type: field.TypeInt64},
+		{Name: "final_evidence_ref_id", Type: field.TypeInt64, Nullable: true},
+	}
+	// OrganizationExecutionOutboxesTable holds the schema information for the "organization_execution_outboxes" table.
+	OrganizationExecutionOutboxesTable = &schema.Table{
+		Name:       "organization_execution_outboxes",
+		Columns:    OrganizationExecutionOutboxesColumns,
+		PrimaryKey: []*schema.Column{OrganizationExecutionOutboxesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "organization_execution_outboxes_organizations_execution_outboxes",
+				Columns:    []*schema.Column{OrganizationExecutionOutboxesColumns[10]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_execution_outboxes_organization_executions_outboxes",
+				Columns:    []*schema.Column{OrganizationExecutionOutboxesColumns[11]},
+				RefColumns: []*schema.Column{OrganizationExecutionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "organization_execution_outboxes_organization_final_execution_evidences_outboxes",
+				Columns:    []*schema.Column{OrganizationExecutionOutboxesColumns[12]},
+				RefColumns: []*schema.Column{OrganizationFinalExecutionEvidencesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationexecutionoutbox_execution_ref_id_event_type",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationExecutionOutboxesColumns[11], OrganizationExecutionOutboxesColumns[5]},
+			},
+			{
+				Name:    "organizationexecutionoutbox_execution_id_snapshot_event_type",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationExecutionOutboxesColumns[3], OrganizationExecutionOutboxesColumns[5]},
+			},
+			{
+				Name:    "organizationexecutionoutbox_status_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationExecutionOutboxesColumns[7], OrganizationExecutionOutboxesColumns[1]},
+			},
+		},
+	}
+	// OrganizationExecutionReconciliationAuditsColumns holds the columns for the "organization_execution_reconciliation_audits" table.
+	OrganizationExecutionReconciliationAuditsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "operation_id", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "correlation_id", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "idempotency_key_hash", Type: field.TypeString, Size: 64},
+		{Name: "canonical_payload_hash", Type: field.TypeString, Size: 64},
+		{Name: "execution_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "execution_ref_id", Type: field.TypeInt64},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "final_evidence_id_snapshot", Type: field.TypeInt64},
+		{Name: "final_evidence_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "selected_attempt_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "selected_attempt_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "selected_evidence_id_snapshot", Type: field.TypeInt64},
+		{Name: "selected_evidence_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "actor_id_snapshot", Type: field.TypeInt64},
+		{Name: "actor_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "actor_display_snapshot", Type: field.TypeString, Size: 255},
+		{Name: "actor_role_snapshot", Type: field.TypeString, Size: 64},
+		{Name: "authorization_scope", Type: field.TypeString, Size: 64},
+		{Name: "action", Type: field.TypeString, Size: 16},
+		{Name: "raw_actual_cost", Type: field.TypeString, SchemaType: map[string]string{"postgres": "numeric", "sqlite3": "text"}},
+		{Name: "organization_settled_cost", Type: field.TypeString, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "text"}},
+		{Name: "reservation_amount", Type: field.TypeString, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "text"}},
+		{Name: "reservation_status_before", Type: field.TypeString, Size: 32},
+		{Name: "reservation_status_after", Type: field.TypeString, Size: 32},
+		{Name: "public_reason", Type: field.TypeString, Size: 255},
+		{Name: "internal_reason", Type: field.TypeString, Size: 2000},
+		{Name: "reconciled_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// OrganizationExecutionReconciliationAuditsTable holds the schema information for the "organization_execution_reconciliation_audits" table.
+	OrganizationExecutionReconciliationAuditsTable = &schema.Table{
+		Name:       "organization_execution_reconciliation_audits",
+		Columns:    OrganizationExecutionReconciliationAuditsColumns,
+		PrimaryKey: []*schema.Column{OrganizationExecutionReconciliationAuditsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationexecutionreconciliationaudit_execution_ref_id",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationExecutionReconciliationAuditsColumns[6]},
+			},
+			{
+				Name:    "organizationexecutionreconciliationaudit_operation_id",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationExecutionReconciliationAuditsColumns[1]},
+			},
+			{
+				Name:    "organizationexecutionreconciliationaudit_authorization_scope_organization_id_idempotency_key_hash",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationExecutionReconciliationAuditsColumns[18], OrganizationExecutionReconciliationAuditsColumns[7], OrganizationExecutionReconciliationAuditsColumns[3]},
+			},
+			{
+				Name:    "organizationexecutionreconciliationaudit_organization_id_reconciled_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationExecutionReconciliationAuditsColumns[7], OrganizationExecutionReconciliationAuditsColumns[27]},
+			},
+		},
+	}
+	// OrganizationFinalExecutionEvidencesColumns holds the columns for the "organization_final_execution_evidences" table.
+	OrganizationFinalExecutionEvidencesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "execution_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "allocation_id_snapshot", Type: field.TypeInt64, Nullable: true},
+		{Name: "user_id_snapshot", Type: field.TypeInt64},
+		{Name: "api_key_id_snapshot", Type: field.TypeInt64},
+		{Name: "final_attempt_id_snapshot", Type: field.TypeString, Nullable: true, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "final_attempt_evidence_id_snapshot", Type: field.TypeInt64, Nullable: true},
+		{Name: "account_id_snapshot", Type: field.TypeInt64, Nullable: true},
+		{Name: "endpoint_family", Type: field.TypeString, Size: 128},
+		{Name: "request_shape", Type: field.TypeString, Size: 128},
+		{Name: "model", Type: field.TypeString, Nullable: true, Size: 255},
+		{Name: "input_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "output_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "cache_creation_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "cache_read_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "raw_actual_cost", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric", "sqlite3": "numeric"}},
+		{Name: "organization_settled_cost", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "numeric"}},
+		{Name: "terminal_outcome", Type: field.TypeString, Size: 16},
+		{Name: "is_business_limited", Type: field.TypeBool, Default: false},
+		{Name: "is_count_tokens_probe", Type: field.TypeBool, Default: false},
+		{Name: "zero_cost_proof", Type: field.TypeJSON, Nullable: true},
+		{Name: "occurred_at", Type: field.TypeTime},
+		{Name: "reconciled_at", Type: field.TypeTime, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "api_key_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "allocation_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "final_attempt_evidence_ref_id", Type: field.TypeInt64, Unique: true, Nullable: true},
+		{Name: "execution_ref_id", Type: field.TypeInt64, Unique: true},
+		{Name: "final_attempt_ref_id", Type: field.TypeInt64, Unique: true, Nullable: true},
+		{Name: "account_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "user_ref_id", Type: field.TypeInt64, Nullable: true},
+	}
+	// OrganizationFinalExecutionEvidencesTable holds the schema information for the "organization_final_execution_evidences" table.
+	OrganizationFinalExecutionEvidencesTable = &schema.Table{
+		Name:       "organization_final_execution_evidences",
+		Columns:    OrganizationFinalExecutionEvidencesColumns,
+		PrimaryKey: []*schema.Column{OrganizationFinalExecutionEvidencesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "organization_final_execution_evidences_api_keys_organization_final_execution_evidences",
+				Columns:    []*schema.Column{OrganizationFinalExecutionEvidencesColumns[24]},
+				RefColumns: []*schema.Column{APIKeysColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "organization_final_execution_evidences_organizations_final_execution_evidences",
+				Columns:    []*schema.Column{OrganizationFinalExecutionEvidencesColumns[25]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_final_execution_evidences_organization_allocations_final_execution_evidences",
+				Columns:    []*schema.Column{OrganizationFinalExecutionEvidencesColumns[26]},
+				RefColumns: []*schema.Column{OrganizationAllocationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_final_execution_evidences_organization_attempt_evidences_final_execution_evidence",
+				Columns:    []*schema.Column{OrganizationFinalExecutionEvidencesColumns[27]},
+				RefColumns: []*schema.Column{OrganizationAttemptEvidencesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "organization_final_execution_evidences_organization_executions_final_evidence",
+				Columns:    []*schema.Column{OrganizationFinalExecutionEvidencesColumns[28]},
+				RefColumns: []*schema.Column{OrganizationExecutionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "organization_final_execution_evidences_organization_execution_attempts_final_execution_evidence",
+				Columns:    []*schema.Column{OrganizationFinalExecutionEvidencesColumns[29]},
+				RefColumns: []*schema.Column{OrganizationExecutionAttemptsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "organization_final_execution_evidences_accounts_account_ref",
+				Columns:    []*schema.Column{OrganizationFinalExecutionEvidencesColumns[30]},
+				RefColumns: []*schema.Column{AccountsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "organization_final_execution_evidences_users_organization_final_execution_evidences",
+				Columns:    []*schema.Column{OrganizationFinalExecutionEvidencesColumns[31]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationfinalexecutionevidence_execution_ref_id",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationFinalExecutionEvidencesColumns[28]},
+			},
+			{
+				Name:    "organizationfinalexecutionevidence_execution_id_snapshot",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationFinalExecutionEvidencesColumns[1]},
+			},
+			{
+				Name:    "organizationfinalexecutionevidence_organization_id_occurred_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationFinalExecutionEvidencesColumns[25], OrganizationFinalExecutionEvidencesColumns[21]},
+			},
+			{
+				Name:    "organizationfinalexecutionevidence_allocation_id_snapshot_occurred_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationFinalExecutionEvidencesColumns[2], OrganizationFinalExecutionEvidencesColumns[21]},
+			},
+		},
+	}
+	// OrganizationLedgerOperationsColumns holds the columns for the "organization_ledger_operations" table.
+	OrganizationLedgerOperationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "operation_id", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "correlation_id", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "operation_type", Type: field.TypeString, Size: 64},
+		{Name: "authorization_scope", Type: field.TypeString, Size: 64},
+		{Name: "actor_id_snapshot", Type: field.TypeInt64},
+		{Name: "actor_execution_id_snapshot", Type: field.TypeString, Nullable: true, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "actor_display_snapshot", Type: field.TypeString, Size: 255},
+		{Name: "actor_role_snapshot", Type: field.TypeString, Size: 64},
+		{Name: "currency", Type: field.TypeString, Size: 3, Default: "USD"},
+		{Name: "idempotency_key_hash", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "canonical_payload_hash", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "public_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "internal_reason", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "no_op_result_snapshot", Type: field.TypeJSON, Nullable: true},
+		{Name: "occurred_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "actor_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "actor_execution_ref_id", Type: field.TypeInt64, Nullable: true},
+	}
+	// OrganizationLedgerOperationsTable holds the schema information for the "organization_ledger_operations" table.
+	OrganizationLedgerOperationsTable = &schema.Table{
+		Name:       "organization_ledger_operations",
+		Columns:    OrganizationLedgerOperationsColumns,
+		PrimaryKey: []*schema.Column{OrganizationLedgerOperationsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "organization_ledger_operations_organizations_ledger_operations",
+				Columns:    []*schema.Column{OrganizationLedgerOperationsColumns[17]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_ledger_operations_users_actor_ref",
+				Columns:    []*schema.Column{OrganizationLedgerOperationsColumns[18]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "organization_ledger_operations_organization_executions_actor_execution_ref",
+				Columns:    []*schema.Column{OrganizationLedgerOperationsColumns[19]},
+				RefColumns: []*schema.Column{OrganizationExecutionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationledgeroperation_operation_id",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationLedgerOperationsColumns[1]},
+			},
+			{
+				Name:    "organizationledgeroperation_authorization_scope_organization_id_operation_type_idempotency_key_hash",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationLedgerOperationsColumns[4], OrganizationLedgerOperationsColumns[17], OrganizationLedgerOperationsColumns[3], OrganizationLedgerOperationsColumns[10]},
+			},
+			{
+				Name:    "organizationledgeroperation_organization_id_occurred_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationLedgerOperationsColumns[17], OrganizationLedgerOperationsColumns[15]},
+			},
+		},
+	}
+	// OrganizationLedgerPostingsColumns holds the columns for the "organization_ledger_postings" table.
+	OrganizationLedgerPostingsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "operation_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "posting_sequence", Type: field.TypeInt, SchemaType: map[string]string{"postgres": "integer"}},
+		{Name: "bucket_type", Type: field.TypeString, Size: 64},
+		{Name: "bucket_id_snapshot", Type: field.TypeInt64},
+		{Name: "allocation_id_snapshot", Type: field.TypeInt64, Nullable: true},
+		{Name: "target_user_id_snapshot", Type: field.TypeInt64, Nullable: true},
+		{Name: "execution_id_snapshot", Type: field.TypeString, Nullable: true, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "final_evidence_id_snapshot", Type: field.TypeInt64, Nullable: true},
+		{Name: "currency", Type: field.TypeString, Size: 3, Default: "USD"},
+		{Name: "before_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "numeric"}},
+		{Name: "delta_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "numeric"}},
+		{Name: "after_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "numeric"}},
+		{Name: "balance_version_before", Type: field.TypeInt64},
+		{Name: "balance_version_after", Type: field.TypeInt64},
+		{Name: "occurred_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "operation_ref_id", Type: field.TypeInt64},
+		{Name: "allocation_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "target_user_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "execution_ref_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "final_evidence_ref_id", Type: field.TypeInt64, Nullable: true},
+	}
+	// OrganizationLedgerPostingsTable holds the schema information for the "organization_ledger_postings" table.
+	OrganizationLedgerPostingsTable = &schema.Table{
+		Name:       "organization_ledger_postings",
+		Columns:    OrganizationLedgerPostingsColumns,
+		PrimaryKey: []*schema.Column{OrganizationLedgerPostingsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "organization_ledger_postings_organizations_ledger_postings",
+				Columns:    []*schema.Column{OrganizationLedgerPostingsColumns[17]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_ledger_postings_organization_ledger_operations_postings",
+				Columns:    []*schema.Column{OrganizationLedgerPostingsColumns[18]},
+				RefColumns: []*schema.Column{OrganizationLedgerOperationsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "organization_ledger_postings_organization_allocations_allocation_ref",
+				Columns:    []*schema.Column{OrganizationLedgerPostingsColumns[19]},
+				RefColumns: []*schema.Column{OrganizationAllocationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_ledger_postings_users_target_user_ref",
+				Columns:    []*schema.Column{OrganizationLedgerPostingsColumns[20]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "organization_ledger_postings_organization_executions_execution_ref",
+				Columns:    []*schema.Column{OrganizationLedgerPostingsColumns[21]},
+				RefColumns: []*schema.Column{OrganizationExecutionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "organization_ledger_postings_organization_final_execution_evidences_final_evidence_ref",
+				Columns:    []*schema.Column{OrganizationLedgerPostingsColumns[22]},
+				RefColumns: []*schema.Column{OrganizationFinalExecutionEvidencesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationledgerposting_operation_ref_id_posting_sequence",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationLedgerPostingsColumns[18], OrganizationLedgerPostingsColumns[2]},
+			},
+			{
+				Name:    "organizationledgerposting_organization_id_occurred_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationLedgerPostingsColumns[17], OrganizationLedgerPostingsColumns[15]},
+			},
+			{
+				Name:    "organizationledgerposting_organization_id_bucket_type_bucket_id_snapshot",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationLedgerPostingsColumns[17], OrganizationLedgerPostingsColumns[3], OrganizationLedgerPostingsColumns[4]},
+			},
+		},
+	}
+	// OrganizationReservationsColumns holds the columns for the "organization_reservations" table.
+	OrganizationReservationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "execution_id_snapshot", Type: field.TypeString, Size: 36, SchemaType: map[string]string{"postgres": "uuid", "sqlite3": "text"}},
+		{Name: "allocation_id_snapshot", Type: field.TypeInt64},
+		{Name: "allocation_version_snapshot", Type: field.TypeInt64},
+		{Name: "organization_balance_version_snapshot", Type: field.TypeInt64},
+		{Name: "billing_fingerprint", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "candidate_snapshot", Type: field.TypeJSON},
+		{Name: "candidate_set_hash", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "pricing_snapshot", Type: field.TypeJSON},
+		{Name: "pricing_snapshot_hash", Type: field.TypeString, Size: 64, SchemaType: map[string]string{"postgres": "char(64)"}},
+		{Name: "reserved_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "numeric"}},
+		{Name: "settled_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "numeric"}},
+		{Name: "released_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "decimal(20,8)", "sqlite3": "numeric"}},
+		{Name: "status", Type: field.TypeString, Size: 32, Default: "reserved"},
+		{Name: "reserved_at", Type: field.TypeTime},
+		{Name: "terminalized_at", Type: field.TypeTime, Nullable: true},
+		{Name: "organization_id", Type: field.TypeInt64},
+		{Name: "allocation_ref_id", Type: field.TypeInt64},
+		{Name: "execution_ref_id", Type: field.TypeInt64, Unique: true},
+	}
+	// OrganizationReservationsTable holds the schema information for the "organization_reservations" table.
+	OrganizationReservationsTable = &schema.Table{
+		Name:       "organization_reservations",
+		Columns:    OrganizationReservationsColumns,
+		PrimaryKey: []*schema.Column{OrganizationReservationsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "organization_reservations_organizations_reservations",
+				Columns:    []*schema.Column{OrganizationReservationsColumns[18]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_reservations_organization_allocations_reservations",
+				Columns:    []*schema.Column{OrganizationReservationsColumns[19]},
+				RefColumns: []*schema.Column{OrganizationAllocationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "organization_reservations_organization_executions_reservation",
+				Columns:    []*schema.Column{OrganizationReservationsColumns[20]},
+				RefColumns: []*schema.Column{OrganizationExecutionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "organizationreservation_execution_ref_id",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationReservationsColumns[20]},
+			},
+			{
+				Name:    "organizationreservation_execution_id_snapshot",
+				Unique:  true,
+				Columns: []*schema.Column{OrganizationReservationsColumns[3]},
+			},
+			{
+				Name:    "organizationreservation_allocation_id_snapshot_status",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationReservationsColumns[4], OrganizationReservationsColumns[15]},
+			},
+			{
+				Name:    "organizationreservation_organization_id_status_reserved_at",
+				Unique:  false,
+				Columns: []*schema.Column{OrganizationReservationsColumns[18], OrganizationReservationsColumns[15], OrganizationReservationsColumns[16]},
+			},
+		},
+	}
 	// PaymentAuditLogsColumns holds the columns for the "payment_audit_logs" table.
 	PaymentAuditLogsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1484,6 +2398,7 @@ var (
 		{Name: "balance", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "concurrency", Type: field.TypeInt, Default: 5},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "organization_role", Type: field.TypeString, Nullable: true, Size: 32},
 		{Name: "username", Type: field.TypeString, Size: 100, Default: ""},
 		{Name: "notes", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "totp_secret_encrypted", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
@@ -1498,12 +2413,21 @@ var (
 		{Name: "balance_notify_extra_emails", Type: field.TypeString, Default: "[]", SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "total_recharged", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "rpm_limit", Type: field.TypeInt, Default: 0},
+		{Name: "organization_id", Type: field.TypeInt64, Nullable: true},
 	}
 	// UsersTable holds the schema information for the "users" table.
 	UsersTable = &schema.Table{
 		Name:       "users",
 		Columns:    UsersColumns,
 		PrimaryKey: []*schema.Column{UsersColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "users_organizations_members",
+				Columns:    []*schema.Column{UsersColumns[25]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "user_status",
@@ -1514,6 +2438,11 @@ var (
 				Name:    "user_deleted_at",
 				Unique:  false,
 				Columns: []*schema.Column{UsersColumns[3]},
+			},
+			{
+				Name:    "user_organization_id",
+				Unique:  false,
+				Columns: []*schema.Column{UsersColumns[25]},
 			},
 		},
 	}
@@ -1789,6 +2718,20 @@ var (
 		GroupsTable,
 		IdempotencyRecordsTable,
 		IdentityAdoptionDecisionsTable,
+		OrganizationsTable,
+		OrganizationAllocationsTable,
+		OrganizationAttemptAccountEffectsTable,
+		OrganizationAttemptAccountPostingsTable,
+		OrganizationAttemptEvidencesTable,
+		OrganizationExecutionsTable,
+		OrganizationExecutionAttemptsTable,
+		OrganizationExecutionIncidentsTable,
+		OrganizationExecutionOutboxesTable,
+		OrganizationExecutionReconciliationAuditsTable,
+		OrganizationFinalExecutionEvidencesTable,
+		OrganizationLedgerOperationsTable,
+		OrganizationLedgerPostingsTable,
+		OrganizationReservationsTable,
 		PaymentAuditLogsTable,
 		PaymentOrdersTable,
 		PaymentProviderInstancesTable,
@@ -1814,7 +2757,8 @@ var (
 
 func init() {
 	APIKeysTable.ForeignKeys[0].RefTable = GroupsTable
-	APIKeysTable.ForeignKeys[1].RefTable = UsersTable
+	APIKeysTable.ForeignKeys[1].RefTable = OrganizationsTable
+	APIKeysTable.ForeignKeys[2].RefTable = UsersTable
 	APIKeysTable.Annotation = &entsql.Annotation{
 		Table: "api_keys",
 	}
@@ -1872,6 +2816,187 @@ func init() {
 	IdentityAdoptionDecisionsTable.Annotation = &entsql.Annotation{
 		Table: "identity_adoption_decisions",
 	}
+	OrganizationsTable.Annotation = &entsql.Annotation{
+		Table: "organizations",
+	}
+	OrganizationsTable.Annotation.Checks = map[string]string{
+		"organizations_balance_version_nonnegative_check": "balance_version >= 0",
+		"organizations_unallocated_nonnegative_check":     "unallocated_pool >= 0",
+	}
+	OrganizationAllocationsTable.ForeignKeys[0].RefTable = OrganizationsTable
+	OrganizationAllocationsTable.ForeignKeys[1].RefTable = UsersTable
+	OrganizationAllocationsTable.Annotation = &entsql.Annotation{
+		Table: "organization_allocations",
+	}
+	OrganizationAllocationsTable.Annotation.Checks = map[string]string{
+		"organization_allocations_active_user_ref_check":     "(status <> 'active' OR user_ref_id IS NOT NULL)",
+		"organization_allocations_amounts_nonnegative_check": "available >= 0 AND reserved >= 0",
+		"organization_allocations_closed_zero_check":         "(status = 'active' OR (available = 0 AND reserved = 0))",
+		"organization_allocations_status_check":              "status IN ('active', 'closed')",
+		"organization_allocations_user_snapshot_check":       "(user_ref_id IS NULL OR user_ref_id = user_id_snapshot)",
+		"organization_allocations_version_nonnegative_check": "version >= 0",
+	}
+	OrganizationAttemptAccountEffectsTable.Annotation = &entsql.Annotation{
+		Table: "organization_attempt_account_effects",
+	}
+	OrganizationAttemptAccountEffectsTable.Annotation.Checks = map[string]string{
+		"organization_attempt_account_effects_account_ref_check":  "account_ref_id IS NULL OR account_ref_id = account_id_snapshot",
+		"organization_attempt_account_effects_evidence_ref_check": "selected_evidence_ref_id IS NULL OR selected_evidence_ref_id = selected_evidence_id_snapshot",
+		"organization_attempt_account_effects_posting_ref_check":  "posting_ref_id IS NULL OR posting_ref_id = posting_id_snapshot",
+		"organization_attempt_account_effects_status_check":       "status IN ('pending', 'applied', 'applied_noop_deleted_target', 'operator_attention')",
+	}
+	OrganizationAttemptAccountPostingsTable.Annotation = &entsql.Annotation{
+		Table: "organization_attempt_account_postings",
+	}
+	OrganizationAttemptAccountPostingsTable.Annotation.Checks = map[string]string{
+		"organization_attempt_account_postings_account_ref_check":    "account_ref_id IS NULL OR account_ref_id = account_id_snapshot",
+		"organization_attempt_account_postings_amount_check":         "raw_actual_cost >= 0 AND reservation_ceiling >= 0 AND platform_overage_cost >= 0",
+		"organization_attempt_account_postings_classification_check": "classification IN ('normal', 'platform_overage')",
+		"organization_attempt_account_postings_evidence_ref_check":   "evidence_ref_id IS NULL OR evidence_ref_id = evidence_id_snapshot",
+	}
+	OrganizationAttemptEvidencesTable.ForeignKeys[0].RefTable = OrganizationsTable
+	OrganizationAttemptEvidencesTable.ForeignKeys[1].RefTable = AccountsTable
+	OrganizationAttemptEvidencesTable.ForeignKeys[2].RefTable = OrganizationExecutionsTable
+	OrganizationAttemptEvidencesTable.ForeignKeys[3].RefTable = OrganizationExecutionAttemptsTable
+	OrganizationAttemptEvidencesTable.Annotation = &entsql.Annotation{
+		Table: "organization_attempt_evidences",
+	}
+	OrganizationAttemptEvidencesTable.Annotation.Checks = map[string]string{
+		"organization_attempt_evidences_account_ref_check":      "account_ref_id IS NULL OR account_ref_id = account_id_snapshot",
+		"organization_attempt_evidences_counts_cost_check":      "input_tokens >= 0 AND output_tokens >= 0 AND cache_creation_tokens >= 0 AND cache_read_tokens >= 0 AND raw_actual_cost >= 0",
+		"organization_attempt_evidences_source_check":           "evidence_source IN ('fake_adapter', 'adapter_direct', 'provider_query')",
+		"organization_attempt_evidences_terminal_outcome_check": "terminal_outcome IN ('success', 'error', 'unknown')",
+	}
+	OrganizationExecutionsTable.ForeignKeys[0].RefTable = APIKeysTable
+	OrganizationExecutionsTable.ForeignKeys[1].RefTable = OrganizationsTable
+	OrganizationExecutionsTable.ForeignKeys[2].RefTable = OrganizationAllocationsTable
+	OrganizationExecutionsTable.ForeignKeys[3].RefTable = UsersTable
+	OrganizationExecutionsTable.Annotation = &entsql.Annotation{
+		Table: "organization_executions",
+	}
+	OrganizationExecutionsTable.Annotation.Checks = map[string]string{
+		"organization_executions_allocation_ref_check":       "allocation_ref_id IS NULL OR allocation_ref_id = allocation_id_snapshot",
+		"organization_executions_amount_check":               "candidate_ceiling >= 0",
+		"organization_executions_api_key_ref_check":          "api_key_ref_id IS NULL OR api_key_ref_id = api_key_id_snapshot",
+		"organization_executions_non_billable_ceiling_check": "is_billable OR candidate_ceiling = 0",
+		"organization_executions_status_check":               "status IN ('accepted', 'reserved', 'dispatched', 'final_usage_observed', 'pending_reconciliation', 'settled', 'released')",
+		"organization_executions_user_ref_check":             "user_ref_id IS NULL OR user_ref_id = user_id_snapshot",
+	}
+	OrganizationExecutionAttemptsTable.ForeignKeys[0].RefTable = OrganizationsTable
+	OrganizationExecutionAttemptsTable.ForeignKeys[1].RefTable = OrganizationExecutionsTable
+	OrganizationExecutionAttemptsTable.ForeignKeys[2].RefTable = AccountsTable
+	OrganizationExecutionAttemptsTable.Annotation = &entsql.Annotation{
+		Table: "organization_execution_attempts",
+	}
+	OrganizationExecutionAttemptsTable.Annotation.Checks = map[string]string{
+		"organization_execution_attempts_account_ref_check": "account_ref_id IS NULL OR account_ref_id = account_id_snapshot",
+		"organization_execution_attempts_sequence_check":    "attempt_sequence > 0",
+		"organization_execution_attempts_status_check":      "status IN ('created', 'dispatched', 'final_usage_observed')",
+	}
+	OrganizationExecutionIncidentsTable.Annotation = &entsql.Annotation{
+		Table: "organization_execution_incidents",
+	}
+	OrganizationExecutionIncidentsTable.Annotation.Checks = map[string]string{
+		"organization_execution_incidents_status_check": "status = 'open'",
+		"organization_execution_incidents_type_check":   "incident_type IN ('provenance_conflict', 'platform_overage')",
+	}
+	OrganizationExecutionOutboxesTable.ForeignKeys[0].RefTable = OrganizationsTable
+	OrganizationExecutionOutboxesTable.ForeignKeys[1].RefTable = OrganizationExecutionsTable
+	OrganizationExecutionOutboxesTable.ForeignKeys[2].RefTable = OrganizationFinalExecutionEvidencesTable
+	OrganizationExecutionOutboxesTable.Annotation = &entsql.Annotation{
+		Table: "organization_execution_outboxes",
+	}
+	OrganizationExecutionOutboxesTable.Annotation.Checks = map[string]string{
+		"organization_execution_outboxes_event_type_check":   "event_type IN ('usage_projection', 'error_projection', 'api_key_quota', 'user_platform_quota')",
+		"organization_execution_outboxes_evidence_ref_check": "final_evidence_ref_id IS NULL OR final_evidence_ref_id = final_evidence_id_snapshot",
+		"organization_execution_outboxes_status_check":       "status IN ('pending', 'applied', 'applied_noop_deleted_target', 'operator_attention')",
+	}
+	OrganizationExecutionReconciliationAuditsTable.Annotation = &entsql.Annotation{
+		Table: "organization_execution_reconciliation_audits",
+	}
+	OrganizationExecutionReconciliationAuditsTable.Annotation.Checks = map[string]string{
+		"organization_execution_reconciliation_audits_action_check":            "action IN ('settled', 'released')",
+		"organization_execution_reconciliation_audits_actor_ref_check":         "actor_ref_id IS NULL OR actor_ref_id = actor_id_snapshot",
+		"organization_execution_reconciliation_audits_amount_check":            "raw_actual_cost >= 0 AND organization_settled_cost >= 0 AND reservation_amount >= 0",
+		"organization_execution_reconciliation_audits_evidence_ref_check":      "selected_evidence_ref_id IS NULL OR selected_evidence_ref_id = selected_evidence_id_snapshot",
+		"organization_execution_reconciliation_audits_final_ref_check":         "final_evidence_ref_id IS NULL OR final_evidence_ref_id = final_evidence_id_snapshot",
+		"organization_execution_reconciliation_audits_hash_check":              "length(idempotency_key_hash) = 64 AND length(canonical_payload_hash) = 64",
+		"organization_execution_reconciliation_audits_reservation_state_check": "reservation_status_before = 'pending_reconciliation' AND reservation_status_after IN ('settled', 'released')",
+		"organization_execution_reconciliation_audits_scope_check":             "authorization_scope = 'platform_admin_jwt'",
+	}
+	OrganizationFinalExecutionEvidencesTable.ForeignKeys[0].RefTable = APIKeysTable
+	OrganizationFinalExecutionEvidencesTable.ForeignKeys[1].RefTable = OrganizationsTable
+	OrganizationFinalExecutionEvidencesTable.ForeignKeys[2].RefTable = OrganizationAllocationsTable
+	OrganizationFinalExecutionEvidencesTable.ForeignKeys[3].RefTable = OrganizationAttemptEvidencesTable
+	OrganizationFinalExecutionEvidencesTable.ForeignKeys[4].RefTable = OrganizationExecutionsTable
+	OrganizationFinalExecutionEvidencesTable.ForeignKeys[5].RefTable = OrganizationExecutionAttemptsTable
+	OrganizationFinalExecutionEvidencesTable.ForeignKeys[6].RefTable = AccountsTable
+	OrganizationFinalExecutionEvidencesTable.ForeignKeys[7].RefTable = UsersTable
+	OrganizationFinalExecutionEvidencesTable.Annotation = &entsql.Annotation{
+		Table: "organization_final_execution_evidences",
+	}
+	OrganizationFinalExecutionEvidencesTable.Annotation.Checks = map[string]string{
+		"organization_final_execution_evidences_account_ref_check":          "account_ref_id IS NULL OR account_ref_id = account_id_snapshot",
+		"organization_final_execution_evidences_allocation_ref_check":       "allocation_ref_id IS NULL OR allocation_ref_id = allocation_id_snapshot",
+		"organization_final_execution_evidences_api_key_ref_check":          "api_key_ref_id IS NULL OR api_key_ref_id = api_key_id_snapshot",
+		"organization_final_execution_evidences_attempt_evidence_ref_check": "((final_attempt_evidence_id_snapshot IS NULL AND final_attempt_evidence_ref_id IS NULL) OR (final_attempt_evidence_id_snapshot IS NOT NULL AND final_attempt_evidence_ref_id IS NOT NULL))",
+		"organization_final_execution_evidences_attempt_ref_check":          "((final_attempt_id_snapshot IS NULL AND final_attempt_ref_id IS NULL) OR (final_attempt_id_snapshot IS NOT NULL AND final_attempt_ref_id IS NOT NULL))",
+		"organization_final_execution_evidences_cost_proof_check":           "((organization_settled_cost > 0 AND allocation_id_snapshot IS NOT NULL AND allocation_ref_id IS NOT NULL AND final_attempt_id_snapshot IS NOT NULL AND final_attempt_ref_id IS NOT NULL AND final_attempt_evidence_id_snapshot IS NOT NULL AND final_attempt_evidence_ref_id IS NOT NULL AND zero_cost_proof IS NULL) OR (organization_settled_cost = 0 AND ((final_attempt_id_snapshot IS NOT NULL AND final_attempt_ref_id IS NOT NULL AND final_attempt_evidence_id_snapshot IS NOT NULL AND final_attempt_evidence_ref_id IS NOT NULL AND zero_cost_proof IS NULL) OR (final_attempt_id_snapshot IS NULL AND final_attempt_ref_id IS NULL AND final_attempt_evidence_id_snapshot IS NULL AND final_attempt_evidence_ref_id IS NULL AND account_id_snapshot IS NULL AND account_ref_id IS NULL AND input_tokens = 0 AND output_tokens = 0 AND cache_creation_tokens = 0 AND cache_read_tokens = 0 AND raw_actual_cost = 0 AND zero_cost_proof IS NOT NULL))))",
+		"organization_final_execution_evidences_counts_cost_check":          "input_tokens >= 0 AND output_tokens >= 0 AND cache_creation_tokens >= 0 AND cache_read_tokens >= 0 AND raw_actual_cost >= 0 AND organization_settled_cost >= 0",
+		"organization_final_execution_evidences_outcome_check":              "terminal_outcome IN ('success', 'error')",
+		"organization_final_execution_evidences_user_ref_check":             "user_ref_id IS NULL OR user_ref_id = user_id_snapshot",
+	}
+	OrganizationLedgerOperationsTable.ForeignKeys[0].RefTable = OrganizationsTable
+	OrganizationLedgerOperationsTable.ForeignKeys[1].RefTable = UsersTable
+	OrganizationLedgerOperationsTable.ForeignKeys[2].RefTable = OrganizationExecutionsTable
+	OrganizationLedgerOperationsTable.Annotation = &entsql.Annotation{
+		Table: "organization_ledger_operations",
+	}
+	OrganizationLedgerOperationsTable.Annotation.Checks = map[string]string{
+		"org_ledger_operations_actor_execution_identity_check": "((authorization_scope = 'system_execution' AND actor_id_snapshot = 0 AND actor_ref_id IS NULL AND actor_execution_id_snapshot IS NOT NULL) OR (authorization_scope IN ('platform_admin_jwt', 'organization_admin_jwt') AND actor_id_snapshot > 0 AND actor_execution_id_snapshot IS NULL AND actor_execution_ref_id IS NULL))",
+		"org_ledger_operations_actor_execution_ref_check":      "(actor_execution_ref_id IS NULL OR actor_execution_id_snapshot IS NOT NULL)",
+		"org_ledger_operations_actor_ref_check":                "(actor_ref_id IS NULL OR actor_ref_id = actor_id_snapshot)",
+		"org_ledger_operations_authorization_scope_check":      "authorization_scope IN ('platform_admin_jwt', 'organization_admin_jwt', 'system_execution')",
+		"org_ledger_operations_currency_check":                 "currency = 'USD'",
+		"org_ledger_operations_operation_type_check":           "operation_type IN ('organization_credit', 'equal_allocation', 'custom_allocation', 'allocation_reclaim', 'member_removal_reclaim', 'reservation', 'consumption', 'release')",
+		"org_ledger_operations_reason_check":                   "trim(internal_reason) <> ''",
+	}
+	OrganizationLedgerPostingsTable.ForeignKeys[0].RefTable = OrganizationsTable
+	OrganizationLedgerPostingsTable.ForeignKeys[1].RefTable = OrganizationLedgerOperationsTable
+	OrganizationLedgerPostingsTable.ForeignKeys[2].RefTable = OrganizationAllocationsTable
+	OrganizationLedgerPostingsTable.ForeignKeys[3].RefTable = UsersTable
+	OrganizationLedgerPostingsTable.ForeignKeys[4].RefTable = OrganizationExecutionsTable
+	OrganizationLedgerPostingsTable.ForeignKeys[5].RefTable = OrganizationFinalExecutionEvidencesTable
+	OrganizationLedgerPostingsTable.Annotation = &entsql.Annotation{
+		Table: "organization_ledger_postings",
+	}
+	OrganizationLedgerPostingsTable.Annotation.Checks = map[string]string{
+		"org_ledger_postings_allocation_ref_check":      "(allocation_ref_id IS NULL OR allocation_ref_id = allocation_id_snapshot)",
+		"org_ledger_postings_amount_equation_check":     "after_amount = before_amount + delta_amount",
+		"org_ledger_postings_amounts_nonnegative_check": "before_amount >= 0 AND after_amount >= 0",
+		"org_ledger_postings_bucket_check":              "((bucket_type = 'organization_unallocated' AND bucket_id_snapshot = organization_id AND allocation_id_snapshot IS NULL) OR (bucket_type IN ('allocation_available', 'allocation_reserved') AND allocation_id_snapshot IS NOT NULL))",
+		"org_ledger_postings_currency_check":            "currency = 'USD'",
+		"org_ledger_postings_delta_nonzero_check":       "delta_amount <> 0",
+		"org_ledger_postings_execution_ref_check":       "(execution_ref_id IS NULL OR execution_id_snapshot IS NOT NULL)",
+		"org_ledger_postings_final_evidence_ref_check":  "(final_evidence_ref_id IS NULL OR final_evidence_id_snapshot IS NOT NULL)",
+		"org_ledger_postings_operation_snapshot_check":  "trim(operation_id_snapshot) <> ''",
+		"org_ledger_postings_sequence_check":            "posting_sequence > 0",
+		"org_ledger_postings_target_user_ref_check":     "(target_user_ref_id IS NULL OR target_user_ref_id = target_user_id_snapshot)",
+		"org_ledger_postings_version_equation_check":    "balance_version_after = balance_version_before + 1",
+	}
+	OrganizationReservationsTable.ForeignKeys[0].RefTable = OrganizationsTable
+	OrganizationReservationsTable.ForeignKeys[1].RefTable = OrganizationAllocationsTable
+	OrganizationReservationsTable.ForeignKeys[2].RefTable = OrganizationExecutionsTable
+	OrganizationReservationsTable.Annotation = &entsql.Annotation{
+		Table: "organization_reservations",
+	}
+	OrganizationReservationsTable.Annotation.Checks = map[string]string{
+		"organization_reservations_allocation_ref_check":  "allocation_ref_id = allocation_id_snapshot",
+		"organization_reservations_amount_check":          "reserved_amount >= 0 AND settled_amount >= 0 AND released_amount >= 0 AND settled_amount + released_amount <= reserved_amount",
+		"organization_reservations_status_check":          "status IN ('reserved', 'pending_reconciliation', 'settled', 'released')",
+		"organization_reservations_terminal_amount_check": "((status IN ('reserved', 'pending_reconciliation') AND settled_amount = 0 AND released_amount = 0) OR (status IN ('settled', 'released') AND settled_amount + released_amount = reserved_amount))",
+		"organization_reservations_version_check":         "allocation_version_snapshot >= 0 AND organization_balance_version_snapshot >= 0",
+	}
 	PaymentAuditLogsTable.Annotation = &entsql.Annotation{
 		Table: "payment_audit_logs",
 	}
@@ -1926,8 +3051,12 @@ func init() {
 	UsageLogsTable.Annotation = &entsql.Annotation{
 		Table: "usage_logs",
 	}
+	UsersTable.ForeignKeys[0].RefTable = OrganizationsTable
 	UsersTable.Annotation = &entsql.Annotation{
 		Table: "users",
+	}
+	UsersTable.Annotation.Checks = map[string]string{
+		"users_organization_assignment_check": "organization_id IS NULL AND organization_role IS NULL OR organization_id IS NOT NULL AND organization_role IS NOT NULL AND organization_role IN ('organization_admin', 'organization_member')",
 	}
 	UserAllowedGroupsTable.ForeignKeys[0].RefTable = UsersTable
 	UserAllowedGroupsTable.ForeignKeys[1].RefTable = GroupsTable

@@ -36,3 +36,18 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
   })
 })
+
+describe('AppSidebar organization authority', () => {
+  it('keeps platform administration first and gives organization admins only organization routes', () => {
+    const platformBranch = componentSource.indexOf('<template v-if="isAdmin">')
+    const organizationBranch = componentSource.indexOf('<template v-else-if="isOrganizationAdmin')
+    const organizationItems = componentSource.match(/const organizationNavItems[\s\S]*?\n\]\)/)?.[0] ?? ''
+
+    expect(platformBranch).toBeGreaterThanOrEqual(0)
+    expect(organizationBranch).toBeGreaterThan(platformBranch)
+    expect(organizationItems).toContain("path: '/organization/overview'")
+    expect(organizationItems).not.toContain("path: '/admin/")
+    expect(organizationItems).not.toContain("path: '/keys'")
+    expect(organizationItems).not.toContain("path: '/subscriptions'")
+  })
+})

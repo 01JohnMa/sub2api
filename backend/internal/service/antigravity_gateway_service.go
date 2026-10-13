@@ -1360,7 +1360,49 @@ func (s *AntigravityGatewayService) unwrapV1InternalResponse(body []byte) ([]byt
 //	      └─ retryDelay <  7s → 等待后重试 1 次
 //	          ├─ 成功 → 正常返回
 //	          └─ 失败 → 设置模型限流 + 清除粘性绑定 → 切换账号
-func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte, isStickySession bool) (*ForwardResult, error) {
+type ForwardOption func(*forwardOptions)
+
+type forwardOptions struct {
+	prepared *PreparedAntigravityMessagesPayload
+}
+
+type PreparedAntigravityMessagesPayload struct {
+	Payload         []byte
+	DispatchModel   string
+	IdentitySummary string
+}
+
+func WithPreparedAntigravityMessagesPayload(payload PreparedAntigravityMessagesPayload) ForwardOption {
+	return func(options *forwardOptions) { options.prepared = &payload }
+}
+
+func (s *AntigravityGatewayService) PrepareOrganizationMessagesPayload(ctx context.Context, account *Account, body []byte) (PreparedAntigravityMessagesPayload, error) {
+	var request antigravity.ClaudeRequest
+	if s == nil || account == nil || json.Unmarshal(body, &request) != nil || strings.TrimSpace(request.Model) == "" {
+		return PreparedAntigravityMessagesPayload{}, ErrOrganizationGeminiUnsupportedRequest
+	}
+	mappedModel := s.getMappedModel(account, request.Model)
+	if mappedModel == "" {
+		return PreparedAntigravityMessagesPayload{}, ErrOrganizationGeminiCandidateConflict
+	}
+	thinking := request.Thinking != nil && (request.Thinking.Type == "enabled" || request.Thinking.Type == "adaptive")
+	mappedModel = applyThinkingModelSuffix(mappedModel, thinking)
+	options := s.getClaudeTransformOptions(ctx)
+	options.EnableIdentityPatch = true
+	payload, err := antigravity.TransformClaudeToGeminiWithOptions(&request, strings.TrimSpace(account.GetCredential("project_id")), mappedModel, options)
+	if err != nil {
+		return PreparedAntigravityMessagesPayload{}, err
+	}
+	return PreparedAntigravityMessagesPayload{Payload: payload, DispatchModel: mappedModel, IdentitySummary: organizationGeminiAntigravityIdentitySummary(account, mappedModel)}, nil
+}
+
+func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte, isStickySession bool, options ...ForwardOption) (*ForwardResult, error) {
+	forwardOpts := forwardOptions{}
+	for _, apply := range options {
+		if apply != nil {
+			apply(&forwardOpts)
+		}
+	}
 	// 上游透传账号直接转发，不走 OAuth token 刷新
 	if account.Type == AccountTypeUpstream {
 		return s.ForwardUpstream(ctx, c, account, body)
@@ -1422,6 +1464,12 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 	if err != nil {
 		return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", "Invalid request")
 	}
+	if forwardOpts.prepared != nil {
+		if forwardOpts.prepared.DispatchModel != mappedModel || len(forwardOpts.prepared.Payload) == 0 {
+			return nil, ErrOrganizationGeminiCandidateConflict
+		}
+		geminiBody = forwardOpts.prepared.Payload
+	}
 
 	// Antigravity 上游只支持流式请求，统一使用 streamGenerateContent
 	// 如果客户端请求非流式，在响应处理阶段会收集完整流式响应后转换返回
@@ -1469,7 +1517,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		// 优先检测 thinking block 的 signature 相关错误（400）并重试一次：
 		// Antigravity /v1internal 链路在部分场景会对 thought/thinking signature 做严格校验，
 		// 当历史消息携带的 signature 不合法时会直接 400；去除 thinking 后可继续完成请求。
-		if resp.StatusCode == http.StatusBadRequest && isSignatureRelatedError(respBody) && s.settingService.IsSignatureRectifierEnabled(ctx) {
+		if forwardOpts.prepared == nil && resp.StatusCode == http.StatusBadRequest && isSignatureRelatedError(respBody) && s.settingService.IsSignatureRectifierEnabled(ctx) {
 			upstreamMsg := strings.TrimSpace(extractAntigravityErrorMessage(respBody))
 			upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 			logBody, maxBytes := s.getLogConfig()
@@ -1603,7 +1651,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		}
 
 		// Budget 整流：检测 budget_tokens 约束错误并自动修正重试
-		if resp.StatusCode == http.StatusBadRequest && respBody != nil && !isSignatureRelatedError(respBody) {
+		if forwardOpts.prepared == nil && resp.StatusCode == http.StatusBadRequest && respBody != nil && !isSignatureRelatedError(respBody) {
 			errMsg := strings.TrimSpace(extractAntigravityErrorMessage(respBody))
 			if isThinkingBudgetConstraintError(errMsg) && s.settingService.IsBudgetRectifierEnabled(ctx) {
 				appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -2099,6 +2147,18 @@ type ForwardGeminiOption func(*forwardGeminiOptions)
 type forwardGeminiOptions struct {
 	groupID     int64
 	sessionHash string
+	prepared    *PreparedAntigravityGeminiPayload
+}
+
+// PreparedAntigravityGeminiPayload is the exact v1internal payload frozen by
+// an organization reservation. It remains in memory only; snapshots retain
+// only its hash and a redacted identity summary.
+type PreparedAntigravityGeminiPayload struct {
+	Payload         []byte
+	CanonicalBody   []byte
+	DispatchModel   string
+	UpstreamAction  string
+	IdentitySummary string
 }
 
 func WithForwardGeminiSession(groupID int64, sessionHash string) ForwardGeminiOption {
@@ -2106,6 +2166,34 @@ func WithForwardGeminiSession(groupID int64, sessionHash string) ForwardGeminiOp
 		opts.groupID = groupID
 		opts.sessionHash = sessionHash
 	}
+}
+
+func WithPreparedAntigravityGeminiPayload(payload PreparedAntigravityGeminiPayload) ForwardGeminiOption {
+	return func(opts *forwardGeminiOptions) { opts.prepared = &payload }
+}
+
+func (s *AntigravityGatewayService) PrepareOrganizationGeminiPayload(account *Account, dispatchModel string, action string, body []byte) (PreparedAntigravityGeminiPayload, error) {
+	if s == nil || account == nil || !organizationGeminiNativeAction(action) || len(body) == 0 {
+		return PreparedAntigravityGeminiPayload{}, ErrOrganizationGeminiUnsupportedRequest
+	}
+	mappedModel := s.getMappedModel(account, dispatchModel)
+	if mappedModel == "" {
+		return PreparedAntigravityGeminiPayload{}, ErrOrganizationGeminiCandidateConflict
+	}
+	injected, err := injectIdentityPatchToGeminiRequest(body)
+	if err != nil {
+		return PreparedAntigravityGeminiPayload{}, err
+	}
+	if cleaned, cleanErr := cleanGeminiRequest(injected); cleanErr == nil {
+		injected = cleaned
+	} else {
+		return PreparedAntigravityGeminiPayload{}, cleanErr
+	}
+	wrapped, err := s.wrapV1InternalRequest(strings.TrimSpace(account.GetCredential("project_id")), mappedModel, injected)
+	if err != nil {
+		return PreparedAntigravityGeminiPayload{}, err
+	}
+	return PreparedAntigravityGeminiPayload{Payload: wrapped, CanonicalBody: injected, DispatchModel: mappedModel, UpstreamAction: "streamGenerateContent", IdentitySummary: organizationGeminiAntigravityIdentitySummary(account, mappedModel)}, nil
 }
 
 func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte, isStickySession bool, options ...ForwardGeminiOption) (*ForwardResult, error) {
@@ -2180,7 +2268,7 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		proxyURL = account.Proxy.URL()
 	}
 
-	// Antigravity 上游要求必须包含身份提示词，注入到请求中
+	// Antigravity 上游要求必须包含身份提示词，注入到请求中.
 	injectedBody, err := injectIdentityPatchToGeminiRequest(body)
 	if err != nil {
 		return nil, s.writeGoogleError(c, http.StatusBadRequest, "Invalid request body")
@@ -2203,6 +2291,14 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 	// Antigravity 上游只支持流式请求，统一使用 streamGenerateContent
 	// 如果客户端请求非流式，在响应处理阶段会收集完整流式响应后返回
 	upstreamAction := "streamGenerateContent"
+	if forwardOpts.prepared != nil {
+		if forwardOpts.prepared.DispatchModel != mappedModel || len(forwardOpts.prepared.Payload) == 0 {
+			return nil, ErrOrganizationGeminiCandidateConflict
+		}
+		injectedBody = forwardOpts.prepared.CanonicalBody
+		wrappedBody = forwardOpts.prepared.Payload
+		upstreamAction = forwardOpts.prepared.UpstreamAction
+	}
 
 	// 执行带重试的请求
 	result, err := s.antigravityRetryLoop(antigravityRetryLoopParams{
@@ -2253,7 +2349,7 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
 
 		// 模型兜底：模型不存在且开启 fallback 时，自动用 fallback 模型重试一次
-		if s.settingService != nil && s.settingService.IsModelFallbackEnabled(ctx) &&
+		if forwardOpts.prepared == nil && s.settingService != nil && s.settingService.IsModelFallbackEnabled(ctx) &&
 			isModelNotFoundError(resp.StatusCode, respBody) {
 			fallbackModel := s.settingService.GetFallbackModel(ctx, PlatformAntigravity)
 			if fallbackModel != "" && fallbackModel != mappedModel {
@@ -2282,6 +2378,7 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 			signatureCheckBody = unwrapped
 		}
 		if resp.StatusCode == http.StatusBadRequest &&
+			forwardOpts.prepared == nil &&
 			s.settingService != nil &&
 			s.settingService.IsSignatureRectifierEnabled(ctx) &&
 			isSignatureRelatedError(signatureCheckBody) &&

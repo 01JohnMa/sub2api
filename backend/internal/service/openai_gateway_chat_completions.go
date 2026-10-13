@@ -61,9 +61,19 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	promptCacheKey string,
 	defaultMappedModel string,
 ) (*OpenAIForwardResult, error) {
+	if s == nil || account == nil || c == nil || c.Request == nil {
+		return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("organization Chat forwarding dependencies are unavailable"))
+	}
+	frozenRoute := organizationChatDispatchRouteFromContext(ctx)
+	if frozenRoute == OrganizationChatRouteRawChat {
+		return s.forwardAsRawChatCompletions(ctx, c, account, body, defaultMappedModel)
+	}
+	if frozenRoute != "" && frozenRoute != OrganizationChatRouteResponsesBridge {
+		return nil, &OpenAILocalPreDispatchError{Message: "unsupported frozen organization Chat route", ZeroProof: "candidate_snapshot_conflict"}
+	}
 	// 入口分流：APIKey 账号 + 强制或已探测确认上游不支持 Responses，走 CC 直转。
 	// 自动模式下标记缺失（未探测）按"现状即证据"原则继续走下方原 Responses 转换路径。
-	if account.Type == AccountTypeAPIKey && !openai_compat.ShouldUseResponsesAPI(account.Extra) {
+	if frozenRoute == "" && account.Type == AccountTypeAPIKey && !openai_compat.ShouldUseResponsesAPI(account.Extra) {
 		return s.forwardAsRawChatCompletions(ctx, c, account, body, defaultMappedModel)
 	}
 
@@ -72,7 +82,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	// 1. Parse Chat Completions request
 	var chatReq apicompat.ChatCompletionsRequest
 	if err := json.Unmarshal(body, &chatReq); err != nil {
-		return nil, fmt.Errorf("parse chat completions request: %w", err)
+		return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("parse chat completions request: %w", err))
 	}
 	originalModel := chatReq.Model
 	clientStream := chatReq.Stream
@@ -111,7 +121,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	if isResponsesShape {
 		responsesBody, err = sjson.SetBytes(body, "model", upstreamModel)
 		if err != nil {
-			return nil, fmt.Errorf("rewrite model in responses-shape body: %w", err)
+			return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("rewrite model in responses-shape body: %w", err))
 		}
 		// Strip Responses API parameters that no Codex upstream accepts.
 		// Because this branch forwards the raw body (the normal path rebuilds
@@ -125,7 +135,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		}
 		responsesBody, normalizedServiceTier, err := normalizeResponsesBodyServiceTier(responsesBody)
 		if err != nil {
-			return nil, fmt.Errorf("normalize service_tier in responses-shape body: %w", err)
+			return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("normalize service_tier in responses-shape body: %w", err))
 		}
 		// Minimal stub populated from the raw body so downstream billing
 		// propagation (ServiceTier, ReasoningEffort) keeps working.
@@ -141,13 +151,13 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		// ChatCompletionsToResponses always sets Stream=true (upstream always streams).
 		responsesReq, err = apicompat.ChatCompletionsToResponses(&chatReq)
 		if err != nil {
-			return nil, fmt.Errorf("convert chat completions to responses: %w", err)
+			return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("convert chat completions to responses: %w", err))
 		}
 		responsesReq.Model = upstreamModel
 		normalizeResponsesRequestServiceTier(responsesReq)
 		responsesBody, err = json.Marshal(responsesReq)
 		if err != nil {
-			return nil, fmt.Errorf("marshal responses request: %w", err)
+			return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("marshal responses request: %w", err))
 		}
 	}
 
@@ -170,7 +180,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	if account.Type == AccountTypeOAuth {
 		var reqBody map[string]any
 		if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
-			return nil, fmt.Errorf("unmarshal for codex transform: %w", err)
+			return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("unmarshal for codex transform: %w", err))
 		}
 		codexResult := applyCodexOAuthTransform(reqBody, false, false)
 		if codexResult.NormalizedModel != "" {
@@ -183,7 +193,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		}
 		responsesBody, err = json.Marshal(reqBody)
 		if err != nil {
-			return nil, fmt.Errorf("remarshal after codex transform: %w", err)
+			return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("remarshal after codex transform: %w", err))
 		}
 	}
 
@@ -191,34 +201,38 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		if trimmedKey := strings.TrimSpace(promptCacheKey); trimmedKey != "" {
 			var reqBody map[string]any
 			if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
-				return nil, fmt.Errorf("unmarshal for prompt cache key injection: %w", err)
+				return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("unmarshal for prompt cache key injection: %w", err))
 			}
 			if existing, ok := reqBody["prompt_cache_key"].(string); !ok || strings.TrimSpace(existing) == "" {
 				reqBody["prompt_cache_key"] = trimmedKey
 				responsesBody, err = json.Marshal(reqBody)
 				if err != nil {
-					return nil, fmt.Errorf("remarshal after prompt cache key injection: %w", err)
+					return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("remarshal after prompt cache key injection: %w", err))
 				}
 			}
 		}
 	}
 
 	// 4b. Apply OpenAI fast policy (may filter service_tier or block the request).
-	updatedBody, policyErr := s.applyOpenAIFastPolicyToBody(ctx, account, upstreamModel, responsesBody)
-	if policyErr != nil {
-		var blocked *OpenAIFastBlockedError
-		if errors.As(policyErr, &blocked) {
-			MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
-			writeChatCompletionsError(c, http.StatusForbidden, "permission_error", blocked.Message)
+	if frozenRoute == "" {
+		updatedBody, policyErr := s.applyOpenAIFastPolicyToBody(ctx, account, upstreamModel, responsesBody)
+		if policyErr != nil {
+			var blocked *OpenAIFastBlockedError
+			if errors.As(policyErr, &blocked) {
+				MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
+				if !isOrganizationResponsesDispatchContext(ctx) {
+					writeChatCompletionsError(c, http.StatusForbidden, "permission_error", blocked.Message)
+				}
+			}
+			return nil, organizationChatLocalPreDispatchError(ctx, policyErr)
 		}
-		return nil, policyErr
+		responsesBody = updatedBody
 	}
-	responsesBody = updatedBody
 
 	// 5. Get access token
 	token, _, err := s.GetAccessToken(ctx, account)
 	if err != nil {
-		return nil, fmt.Errorf("get access token: %w", err)
+		return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("get access token: %w", err))
 	}
 
 	// 6. Build upstream request
@@ -226,12 +240,15 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	upstreamReq, err := s.buildUpstreamRequest(upstreamCtx, c, account, responsesBody, token, true, promptCacheKey, false)
 	releaseUpstreamCtx()
 	if err != nil {
-		return nil, fmt.Errorf("build upstream request: %w", err)
+		return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("build upstream request: %w", err))
 	}
 
 	if promptCacheKey != "" {
 		apiKeyID := getAPIKeyIDFromContext(c)
 		upstreamReq.Header.Set("session_id", generateSessionUUID(isolateOpenAISessionID(apiKeyID, promptCacheKey)))
+	}
+	if s.httpUpstream == nil {
+		return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("OpenAI upstream client is unavailable"))
 	}
 
 	// 7. Send request
@@ -267,6 +284,19 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		if account.Type == AccountTypeAPIKey &&
 			openai_compat.ResolveResponsesSupport(account.Extra) == openai_compat.ResponsesSupportUnknown &&
 			!isResponsesEndpointSupportedByStatus(resp.StatusCode) {
+			if frozenRoute == OrganizationChatRouteResponsesBridge {
+				failoverErr := &UpstreamFailoverError{
+					StatusCode: resp.StatusCode, ResponseBody: respBody, ResponseHeaders: resp.Header.Clone(),
+				}
+				if usage, ok := extractOpenAIUsageFromJSONBytes(respBody); ok {
+					return &OpenAIForwardResult{
+						RequestID: resp.Header.Get("x-request-id"), Usage: usage, UsageObserved: true,
+						Model: originalModel, BillingModel: billingModel, UpstreamModel: upstreamModel,
+						Stream: clientStream, ResponseHeaders: resp.Header.Clone(), Duration: time.Since(startTime),
+					}, failoverErr
+				}
+				return nil, failoverErr
+			}
 			logger.L().Info("openai chat_completions: /responses unsupported, falling back to raw chat completions",
 				zap.Int64("account_id", account.ID),
 				zap.Int("upstream_status", resp.StatusCode),
@@ -294,11 +324,32 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 				Detail:             upstreamDetail,
 			})
 			s.handleOpenAIAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody, upstreamModel)
-			return nil, &UpstreamFailoverError{
+			failoverErr := &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
 				ResponseBody:           respBody,
+				ResponseHeaders:        resp.Header.Clone(),
 				RetryableOnSameAccount: account.IsPoolMode() && (account.IsPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, respBody)),
 			}
+			if usage, ok := extractOpenAIUsageFromJSONBytes(respBody); ok {
+				var serviceTier *string
+				if responsesReq.ServiceTier != "" {
+					tier := responsesReq.ServiceTier
+					serviceTier = &tier
+				}
+				return &OpenAIForwardResult{
+					RequestID:       resp.Header.Get("x-request-id"),
+					Usage:           usage,
+					UsageObserved:   true,
+					Model:           originalModel,
+					BillingModel:    billingModel,
+					UpstreamModel:   upstreamModel,
+					ServiceTier:     serviceTier,
+					Stream:          clientStream,
+					ResponseHeaders: resp.Header.Clone(),
+					Duration:        time.Since(startTime),
+				}, failoverErr
+			}
+			return nil, failoverErr
 		}
 		return s.handleChatCompletionsErrorResponse(resp, c, account, billingModel)
 	}
@@ -412,7 +463,15 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 	}
 	if strings.TrimSpace(finalResponse.Status) == "failed" {
 		payload, _ := json.Marshal(gin.H{"type": "response.failed", "response": finalResponse})
-		return nil, s.newOpenAIStreamFailoverError(c, account, false, requestID, payload, openAICompatFailedResponseMessage(finalResponse))
+		failoverErr := s.newOpenAIStreamFailoverError(c, account, false, requestID, payload, openAICompatFailedResponseMessage(finalResponse))
+		if finalResponse.Usage != nil {
+			return &OpenAIForwardResult{
+				RequestID: requestID, ResponseID: finalResponse.ID, Usage: usage, UsageObserved: true,
+				Model: originalModel, BillingModel: billingModel, UpstreamModel: upstreamModel,
+				Stream: false, ResponseHeaders: resp.Header.Clone(), Duration: time.Since(startTime),
+			}, failoverErr
+		}
+		return nil, failoverErr
 	}
 
 	// When the terminal event has an empty output array, reconstruct from
@@ -432,13 +491,16 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 	c.JSON(http.StatusOK, chatResp)
 
 	return &OpenAIForwardResult{
-		RequestID:     requestID,
-		Usage:         usage,
-		Model:         originalModel,
-		BillingModel:  billingModel,
-		UpstreamModel: upstreamModel,
-		Stream:        false,
-		Duration:      time.Since(startTime),
+		RequestID:       requestID,
+		ResponseID:      finalResponse.ID,
+		Usage:           usage,
+		UsageObserved:   finalResponse.Usage != nil,
+		Model:           originalModel,
+		BillingModel:    billingModel,
+		UpstreamModel:   upstreamModel,
+		Stream:          false,
+		ResponseHeaders: resp.Header.Clone(),
+		Duration:        time.Since(startTime),
 	}, nil
 }
 
@@ -479,6 +541,7 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 	state.IncludeUsage = true
 
 	var usage OpenAIUsage
+	usageObserved := false
 	var firstTokenMs *int
 	firstChunk := true
 	clientDisconnected := false
@@ -510,14 +573,17 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 
 	resultWithUsage := func() *OpenAIForwardResult {
 		return &OpenAIForwardResult{
-			RequestID:     requestID,
-			Usage:         usage,
-			Model:         originalModel,
-			BillingModel:  billingModel,
-			UpstreamModel: upstreamModel,
-			Stream:        true,
-			Duration:      time.Since(startTime),
-			FirstTokenMs:  firstTokenMs,
+			RequestID:        requestID,
+			Usage:            usage,
+			UsageObserved:    usageObserved,
+			ClientDisconnect: clientDisconnected,
+			Model:            originalModel,
+			BillingModel:     billingModel,
+			UpstreamModel:    upstreamModel,
+			Stream:           true,
+			ResponseHeaders:  resp.Header.Clone(),
+			Duration:         time.Since(startTime),
+			FirstTokenMs:     firstTokenMs,
 		}
 	}
 
@@ -542,9 +608,11 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 		if isTerminalEvent {
 			if event.Usage != nil {
 				usage = copyOpenAIUsageFromResponsesUsage(event.Usage)
+				usageObserved = true
 			}
 			if event.Response != nil && event.Response.Usage != nil {
 				usage = copyOpenAIUsageFromResponsesUsage(event.Response.Usage)
+				usageObserved = true
 			}
 		}
 		if strings.TrimSpace(event.Type) == "response.failed" {
@@ -604,7 +672,7 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 
 	finalizeStream := func() (*OpenAIForwardResult, error) {
 		if streamFailoverErr != nil {
-			if c == nil || c.Writer == nil || !c.Writer.Written() {
+			if !usageObserved && (c == nil || c.Writer == nil || !c.Writer.Written()) {
 				return nil, streamFailoverErr
 			}
 			return resultWithUsage(), streamFailoverErr
@@ -848,6 +916,17 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 			}
 			c.Writer.Flush()
 		}
+	}
+}
+
+func organizationChatLocalPreDispatchError(ctx context.Context, err error) error {
+	if err == nil || !isOrganizationResponsesDispatchContext(ctx) {
+		return err
+	}
+	return &OpenAILocalPreDispatchError{
+		Message:   err.Error(),
+		Cause:     err,
+		ZeroProof: "local_pre_dispatch_rejected",
 	}
 }
 

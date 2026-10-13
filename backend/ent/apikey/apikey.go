@@ -29,6 +29,8 @@ const (
 	FieldName = "name"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldOrganizationID holds the string denoting the organization_id field in the database.
+	FieldOrganizationID = "organization_id"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldLastUsedAt holds the string denoting the last_used_at field in the database.
@@ -65,8 +67,14 @@ const (
 	EdgeUser = "user"
 	// EdgeGroup holds the string denoting the group edge name in mutations.
 	EdgeGroup = "group"
+	// EdgeOrganization holds the string denoting the organization edge name in mutations.
+	EdgeOrganization = "organization"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
+	// EdgeOrganizationExecutions holds the string denoting the organization_executions edge name in mutations.
+	EdgeOrganizationExecutions = "organization_executions"
+	// EdgeOrganizationFinalExecutionEvidences holds the string denoting the organization_final_execution_evidences edge name in mutations.
+	EdgeOrganizationFinalExecutionEvidences = "organization_final_execution_evidences"
 	// Table holds the table name of the apikey in the database.
 	Table = "api_keys"
 	// UserTable is the table that holds the user relation/edge.
@@ -83,6 +91,13 @@ const (
 	GroupInverseTable = "groups"
 	// GroupColumn is the table column denoting the group relation/edge.
 	GroupColumn = "group_id"
+	// OrganizationTable is the table that holds the organization relation/edge.
+	OrganizationTable = "api_keys"
+	// OrganizationInverseTable is the table name for the Organization entity.
+	// It exists in this package in order to avoid circular dependency with the "organization" package.
+	OrganizationInverseTable = "organizations"
+	// OrganizationColumn is the table column denoting the organization relation/edge.
+	OrganizationColumn = "organization_id"
 	// UsageLogsTable is the table that holds the usage_logs relation/edge.
 	UsageLogsTable = "usage_logs"
 	// UsageLogsInverseTable is the table name for the UsageLog entity.
@@ -90,6 +105,20 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "api_key_id"
+	// OrganizationExecutionsTable is the table that holds the organization_executions relation/edge.
+	OrganizationExecutionsTable = "organization_executions"
+	// OrganizationExecutionsInverseTable is the table name for the OrganizationExecution entity.
+	// It exists in this package in order to avoid circular dependency with the "organizationexecution" package.
+	OrganizationExecutionsInverseTable = "organization_executions"
+	// OrganizationExecutionsColumn is the table column denoting the organization_executions relation/edge.
+	OrganizationExecutionsColumn = "api_key_ref_id"
+	// OrganizationFinalExecutionEvidencesTable is the table that holds the organization_final_execution_evidences relation/edge.
+	OrganizationFinalExecutionEvidencesTable = "organization_final_execution_evidences"
+	// OrganizationFinalExecutionEvidencesInverseTable is the table name for the OrganizationFinalExecutionEvidence entity.
+	// It exists in this package in order to avoid circular dependency with the "organizationfinalexecutionevidence" package.
+	OrganizationFinalExecutionEvidencesInverseTable = "organization_final_execution_evidences"
+	// OrganizationFinalExecutionEvidencesColumn is the table column denoting the organization_final_execution_evidences relation/edge.
+	OrganizationFinalExecutionEvidencesColumn = "api_key_ref_id"
 )
 
 // Columns holds all SQL columns for apikey fields.
@@ -102,6 +131,7 @@ var Columns = []string{
 	FieldKey,
 	FieldName,
 	FieldGroupID,
+	FieldOrganizationID,
 	FieldStatus,
 	FieldLastUsedAt,
 	FieldIPWhitelist,
@@ -213,6 +243,11 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
 }
 
+// ByOrganizationID orders the results by the organization_id field.
+func ByOrganizationID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOrganizationID, opts...).ToFunc()
+}
+
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
@@ -297,6 +332,13 @@ func ByGroupField(field string, opts ...sql.OrderTermOption) OrderOption {
 	}
 }
 
+// ByOrganizationField orders the results by organization field.
+func ByOrganizationField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOrganizationStep(), sql.OrderByField(field, opts...))
+	}
+}
+
 // ByUsageLogsCount orders the results by usage_logs count.
 func ByUsageLogsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -308,6 +350,34 @@ func ByUsageLogsCount(opts ...sql.OrderTermOption) OrderOption {
 func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newUsageLogsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByOrganizationExecutionsCount orders the results by organization_executions count.
+func ByOrganizationExecutionsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newOrganizationExecutionsStep(), opts...)
+	}
+}
+
+// ByOrganizationExecutions orders the results by organization_executions terms.
+func ByOrganizationExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOrganizationExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByOrganizationFinalExecutionEvidencesCount orders the results by organization_final_execution_evidences count.
+func ByOrganizationFinalExecutionEvidencesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newOrganizationFinalExecutionEvidencesStep(), opts...)
+	}
+}
+
+// ByOrganizationFinalExecutionEvidences orders the results by organization_final_execution_evidences terms.
+func ByOrganizationFinalExecutionEvidences(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOrganizationFinalExecutionEvidencesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 func newUserStep() *sqlgraph.Step {
@@ -324,10 +394,31 @@ func newGroupStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.M2O, true, GroupTable, GroupColumn),
 	)
 }
+func newOrganizationStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OrganizationInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, OrganizationTable, OrganizationColumn),
+	)
+}
 func newUsageLogsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
+	)
+}
+func newOrganizationExecutionsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OrganizationExecutionsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, OrganizationExecutionsTable, OrganizationExecutionsColumn),
+	)
+}
+func newOrganizationFinalExecutionEvidencesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OrganizationFinalExecutionEvidencesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, OrganizationFinalExecutionEvidencesTable, OrganizationFinalExecutionEvidencesColumn),
 	)
 }

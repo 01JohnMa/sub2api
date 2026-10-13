@@ -9,6 +9,10 @@ const {
   getOrganization,
   createOrganization,
   updateOrganization,
+	disableOrganization,
+	reactivateOrganization,
+	getOrganizationArchivePreview,
+	archiveOrganization,
   listOrganizationMembers,
   addOrganizationMember,
   removeOrganizationMember,
@@ -17,12 +21,19 @@ const {
   listOrganizationLedger,
   creditOrganization,
   previewOrganizationAllocation,
-  executeOrganizationAllocation
+  executeOrganizationAllocation,
+  listPendingReconciliations,
+  getPendingReconciliation,
+  resolvePendingReconciliation
 } = vi.hoisted(() => ({
   listOrganizations: vi.fn(),
   getOrganization: vi.fn(),
   createOrganization: vi.fn(),
   updateOrganization: vi.fn(),
+	disableOrganization: vi.fn(),
+	reactivateOrganization: vi.fn(),
+	getOrganizationArchivePreview: vi.fn(),
+	archiveOrganization: vi.fn(),
   listOrganizationMembers: vi.fn(),
   addOrganizationMember: vi.fn(),
   removeOrganizationMember: vi.fn(),
@@ -31,7 +42,10 @@ const {
   listOrganizationLedger: vi.fn(),
   creditOrganization: vi.fn(),
   previewOrganizationAllocation: vi.fn(),
-  executeOrganizationAllocation: vi.fn()
+  executeOrganizationAllocation: vi.fn(),
+  listPendingReconciliations: vi.fn(),
+  getPendingReconciliation: vi.fn(),
+  resolvePendingReconciliation: vi.fn()
 }))
 
 const { showError, showSuccess } = vi.hoisted(() => ({
@@ -46,6 +60,10 @@ vi.mock('@/api/admin', () => ({
       getById: getOrganization,
       create: createOrganization,
       update: updateOrganization,
+		disable: disableOrganization,
+		reactivate: reactivateOrganization,
+		getArchivePreview: getOrganizationArchivePreview,
+		archive: archiveOrganization,
       listMembers: listOrganizationMembers,
       addMember: addOrganizationMember,
       removeMember: removeOrganizationMember,
@@ -54,7 +72,10 @@ vi.mock('@/api/admin', () => ({
       listLedger: listOrganizationLedger,
       credit: creditOrganization,
       previewAllocation: previewOrganizationAllocation,
-      executeAllocation: executeOrganizationAllocation
+      executeAllocation: executeOrganizationAllocation,
+      listPendingReconciliations,
+      getPendingReconciliation,
+      resolvePendingReconciliation
     }
   }
 }))
@@ -100,6 +121,14 @@ const organizationMember = (): OrganizationMember => ({
     reserved: '0.00000000'
   }
 })
+
+function deferred<T>() {
+	let resolve!: (value: T) => void
+	const promise = new Promise<T>((resolvePromise) => {
+		resolve = resolvePromise
+	})
+	return { promise, resolve }
+}
 
 function allocationPreview(operation: 'custom' | 'reclaim' = 'custom') {
   const delta = operation === 'custom' ? '2.50000000' : '-2.50000000'
@@ -173,6 +202,13 @@ const ConfirmDialogStub = {
   `
 }
 
+const PaginationStub = {
+  name: 'Pagination',
+  props: ['page', 'total', 'pageSize'],
+  emits: ['update:page', 'update:pageSize'],
+  template: '<button data-test="pagination-next" @click="$emit(\'update:page\', page + 1)">next</button>'
+}
+
 function mountView() {
   return mount(OrganizationsView, {
     global: {
@@ -185,7 +221,7 @@ function mountView() {
         Select: SelectStub,
         BaseDialog: BaseDialogStub,
         ConfirmDialog: ConfirmDialogStub,
-        Pagination: true,
+        Pagination: PaginationStub,
         EmptyState: true,
         Icon: true
       }
@@ -200,6 +236,10 @@ describe('admin OrganizationsView', () => {
     getOrganization.mockReset()
     createOrganization.mockReset()
     updateOrganization.mockReset()
+		disableOrganization.mockReset()
+		reactivateOrganization.mockReset()
+		getOrganizationArchivePreview.mockReset()
+		archiveOrganization.mockReset()
     listOrganizationMembers.mockReset()
     addOrganizationMember.mockReset()
     removeOrganizationMember.mockReset()
@@ -209,6 +249,9 @@ describe('admin OrganizationsView', () => {
     creditOrganization.mockReset()
     previewOrganizationAllocation.mockReset()
     executeOrganizationAllocation.mockReset()
+		listPendingReconciliations.mockReset()
+		getPendingReconciliation.mockReset()
+		resolvePendingReconciliation.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
     listOrganizations.mockResolvedValue({
@@ -221,6 +264,10 @@ describe('admin OrganizationsView', () => {
     getOrganization.mockResolvedValue(organization())
     createOrganization.mockResolvedValue(organization())
     updateOrganization.mockResolvedValue(organization())
+		disableOrganization.mockResolvedValue({ ...organization(), status: 'disabled' })
+		reactivateOrganization.mockResolvedValue(organization())
+		getOrganizationArchivePreview.mockResolvedValue({ organization_id: 7, status: 'active', unallocated: '12.50000000', balance_version: 3, updated_at: '2026-07-28T01:00:00Z' })
+		archiveOrganization.mockResolvedValue({ ...organization(), status: 'archived' })
     listOrganizationMembers.mockResolvedValue({
       items: [organizationMember()],
       total: 1,
@@ -278,6 +325,9 @@ describe('admin OrganizationsView', () => {
       balance_version_after: 2,
       replayed: false
     })
+		listPendingReconciliations.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
+		getPendingReconciliation.mockResolvedValue(null)
+		resolvePendingReconciliation.mockResolvedValue({ replayed: false })
   })
 
   it('loads an organization table with the default created-at sort and supports server sort', async () => {
@@ -746,4 +796,153 @@ describe('admin OrganizationsView', () => {
     expect(wrapper.find('[data-test="organization-add-member"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="organization-member-role-11"]').exists()).toBe(false)
   })
+
+	it('shows server-computed reconciliation actions and keeps conflict evidence read-only', async () => {
+    const pending = {
+      execution_id: 'execution-1', organization_id: 7, allocation_id: 9, reservation_id: 12,
+      candidate_ceiling: '2.00000000', reserved_amount: '2.00000000', accepted_at: '2026-07-28T00:00:00Z',
+      attempt_count: 1, attempts: [], evidence: [], allowed_resolution: 'settled' as const,
+      computed_organization_amount: '1.00000000', conflict: false
+    }
+    listPendingReconciliations
+      .mockResolvedValueOnce({ items: [pending], total: 21, page: 1, page_size: 20, pages: 2 })
+      .mockResolvedValue({ items: [pending], total: 21, page: 2, page_size: 20, pages: 2 })
+    getPendingReconciliation.mockResolvedValue({
+      ...pending,
+      attempts: [{ attempt_id: 'attempt-1', attempt_sequence: 1, status: 'final_usage_observed' }],
+      evidence: [{ attempt_id: 'attempt-1', attempt_sequence: 1, evidence_source: 'adapter_direct', terminal_outcome: 'success', raw_actual_cost: '1.00000000', input_tokens: 2, output_tokens: 3, cache_creation_tokens: 0, cache_read_tokens: 0, provider_observed_at: '2026-07-28T00:00:00Z' }]
+    })
+		const wrapper = mountView()
+		await flushPromises()
+		await wrapper.get('[data-test="organization-view"]').trigger('click')
+		await flushPromises()
+
+    expect(wrapper.get('[data-test="organization-reconciliation-section"]').text()).toContain('execution-1')
+    expect(wrapper.get('[data-test="organization-reconciliation-section"]').text()).toContain('1.00000000')
+    await wrapper.get('[data-test="organization-reconciliation-pagination"] [data-test="pagination-next"]').trigger('click')
+    await flushPromises()
+    expect(listPendingReconciliations).toHaveBeenCalledWith(7, 2, 20)
+		await wrapper.get('[data-test="organization-reconciliation-item"] button').trigger('click')
+		await flushPromises()
+		expect(wrapper.text()).toContain('adapter_direct')
+		await wrapper.get('[data-test="organization-reconciliation-resolve"]').trigger('click')
+		await wrapper.get('[data-test="organization-reconciliation-confirmation-confirm"]').trigger('click')
+    await flushPromises()
+    expect(resolvePendingReconciliation).toHaveBeenCalledWith(7, 'execution-1', expect.stringMatching(/^organization-reconciliation-/))
+
+    resolvePendingReconciliation.mockRejectedValueOnce({ response: { status: 409, data: { detail: 'evidence conflict' } } })
+    listPendingReconciliations.mockResolvedValueOnce({
+      items: [{ ...pending, conflict: true, allowed_resolution: undefined }],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1
+    })
+    await wrapper.get('[data-test="organization-reconciliation-resolve"]').trigger('click')
+    await wrapper.get('[data-test="organization-reconciliation-confirmation-confirm"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="organization-reconciliation-confirmation"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="organization-reconciliation-resolve"]').exists()).toBe(false)
+  })
+
+	it('confirms lifecycle transitions and binds archive to the refreshed balance version', async () => {
+		const active = organization()
+		const disabled = { ...active, status: 'disabled' as const }
+		const archived = { ...active, status: 'archived' as const }
+		getOrganization
+			.mockReset()
+			.mockResolvedValueOnce(active)
+			.mockResolvedValueOnce(disabled)
+			.mockResolvedValueOnce(active)
+			.mockResolvedValueOnce(archived)
+		const wrapper = mountView()
+		await flushPromises()
+		await wrapper.get('[data-test="organization-view"]').trigger('click')
+		await flushPromises()
+
+		await wrapper.get('[data-test="organization-disable"]').trigger('click')
+		await wrapper.get('[data-test="organization-lifecycle-confirmation-confirm"]').trigger('click')
+		await flushPromises()
+		expect(disableOrganization).toHaveBeenCalledWith(7)
+
+		await wrapper.get('[data-test="organization-reactivate"]').trigger('click')
+		await wrapper.get('[data-test="organization-lifecycle-confirmation-confirm"]').trigger('click')
+		await flushPromises()
+		expect(reactivateOrganization).toHaveBeenCalledWith(7)
+
+		await wrapper.get('[data-test="organization-archive"]').trigger('click')
+		await flushPromises()
+		expect(getOrganizationArchivePreview).toHaveBeenCalledWith(7)
+		expect(wrapper.get('[data-test="organization-lifecycle-section"]').text()).toContain('12.50000000')
+		await wrapper.get('[data-test="organization-lifecycle-confirmation-confirm"]').trigger('click')
+		await flushPromises()
+		expect(archiveOrganization).toHaveBeenCalledWith(7, {
+			balance_version: 3,
+			updated_at: '2026-07-28T01:00:00Z',
+			confirm_archive: true
+		})
+	})
+
+	it('ignores stale detail responses after rapidly selecting another organization or closing', async () => {
+		const organizationA = organization()
+		const organizationB = { ...organization(), id: 8, name: 'Beta', code: 'beta' }
+		const detailA = deferred<Organization>()
+		const detailB = deferred<Organization>()
+		listOrganizations.mockResolvedValue({ items: [organizationA, organizationB], total: 2, page: 1, page_size: 20, pages: 1 })
+		getOrganization.mockImplementation((id: number) => id === 7 ? detailA.promise : detailB.promise)
+
+		const wrapper = mountView()
+		await flushPromises()
+		const viewButtons = wrapper.findAll('[data-test="organization-view"]')
+		await viewButtons[0].trigger('click')
+		await viewButtons[1].trigger('click')
+		detailA.resolve({ ...organizationA, name: 'Stale Alpha' })
+		await flushPromises()
+		expect(wrapper.text()).toContain('Beta')
+		expect(wrapper.text()).not.toContain('Stale Alpha')
+
+		const openDialog = wrapper.findAllComponents(BaseDialogStub).find((dialog) => dialog.props('show'))
+		expect(openDialog).toBeTruthy()
+		openDialog!.vm.$emit('close')
+		detailB.resolve({ ...organizationB, name: 'Late Beta' })
+		await flushPromises()
+		expect(wrapper.text()).not.toContain('Late Beta')
+	})
+
+	it('discards an archive preview when selection changes and never submits it for another organization', async () => {
+		const organizationA = organization()
+		const organizationB = { ...organization(), id: 8, name: 'Beta', code: 'beta' }
+		const previewA = deferred<{
+			organization_id: number
+			status: 'active'
+			unallocated: string
+			balance_version: number
+			updated_at: string
+		}>()
+		listOrganizations.mockResolvedValue({ items: [organizationA, organizationB], total: 2, page: 1, page_size: 20, pages: 1 })
+		getOrganization.mockImplementation(async (id: number) => id === 7 ? organizationA : organizationB)
+		getOrganizationArchivePreview.mockReturnValueOnce(previewA.promise)
+
+		const wrapper = mountView()
+		await flushPromises()
+		const viewButtons = wrapper.findAll('[data-test="organization-view"]')
+		await viewButtons[0].trigger('click')
+		await flushPromises()
+		await wrapper.get('[data-test="organization-archive"]').trigger('click')
+		await viewButtons[1].trigger('click')
+		await flushPromises()
+		previewA.resolve({
+			organization_id: 7,
+			status: 'active',
+			unallocated: '12.50000000',
+			balance_version: 3,
+			updated_at: '2026-07-28T01:00:00Z'
+		})
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Beta')
+		expect(wrapper.text()).not.toContain('12.50000000')
+		expect(wrapper.find('[data-test="organization-lifecycle-confirmation"]').exists()).toBe(false)
+		expect(archiveOrganization).not.toHaveBeenCalled()
+	})
 })

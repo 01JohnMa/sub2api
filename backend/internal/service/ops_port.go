@@ -77,7 +77,10 @@ type OpsInsertErrorLogInput struct {
 	APIKeyID  *int64
 	AccountID *int64
 	GroupID   *int64
-	ClientIP  *string
+	// OrganizationID is the trusted request-time reporting dimension. It is
+	// deliberately independent from organization billing or allocation state.
+	OrganizationID *int64
+	ClientIP       *string
 
 	Platform    string
 	Model       string

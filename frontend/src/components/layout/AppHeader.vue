@@ -42,11 +42,11 @@
         <LocaleSwitcher />
 
         <!-- Subscription Progress (for users with active subscriptions) -->
-        <SubscriptionProgressMini v-if="user" />
+        <SubscriptionProgressMini v-if="showPersonalAccountControls" />
 
         <!-- Balance Display -->
         <div
-          v-if="user"
+          v-if="showPersonalAccountControls"
           class="hidden items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 dark:border-primary-800 dark:bg-primary-900/20 sm:flex"
         >
           <svg
@@ -63,7 +63,7 @@
             />
           </svg>
           <span class="text-sm font-semibold text-primary-700 dark:text-primary-300">
-            ${{ user.balance?.toFixed(2) || '0.00' }}
+            ${{ user?.balance?.toFixed(2) || '0.00' }}
           </span>
         </div>
 
@@ -106,7 +106,10 @@
               </div>
 
               <!-- Balance (mobile only) -->
-              <div class="border-b border-gray-100 px-4 py-2 dark:border-dark-700 sm:hidden">
+              <div
+                v-if="showPersonalAccountControls"
+                class="border-b border-gray-100 px-4 py-2 dark:border-dark-700 sm:hidden"
+              >
                 <div class="text-xs text-gray-500 dark:text-dark-400">
                   {{ t('common.balance') }}
                 </div>
@@ -116,15 +119,17 @@
               </div>
 
               <div class="py-1">
-                <router-link to="/profile" @click="closeDropdown" class="dropdown-item">
-                  <Icon name="user" size="sm" />
-                  {{ t('nav.profile') }}
-                </router-link>
+                <template v-if="showPersonalAccountControls">
+                  <router-link to="/profile" @click="closeDropdown" class="dropdown-item">
+                    <Icon name="user" size="sm" />
+                    {{ t('nav.profile') }}
+                  </router-link>
 
-                <router-link to="/keys" @click="closeDropdown" class="dropdown-item">
-                  <Icon name="key" size="sm" />
-                  {{ t('nav.apiKeys') }}
-                </router-link>
+                  <router-link to="/keys" @click="closeDropdown" class="dropdown-item">
+                    <Icon name="key" size="sm" />
+                    {{ t('nav.apiKeys') }}
+                  </router-link>
+                </template>
 
                 <a
                   v-if="authStore.isAdmin"
@@ -237,6 +242,9 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => appStore.docUrl)
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
+const showPersonalAccountControls = computed(() => {
+  return !!user.value && (!authStore.isOrganizationAdmin || authStore.isAdmin)
+})
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
@@ -64,13 +62,18 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	body []byte,
 	defaultMappedModel string,
 ) (*OpenAIForwardResult, error) {
+	if s == nil || account == nil || c == nil || c.Request == nil {
+		return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("organization Chat raw forwarding dependencies are unavailable"))
+	}
 	startTime := time.Now()
 
 	// 1. Parse minimal fields needed for routing/billing
 	originalModel := gjson.GetBytes(body, "model").String()
 	if originalModel == "" {
-		writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", "model is required")
-		return nil, fmt.Errorf("missing model in request")
+		if !isOrganizationResponsesDispatchContext(ctx) {
+			writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", "model is required")
+		}
+		return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("missing model in request"))
 	}
 	clientStream := gjson.GetBytes(body, "stream").Bool()
 
@@ -89,21 +92,23 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	}
 
 	// 4. Apply OpenAI fast policy on the CC body
-	updatedBody, policyErr := s.applyOpenAIFastPolicyToBody(ctx, account, upstreamModel, upstreamBody)
-	if policyErr != nil {
-		var blocked *OpenAIFastBlockedError
-		if errors.As(policyErr, &blocked) {
-			MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
-			writeChatCompletionsError(c, http.StatusForbidden, "permission_error", blocked.Message)
+	if !isOrganizationResponsesDispatchContext(ctx) {
+		updatedBody, policyErr := s.applyOpenAIFastPolicyToBody(ctx, account, upstreamModel, upstreamBody)
+		if policyErr != nil {
+			var blocked *OpenAIFastBlockedError
+			if errors.As(policyErr, &blocked) {
+				MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
+				writeChatCompletionsError(c, http.StatusForbidden, "permission_error", blocked.Message)
+			}
+			return nil, organizationChatLocalPreDispatchError(ctx, policyErr)
 		}
-		return nil, policyErr
+		upstreamBody = updatedBody
 	}
-	upstreamBody = updatedBody
 	if clientStream {
 		var usageErr error
 		upstreamBody, usageErr = ensureOpenAIChatStreamUsage(upstreamBody)
 		if usageErr != nil {
-			return nil, fmt.Errorf("enable stream usage: %w", usageErr)
+			return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("enable stream usage: %w", usageErr))
 		}
 	}
 
@@ -118,7 +123,7 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	// 5. Build upstream request
 	apiKey := account.GetOpenAIApiKey()
 	if apiKey == "" {
-		return nil, fmt.Errorf("account %d missing api_key", account.ID)
+		return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("account %d missing api_key", account.ID))
 	}
 	baseURL := account.GetOpenAIBaseURL()
 	if baseURL == "" {
@@ -126,7 +131,7 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	}
 	validatedURL, err := s.validateUpstreamBaseURL(baseURL)
 	if err != nil {
-		return nil, fmt.Errorf("invalid base_url: %w", err)
+		return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("invalid base_url: %w", err))
 	}
 	targetURL := buildOpenAIChatCompletionsURL(validatedURL)
 
@@ -134,7 +139,7 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	upstreamReq, err := http.NewRequestWithContext(upstreamCtx, http.MethodPost, targetURL, bytes.NewReader(upstreamBody))
 	releaseUpstreamCtx()
 	if err != nil {
-		return nil, fmt.Errorf("build upstream request: %w", err)
+		return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("build upstream request: %w", err))
 	}
 	upstreamReq = upstreamReq.WithContext(WithHTTPUpstreamProfile(upstreamReq.Context(), HTTPUpstreamProfileOpenAI))
 	upstreamReq.Header.Set("Content-Type", "application/json")
@@ -157,6 +162,9 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	customUA := account.GetOpenAIUserAgent()
 	if customUA != "" {
 		upstreamReq.Header.Set("user-agent", customUA)
+	}
+	if s.httpUpstream == nil {
+		return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("OpenAI upstream client is unavailable"))
 	}
 
 	// 6. Send request
@@ -209,11 +217,28 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 				Detail:             upstreamDetail,
 			})
 			s.handleOpenAIAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody, upstreamModel)
-			return nil, &UpstreamFailoverError{
+			failoverErr := &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
 				ResponseBody:           respBody,
+				ResponseHeaders:        resp.Header.Clone(),
 				RetryableOnSameAccount: account.IsPoolMode() && (account.IsPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, respBody)),
 			}
+			if usage, ok := extractOpenAIUsageFromJSONBytes(respBody); ok {
+				return &OpenAIForwardResult{
+					RequestID:       resp.Header.Get("x-request-id"),
+					Usage:           usage,
+					UsageObserved:   true,
+					Model:           originalModel,
+					BillingModel:    billingModel,
+					UpstreamModel:   upstreamModel,
+					ReasoningEffort: reasoningEffort,
+					ServiceTier:     serviceTier,
+					Stream:          clientStream,
+					ResponseHeaders: resp.Header.Clone(),
+					Duration:        time.Since(startTime),
+				}, failoverErr
+			}
+			return nil, failoverErr
 		}
 		return s.handleChatCompletionsErrorResponse(resp, c, account, billingModel)
 	}
@@ -269,6 +294,8 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
 
 	var usage OpenAIUsage
+	usageObserved := false
+	sawDone := false
 	var firstTokenMs *int
 	clientDisconnected := false
 	clientOutputStarted := false
@@ -312,10 +339,17 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 		refusalDetector.ObserveSSELine(line)
 		if payload, ok := extractOpenAISSEDataLine(line); ok {
 			trimmedPayload := strings.TrimSpace(payload)
-			if trimmedPayload != "[DONE]" {
+			if trimmedPayload == "[DONE]" {
+				sawDone = true
+			} else {
 				usageOnlyChunk := isOpenAIChatUsageOnlyStreamChunk(payload)
-				if u := extractCCStreamUsage(payload); u != nil {
-					usage = *u
+				if gjson.Get(payload, "usage").Exists() {
+					if u := extractCCStreamUsage(payload); u != nil {
+						usage = *u
+						usageObserved = true
+					} else {
+						usageObserved = false
+					}
 				}
 				if firstTokenMs == nil && !usageOnlyChunk {
 					elapsed := int(time.Since(startTime).Milliseconds())
@@ -367,16 +401,18 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 	}
 
 	return &OpenAIForwardResult{
-		RequestID:       requestID,
-		Usage:           usage,
-		Model:           originalModel,
-		BillingModel:    billingModel,
-		UpstreamModel:   upstreamModel,
-		ReasoningEffort: reasoningEffort,
-		ServiceTier:     serviceTier,
-		Stream:          true,
-		Duration:        time.Since(startTime),
-		FirstTokenMs:    firstTokenMs,
+		RequestID:        requestID,
+		Usage:            usage,
+		UsageObserved:    usageObserved && sawDone,
+		ClientDisconnect: clientDisconnected,
+		Model:            originalModel,
+		BillingModel:     billingModel,
+		UpstreamModel:    upstreamModel,
+		ReasoningEffort:  reasoningEffort,
+		ServiceTier:      serviceTier,
+		Stream:           true,
+		Duration:         time.Since(startTime),
+		FirstTokenMs:     firstTokenMs,
 	}, nil
 }
 
@@ -403,20 +439,14 @@ func isOpenAIChatUsageOnlyStreamChunk(payload string) bool {
 
 // extractCCStreamUsage 从单个 CC 流式 chunk 的 payload 中提取 usage 字段。
 // CC 协议中 usage 仅出现在末尾 chunk（且仅当 include_usage 生效时），
-// 但上游可能在多个 chunk 中重复——总是用最新值。
+// 但上游可能在多个 chunk 中重复；仅接受最新的完整 usage，partial usage
+// 会撤销已观测证明并交由组织计费进入 pending reconciliation。
 func extractCCStreamUsage(payload string) *OpenAIUsage {
-	usageResult := gjson.Get(payload, "usage")
-	if !usageResult.Exists() || !usageResult.IsObject() {
+	usage, ok := extractOpenAIUsageFromJSONBytes([]byte(payload))
+	if !ok {
 		return nil
 	}
-	u := OpenAIUsage{
-		InputTokens:  int(gjson.Get(payload, "usage.prompt_tokens").Int()),
-		OutputTokens: int(gjson.Get(payload, "usage.completion_tokens").Int()),
-	}
-	if cached := gjson.Get(payload, "usage.prompt_tokens_details.cached_tokens"); cached.Exists() {
-		u.CacheReadInputTokens = int(cached.Int())
-	}
-	return &u
+	return &usage
 }
 
 // bufferRawChatCompletions 透传上游 CC 非流式 JSON 响应。
@@ -440,17 +470,7 @@ func (s *OpenAIGatewayService) bufferRawChatCompletions(
 		return nil, fmt.Errorf("read upstream body: %w", err)
 	}
 
-	var ccResp apicompat.ChatCompletionsResponse
-	var usage OpenAIUsage
-	if err := json.Unmarshal(respBody, &ccResp); err == nil && ccResp.Usage != nil {
-		usage = OpenAIUsage{
-			InputTokens:  ccResp.Usage.PromptTokens,
-			OutputTokens: ccResp.Usage.CompletionTokens,
-		}
-		if ccResp.Usage.PromptTokensDetails != nil {
-			usage.CacheReadInputTokens = ccResp.Usage.PromptTokensDetails.CachedTokens
-		}
-	}
+	usage, usageObserved := extractOpenAIUsageFromJSONBytes(respBody)
 
 	if s.responseHeaderFilter != nil {
 		responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
@@ -466,6 +486,7 @@ func (s *OpenAIGatewayService) bufferRawChatCompletions(
 	return &OpenAIForwardResult{
 		RequestID:       requestID,
 		Usage:           usage,
+		UsageObserved:   usageObserved,
 		Model:           originalModel,
 		BillingModel:    billingModel,
 		UpstreamModel:   upstreamModel,

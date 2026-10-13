@@ -58,6 +58,32 @@ func TestBuildOrganizationResponsesRequestPolicyTreatsHTTPAliasesIdentically(t *
 	}
 }
 
+func TestBuildOrganizationResponsesRequestPolicySupportsWebSocketTurnAndPreviousResponseID(t *testing.T) {
+	body := []byte(`{"type":"response.create","model":"gpt-5.4","input":"hello","previous_response_id":"resp_123","max_output_tokens":32}`)
+	for _, path := range []string{"/v1/responses", "/responses", "/backend-api/codex/responses"} {
+		policy, err := BuildOrganizationResponsesRequestPolicy(body, OrganizationRequestShapeWebSocketResponseCreate, path)
+		require.NoError(t, err, path)
+		require.Equal(t, OrganizationRequestShapeWebSocketResponseCreate, policy.RequestShape)
+		require.Equal(t, "gpt-5.4", policy.RequestedModel)
+		require.Equal(t, 32, policy.OutputTokenCeiling)
+	}
+}
+
+func TestBuildOrganizationResponsesRequestPolicyRejectsWebSocketTurnWithoutStreamingModel(t *testing.T) {
+	_, err := BuildOrganizationResponsesRequestPolicy(
+		[]byte(`{"type":"response.create","model":"gpt-5.5-pro","input":"hello"}`),
+		OrganizationRequestShapeWebSocketResponseCreate,
+		"/v1/responses",
+	)
+
+	require.ErrorIs(t, err, ErrOrganizationResponsesUnsupportedRequest)
+}
+
+func TestOrganizationResponsesWebSocketUnsafeFailoverErrorIsStable(t *testing.T) {
+	require.Equal(t, "ORGANIZATION_RESPONSES_WS_FAILOVER_UNSUPPORTED", infraerrors.Reason(ErrOrganizationResponsesWSFailoverUnsupported))
+	require.Contains(t, infraerrors.Message(ErrOrganizationResponsesWSFailoverUnsupported), "cannot safely retry")
+}
+
 func TestBuildOrganizationResponsesRequestPolicyRejectsUnboundedOrUnsupportedShapes(t *testing.T) {
 	tests := []struct {
 		name string
@@ -117,7 +143,7 @@ func TestOrganizationResponsesCandidatePricingCeilingAndActualCostUseSameSnapsho
 	requireOrganizationMoneyLessOrEqual(t, actual, pricing.MaximumCost)
 }
 
-func TestPlanOrganizationResponsesCandidatesFreezesNativeResponsesRoutesAndExcludesChatFallback(t *testing.T) {
+func TestPlanOrganizationResponsesCandidatesFreezesNativeAndChatFallbackRoutes(t *testing.T) {
 	groupID := int64(42)
 	organizationID := int64(88)
 	role := OrganizationRoleMember
@@ -146,19 +172,19 @@ func TestPlanOrganizationResponsesCandidatesFreezesNativeResponsesRoutesAndExclu
 
 	require.NoError(t, err)
 	require.Len(t, plan.Candidates, 2)
-	require.Equal(t, []int64{1, 3}, []int64{plan.Candidates[0].AccountID, plan.Candidates[1].AccountID})
+	require.Equal(t, []int64{1, 2}, []int64{plan.Candidates[0].AccountID, plan.Candidates[1].AccountID})
 	require.Equal(t, 2, plan.MaximumAttempts)
 	require.NotEmpty(t, plan.CandidateSnapshot)
-	require.NotContains(t, string(plan.CandidateSnapshot), "chat fallback")
+	require.Equal(t, OrganizationResponsesRouteChatFallback, plan.Candidates[1].Route)
 	require.NotContains(t, string(plan.CandidateSnapshot), "credentials")
 	expectedInputCeiling := organizationResponsesInputTokenCeiling(body) + (len(defaultCodexSynthInstructions(plan.Policy.RequestedModel))+4096)*organizationResponsesMaximumInputBodyMultiplier
 	require.Equal(t, expectedInputCeiling, plan.Candidates[0].Pricing.InputTokenCeiling, "instructions ceiling must use the model Forward sees before account mapping")
 	require.Equal(t, 128000, plan.Candidates[0].Pricing.OutputTokenCeiling, "OAuth removes the client cap and must reserve the verified model maximum")
 	require.Greater(t, plan.Candidates[0].Pricing.InputTokenCeiling, plan.Policy.InputTokenCeiling, "OAuth server instructions must be included in the ceiling")
-	require.Greater(t, plan.Candidates[1].Pricing.InputTokenCeiling, plan.Policy.InputTokenCeiling, "API key server instructions must be included in the ceiling")
+	require.Greater(t, plan.Candidates[1].Pricing.InputTokenCeiling, plan.Policy.InputTokenCeiling, "fallback API key server instructions must be included in the ceiling")
 	require.Equal(t, 64, plan.Candidates[1].Pricing.OutputTokenCeiling)
 	require.Equal(t, 1.25, plan.Candidates[1].Pricing.RateMultiplier)
-	require.Equal(t, 1.1, plan.Candidates[1].Pricing.AccountMultiplier)
+	require.Equal(t, 1.0, plan.Candidates[1].Pricing.AccountMultiplier)
 }
 
 func TestBuildOrganizationResponsesRequestPolicyRejectsUnsupportedModelStreaming(t *testing.T) {

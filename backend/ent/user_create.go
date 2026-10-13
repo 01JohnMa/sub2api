@@ -15,6 +15,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/organization"
+	"github.com/Wei-Shaw/sub2api/ent/organizationallocation"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecution"
+	"github.com/Wei-Shaw/sub2api/ent/organizationfinalexecutionevidence"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -140,6 +144,34 @@ func (_c *UserCreate) SetStatus(v string) *UserCreate {
 func (_c *UserCreate) SetNillableStatus(v *string) *UserCreate {
 	if v != nil {
 		_c.SetStatus(*v)
+	}
+	return _c
+}
+
+// SetOrganizationID sets the "organization_id" field.
+func (_c *UserCreate) SetOrganizationID(v int64) *UserCreate {
+	_c.mutation.SetOrganizationID(v)
+	return _c
+}
+
+// SetNillableOrganizationID sets the "organization_id" field if the given value is not nil.
+func (_c *UserCreate) SetNillableOrganizationID(v *int64) *UserCreate {
+	if v != nil {
+		_c.SetOrganizationID(*v)
+	}
+	return _c
+}
+
+// SetOrganizationRole sets the "organization_role" field.
+func (_c *UserCreate) SetOrganizationRole(v string) *UserCreate {
+	_c.mutation.SetOrganizationRole(v)
+	return _c
+}
+
+// SetNillableOrganizationRole sets the "organization_role" field if the given value is not nil.
+func (_c *UserCreate) SetNillableOrganizationRole(v *string) *UserCreate {
+	if v != nil {
+		_c.SetOrganizationRole(*v)
 	}
 	return _c
 }
@@ -535,6 +567,56 @@ func (_c *UserCreate) AddPlatformQuotas(v ...*UserPlatformQuota) *UserCreate {
 	return _c.AddPlatformQuotaIDs(ids...)
 }
 
+// SetOrganization sets the "organization" edge to the Organization entity.
+func (_c *UserCreate) SetOrganization(v *Organization) *UserCreate {
+	return _c.SetOrganizationID(v.ID)
+}
+
+// AddOrganizationAllocationIDs adds the "organization_allocations" edge to the OrganizationAllocation entity by IDs.
+func (_c *UserCreate) AddOrganizationAllocationIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddOrganizationAllocationIDs(ids...)
+	return _c
+}
+
+// AddOrganizationAllocations adds the "organization_allocations" edges to the OrganizationAllocation entity.
+func (_c *UserCreate) AddOrganizationAllocations(v ...*OrganizationAllocation) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddOrganizationAllocationIDs(ids...)
+}
+
+// AddOrganizationExecutionIDs adds the "organization_executions" edge to the OrganizationExecution entity by IDs.
+func (_c *UserCreate) AddOrganizationExecutionIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddOrganizationExecutionIDs(ids...)
+	return _c
+}
+
+// AddOrganizationExecutions adds the "organization_executions" edges to the OrganizationExecution entity.
+func (_c *UserCreate) AddOrganizationExecutions(v ...*OrganizationExecution) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddOrganizationExecutionIDs(ids...)
+}
+
+// AddOrganizationFinalExecutionEvidenceIDs adds the "organization_final_execution_evidences" edge to the OrganizationFinalExecutionEvidence entity by IDs.
+func (_c *UserCreate) AddOrganizationFinalExecutionEvidenceIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddOrganizationFinalExecutionEvidenceIDs(ids...)
+	return _c
+}
+
+// AddOrganizationFinalExecutionEvidences adds the "organization_final_execution_evidences" edges to the OrganizationFinalExecutionEvidence entity.
+func (_c *UserCreate) AddOrganizationFinalExecutionEvidences(v ...*OrganizationFinalExecutionEvidence) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddOrganizationFinalExecutionEvidenceIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_c *UserCreate) Mutation() *UserMutation {
 	return _c.mutation
@@ -687,6 +769,11 @@ func (_c *UserCreate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "User.status": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.OrganizationRole(); ok {
+		if err := user.OrganizationRoleValidator(v); err != nil {
+			return &ValidationError{Name: "organization_role", err: fmt.Errorf(`ent: validator failed for field "User.organization_role": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.Username(); !ok {
 		return &ValidationError{Name: "username", err: errors.New(`ent: missing required field "User.username"`)}
 	}
@@ -786,6 +873,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.OrganizationRole(); ok {
+		_spec.SetField(user.FieldOrganizationRole, field.TypeString, value)
+		_node.OrganizationRole = &value
 	}
 	if value, ok := _c.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)
@@ -1055,6 +1146,71 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
+	if nodes := _c.mutation.OrganizationIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   user.OrganizationTable,
+			Columns: []string{user.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.OrganizationID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.OrganizationAllocationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationAllocationsTable,
+			Columns: []string{user.OrganizationAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationallocation.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.OrganizationExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationExecutionsTable,
+			Columns: []string{user.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.OrganizationFinalExecutionEvidencesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{user.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	return _node, _spec
 }
 
@@ -1218,6 +1374,42 @@ func (u *UserUpsert) SetStatus(v string) *UserUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *UserUpsert) UpdateStatus() *UserUpsert {
 	u.SetExcluded(user.FieldStatus)
+	return u
+}
+
+// SetOrganizationID sets the "organization_id" field.
+func (u *UserUpsert) SetOrganizationID(v int64) *UserUpsert {
+	u.Set(user.FieldOrganizationID, v)
+	return u
+}
+
+// UpdateOrganizationID sets the "organization_id" field to the value that was provided on create.
+func (u *UserUpsert) UpdateOrganizationID() *UserUpsert {
+	u.SetExcluded(user.FieldOrganizationID)
+	return u
+}
+
+// ClearOrganizationID clears the value of the "organization_id" field.
+func (u *UserUpsert) ClearOrganizationID() *UserUpsert {
+	u.SetNull(user.FieldOrganizationID)
+	return u
+}
+
+// SetOrganizationRole sets the "organization_role" field.
+func (u *UserUpsert) SetOrganizationRole(v string) *UserUpsert {
+	u.Set(user.FieldOrganizationRole, v)
+	return u
+}
+
+// UpdateOrganizationRole sets the "organization_role" field to the value that was provided on create.
+func (u *UserUpsert) UpdateOrganizationRole() *UserUpsert {
+	u.SetExcluded(user.FieldOrganizationRole)
+	return u
+}
+
+// ClearOrganizationRole clears the value of the "organization_role" field.
+func (u *UserUpsert) ClearOrganizationRole() *UserUpsert {
+	u.SetNull(user.FieldOrganizationRole)
 	return u
 }
 
@@ -1612,6 +1804,48 @@ func (u *UserUpsertOne) SetStatus(v string) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateStatus() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetOrganizationID sets the "organization_id" field.
+func (u *UserUpsertOne) SetOrganizationID(v int64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetOrganizationID(v)
+	})
+}
+
+// UpdateOrganizationID sets the "organization_id" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateOrganizationID() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateOrganizationID()
+	})
+}
+
+// ClearOrganizationID clears the value of the "organization_id" field.
+func (u *UserUpsertOne) ClearOrganizationID() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearOrganizationID()
+	})
+}
+
+// SetOrganizationRole sets the "organization_role" field.
+func (u *UserUpsertOne) SetOrganizationRole(v string) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetOrganizationRole(v)
+	})
+}
+
+// UpdateOrganizationRole sets the "organization_role" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateOrganizationRole() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateOrganizationRole()
+	})
+}
+
+// ClearOrganizationRole clears the value of the "organization_role" field.
+func (u *UserUpsertOne) ClearOrganizationRole() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearOrganizationRole()
 	})
 }
 
@@ -2208,6 +2442,48 @@ func (u *UserUpsertBulk) SetStatus(v string) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateStatus() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetOrganizationID sets the "organization_id" field.
+func (u *UserUpsertBulk) SetOrganizationID(v int64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetOrganizationID(v)
+	})
+}
+
+// UpdateOrganizationID sets the "organization_id" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateOrganizationID() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateOrganizationID()
+	})
+}
+
+// ClearOrganizationID clears the value of the "organization_id" field.
+func (u *UserUpsertBulk) ClearOrganizationID() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearOrganizationID()
+	})
+}
+
+// SetOrganizationRole sets the "organization_role" field.
+func (u *UserUpsertBulk) SetOrganizationRole(v string) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetOrganizationRole(v)
+	})
+}
+
+// UpdateOrganizationRole sets the "organization_role" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateOrganizationRole() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateOrganizationRole()
+	})
+}
+
+// ClearOrganizationRole clears the value of the "organization_role" field.
+func (u *UserUpsertBulk) ClearOrganizationRole() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearOrganizationRole()
 	})
 }
 

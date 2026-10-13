@@ -21,14 +21,9 @@ func RegisterOrganizationRoutes(
 	{
 		organization.GET("", h.Organization.GetCurrent)
 		organization.GET("/members", h.Organization.ListCurrentMembers)
-		organization.GET("/balance", h.Organization.GetCurrentBalance)
+		organization.GET("/report", h.Organization.GetCurrentReport)
+		organization.GET("/report/members", h.Organization.ListCurrentReportMembers)
 		organization.POST("/members", h.Organization.AddCurrentMember)
 		organization.DELETE("/members/:user_id", h.Organization.RemoveCurrentMember)
-		organization.POST("/allocations/equal/preview", h.Organization.PreviewEqualAllocation)
-		organization.POST("/allocations/equal", h.Organization.ExecuteEqualAllocation)
-		organization.POST("/allocations/custom/preview", h.Organization.PreviewCustomAllocation)
-		organization.POST("/allocations/custom", h.Organization.ExecuteCustomAllocation)
-		organization.POST("/allocations/reclaim/preview", h.Organization.PreviewReclaimAllocation)
-		organization.POST("/allocations/reclaim", h.Organization.ExecuteReclaimAllocation)
 	}
 }

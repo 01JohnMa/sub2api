@@ -23,6 +23,20 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/organization"
+	"github.com/Wei-Shaw/sub2api/ent/organizationallocation"
+	"github.com/Wei-Shaw/sub2api/ent/organizationattemptaccounteffect"
+	"github.com/Wei-Shaw/sub2api/ent/organizationattemptaccountposting"
+	"github.com/Wei-Shaw/sub2api/ent/organizationattemptevidence"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecution"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionattempt"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionincident"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionoutbox"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionreconciliationaudit"
+	"github.com/Wei-Shaw/sub2api/ent/organizationfinalexecutionevidence"
+	"github.com/Wei-Shaw/sub2api/ent/organizationledgeroperation"
+	"github.com/Wei-Shaw/sub2api/ent/organizationledgerposting"
+	"github.com/Wei-Shaw/sub2api/ent/organizationreservation"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
@@ -505,6 +519,384 @@ func (f TraverseIdentityAdoptionDecision) Traverse(ctx context.Context, q ent.Qu
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.IdentityAdoptionDecisionQuery", q)
+}
+
+// The OrganizationFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationFunc func(context.Context, *ent.OrganizationQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationQuery", q)
+}
+
+// The TraverseOrganization type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganization func(context.Context, *ent.OrganizationQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganization) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganization) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationQuery", q)
+}
+
+// The OrganizationAllocationFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationAllocationFunc func(context.Context, *ent.OrganizationAllocationQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationAllocationFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationAllocationQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationAllocationQuery", q)
+}
+
+// The TraverseOrganizationAllocation type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationAllocation func(context.Context, *ent.OrganizationAllocationQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationAllocation) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationAllocation) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationAllocationQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationAllocationQuery", q)
+}
+
+// The OrganizationAttemptAccountEffectFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationAttemptAccountEffectFunc func(context.Context, *ent.OrganizationAttemptAccountEffectQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationAttemptAccountEffectFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationAttemptAccountEffectQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationAttemptAccountEffectQuery", q)
+}
+
+// The TraverseOrganizationAttemptAccountEffect type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationAttemptAccountEffect func(context.Context, *ent.OrganizationAttemptAccountEffectQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationAttemptAccountEffect) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationAttemptAccountEffect) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationAttemptAccountEffectQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationAttemptAccountEffectQuery", q)
+}
+
+// The OrganizationAttemptAccountPostingFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationAttemptAccountPostingFunc func(context.Context, *ent.OrganizationAttemptAccountPostingQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationAttemptAccountPostingFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationAttemptAccountPostingQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationAttemptAccountPostingQuery", q)
+}
+
+// The TraverseOrganizationAttemptAccountPosting type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationAttemptAccountPosting func(context.Context, *ent.OrganizationAttemptAccountPostingQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationAttemptAccountPosting) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationAttemptAccountPosting) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationAttemptAccountPostingQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationAttemptAccountPostingQuery", q)
+}
+
+// The OrganizationAttemptEvidenceFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationAttemptEvidenceFunc func(context.Context, *ent.OrganizationAttemptEvidenceQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationAttemptEvidenceFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationAttemptEvidenceQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationAttemptEvidenceQuery", q)
+}
+
+// The TraverseOrganizationAttemptEvidence type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationAttemptEvidence func(context.Context, *ent.OrganizationAttemptEvidenceQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationAttemptEvidence) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationAttemptEvidence) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationAttemptEvidenceQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationAttemptEvidenceQuery", q)
+}
+
+// The OrganizationExecutionFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationExecutionFunc func(context.Context, *ent.OrganizationExecutionQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationExecutionFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationExecutionQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationExecutionQuery", q)
+}
+
+// The TraverseOrganizationExecution type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationExecution func(context.Context, *ent.OrganizationExecutionQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationExecution) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationExecution) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationExecutionQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationExecutionQuery", q)
+}
+
+// The OrganizationExecutionAttemptFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationExecutionAttemptFunc func(context.Context, *ent.OrganizationExecutionAttemptQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationExecutionAttemptFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationExecutionAttemptQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationExecutionAttemptQuery", q)
+}
+
+// The TraverseOrganizationExecutionAttempt type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationExecutionAttempt func(context.Context, *ent.OrganizationExecutionAttemptQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationExecutionAttempt) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationExecutionAttempt) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationExecutionAttemptQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationExecutionAttemptQuery", q)
+}
+
+// The OrganizationExecutionIncidentFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationExecutionIncidentFunc func(context.Context, *ent.OrganizationExecutionIncidentQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationExecutionIncidentFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationExecutionIncidentQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationExecutionIncidentQuery", q)
+}
+
+// The TraverseOrganizationExecutionIncident type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationExecutionIncident func(context.Context, *ent.OrganizationExecutionIncidentQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationExecutionIncident) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationExecutionIncident) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationExecutionIncidentQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationExecutionIncidentQuery", q)
+}
+
+// The OrganizationExecutionOutboxFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationExecutionOutboxFunc func(context.Context, *ent.OrganizationExecutionOutboxQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationExecutionOutboxFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationExecutionOutboxQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationExecutionOutboxQuery", q)
+}
+
+// The TraverseOrganizationExecutionOutbox type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationExecutionOutbox func(context.Context, *ent.OrganizationExecutionOutboxQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationExecutionOutbox) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationExecutionOutbox) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationExecutionOutboxQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationExecutionOutboxQuery", q)
+}
+
+// The OrganizationExecutionReconciliationAuditFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationExecutionReconciliationAuditFunc func(context.Context, *ent.OrganizationExecutionReconciliationAuditQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationExecutionReconciliationAuditFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationExecutionReconciliationAuditQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationExecutionReconciliationAuditQuery", q)
+}
+
+// The TraverseOrganizationExecutionReconciliationAudit type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationExecutionReconciliationAudit func(context.Context, *ent.OrganizationExecutionReconciliationAuditQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationExecutionReconciliationAudit) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationExecutionReconciliationAudit) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationExecutionReconciliationAuditQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationExecutionReconciliationAuditQuery", q)
+}
+
+// The OrganizationFinalExecutionEvidenceFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationFinalExecutionEvidenceFunc func(context.Context, *ent.OrganizationFinalExecutionEvidenceQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationFinalExecutionEvidenceFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationFinalExecutionEvidenceQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationFinalExecutionEvidenceQuery", q)
+}
+
+// The TraverseOrganizationFinalExecutionEvidence type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationFinalExecutionEvidence func(context.Context, *ent.OrganizationFinalExecutionEvidenceQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationFinalExecutionEvidence) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationFinalExecutionEvidence) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationFinalExecutionEvidenceQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationFinalExecutionEvidenceQuery", q)
+}
+
+// The OrganizationLedgerOperationFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationLedgerOperationFunc func(context.Context, *ent.OrganizationLedgerOperationQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationLedgerOperationFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationLedgerOperationQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationLedgerOperationQuery", q)
+}
+
+// The TraverseOrganizationLedgerOperation type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationLedgerOperation func(context.Context, *ent.OrganizationLedgerOperationQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationLedgerOperation) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationLedgerOperation) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationLedgerOperationQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationLedgerOperationQuery", q)
+}
+
+// The OrganizationLedgerPostingFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationLedgerPostingFunc func(context.Context, *ent.OrganizationLedgerPostingQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationLedgerPostingFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationLedgerPostingQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationLedgerPostingQuery", q)
+}
+
+// The TraverseOrganizationLedgerPosting type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationLedgerPosting func(context.Context, *ent.OrganizationLedgerPostingQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationLedgerPosting) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationLedgerPosting) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationLedgerPostingQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationLedgerPostingQuery", q)
+}
+
+// The OrganizationReservationFunc type is an adapter to allow the use of ordinary function as a Querier.
+type OrganizationReservationFunc func(context.Context, *ent.OrganizationReservationQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f OrganizationReservationFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.OrganizationReservationQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.OrganizationReservationQuery", q)
+}
+
+// The TraverseOrganizationReservation type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseOrganizationReservation func(context.Context, *ent.OrganizationReservationQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseOrganizationReservation) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseOrganizationReservation) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.OrganizationReservationQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.OrganizationReservationQuery", q)
 }
 
 // The PaymentAuditLogFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1080,6 +1472,34 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.IdempotencyRecordQuery, predicate.IdempotencyRecord, idempotencyrecord.OrderOption]{typ: ent.TypeIdempotencyRecord, tq: q}, nil
 	case *ent.IdentityAdoptionDecisionQuery:
 		return &query[*ent.IdentityAdoptionDecisionQuery, predicate.IdentityAdoptionDecision, identityadoptiondecision.OrderOption]{typ: ent.TypeIdentityAdoptionDecision, tq: q}, nil
+	case *ent.OrganizationQuery:
+		return &query[*ent.OrganizationQuery, predicate.Organization, organization.OrderOption]{typ: ent.TypeOrganization, tq: q}, nil
+	case *ent.OrganizationAllocationQuery:
+		return &query[*ent.OrganizationAllocationQuery, predicate.OrganizationAllocation, organizationallocation.OrderOption]{typ: ent.TypeOrganizationAllocation, tq: q}, nil
+	case *ent.OrganizationAttemptAccountEffectQuery:
+		return &query[*ent.OrganizationAttemptAccountEffectQuery, predicate.OrganizationAttemptAccountEffect, organizationattemptaccounteffect.OrderOption]{typ: ent.TypeOrganizationAttemptAccountEffect, tq: q}, nil
+	case *ent.OrganizationAttemptAccountPostingQuery:
+		return &query[*ent.OrganizationAttemptAccountPostingQuery, predicate.OrganizationAttemptAccountPosting, organizationattemptaccountposting.OrderOption]{typ: ent.TypeOrganizationAttemptAccountPosting, tq: q}, nil
+	case *ent.OrganizationAttemptEvidenceQuery:
+		return &query[*ent.OrganizationAttemptEvidenceQuery, predicate.OrganizationAttemptEvidence, organizationattemptevidence.OrderOption]{typ: ent.TypeOrganizationAttemptEvidence, tq: q}, nil
+	case *ent.OrganizationExecutionQuery:
+		return &query[*ent.OrganizationExecutionQuery, predicate.OrganizationExecution, organizationexecution.OrderOption]{typ: ent.TypeOrganizationExecution, tq: q}, nil
+	case *ent.OrganizationExecutionAttemptQuery:
+		return &query[*ent.OrganizationExecutionAttemptQuery, predicate.OrganizationExecutionAttempt, organizationexecutionattempt.OrderOption]{typ: ent.TypeOrganizationExecutionAttempt, tq: q}, nil
+	case *ent.OrganizationExecutionIncidentQuery:
+		return &query[*ent.OrganizationExecutionIncidentQuery, predicate.OrganizationExecutionIncident, organizationexecutionincident.OrderOption]{typ: ent.TypeOrganizationExecutionIncident, tq: q}, nil
+	case *ent.OrganizationExecutionOutboxQuery:
+		return &query[*ent.OrganizationExecutionOutboxQuery, predicate.OrganizationExecutionOutbox, organizationexecutionoutbox.OrderOption]{typ: ent.TypeOrganizationExecutionOutbox, tq: q}, nil
+	case *ent.OrganizationExecutionReconciliationAuditQuery:
+		return &query[*ent.OrganizationExecutionReconciliationAuditQuery, predicate.OrganizationExecutionReconciliationAudit, organizationexecutionreconciliationaudit.OrderOption]{typ: ent.TypeOrganizationExecutionReconciliationAudit, tq: q}, nil
+	case *ent.OrganizationFinalExecutionEvidenceQuery:
+		return &query[*ent.OrganizationFinalExecutionEvidenceQuery, predicate.OrganizationFinalExecutionEvidence, organizationfinalexecutionevidence.OrderOption]{typ: ent.TypeOrganizationFinalExecutionEvidence, tq: q}, nil
+	case *ent.OrganizationLedgerOperationQuery:
+		return &query[*ent.OrganizationLedgerOperationQuery, predicate.OrganizationLedgerOperation, organizationledgeroperation.OrderOption]{typ: ent.TypeOrganizationLedgerOperation, tq: q}, nil
+	case *ent.OrganizationLedgerPostingQuery:
+		return &query[*ent.OrganizationLedgerPostingQuery, predicate.OrganizationLedgerPosting, organizationledgerposting.OrderOption]{typ: ent.TypeOrganizationLedgerPosting, tq: q}, nil
+	case *ent.OrganizationReservationQuery:
+		return &query[*ent.OrganizationReservationQuery, predicate.OrganizationReservation, organizationreservation.OrderOption]{typ: ent.TypeOrganizationReservation, tq: q}, nil
 	case *ent.PaymentAuditLogQuery:
 		return &query[*ent.PaymentAuditLogQuery, predicate.PaymentAuditLog, paymentauditlog.OrderOption]{typ: ent.TypePaymentAuditLog, tq: q}, nil
 	case *ent.PaymentOrderQuery:

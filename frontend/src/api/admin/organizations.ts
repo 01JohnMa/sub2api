@@ -14,15 +14,20 @@ import type {
   OrganizationAllocationResult,
   Organization,
   OrganizationBalanceSummary,
+	OrganizationArchivePreview,
   OrganizationFundingResult,
   OrganizationLedgerEntry,
   OrganizationMember,
   OrganizationMemberRemovalResult,
+	OrganizationPendingReconciliation,
+	OrganizationPendingReconciliationResult,
+	OrganizationReport,
   OrganizationRole,
   OrganizationStatus,
   PaginatedResponse,
   UpdateOrganizationRequest,
   RemoveOrganizationMemberRequest,
+	ArchiveOrganizationRequest,
   UpdateOrganizationMemberRoleRequest
 } from '@/types'
 
@@ -67,6 +72,26 @@ export async function update(
   request: UpdateOrganizationRequest
 ): Promise<Organization> {
   const { data } = await apiClient.put<Organization>(`/admin/organizations/${id}`, request)
+  return data
+}
+
+export async function disable(id: number): Promise<Organization> {
+  const { data } = await apiClient.post<Organization>(`/admin/organizations/${id}/disable`)
+  return data
+}
+
+export async function reactivate(id: number): Promise<Organization> {
+  const { data } = await apiClient.post<Organization>(`/admin/organizations/${id}/reactivate`)
+  return data
+}
+
+export async function getArchivePreview(id: number): Promise<OrganizationArchivePreview> {
+  const { data } = await apiClient.get<OrganizationArchivePreview>(`/admin/organizations/${id}/archive-preview`)
+  return data
+}
+
+export async function archive(id: number, request: ArchiveOrganizationRequest): Promise<Organization> {
+  const { data } = await apiClient.post<Organization>(`/admin/organizations/${id}/archive`, request)
   return data
 }
 
@@ -126,6 +151,46 @@ export async function removeMember(
 export async function getBalance(id: number): Promise<OrganizationBalanceSummary> {
   const { data } = await apiClient.get<OrganizationBalanceSummary>(`/admin/organizations/${id}/balance`)
   return data
+}
+
+export async function getReport(id: number, start: string, end: string): Promise<OrganizationReport> {
+	const { data } = await apiClient.get<OrganizationReport>(`/admin/organizations/${id}/report`, { params: { start, end } })
+	return data
+}
+
+export async function listPendingReconciliations(
+	id: number,
+	page: number = 1,
+	pageSize: number = 20
+): Promise<PaginatedResponse<OrganizationPendingReconciliation>> {
+	const { data } = await apiClient.get<PaginatedResponse<OrganizationPendingReconciliation>>(
+		`/admin/organizations/${id}/pending-reconciliations`,
+		{ params: { page, page_size: pageSize } }
+	)
+	return data
+}
+
+export async function getPendingReconciliation(
+	id: number,
+	executionID: string
+): Promise<OrganizationPendingReconciliation> {
+	const { data } = await apiClient.get<OrganizationPendingReconciliation>(
+		`/admin/organizations/${id}/pending-reconciliations/${executionID}`
+	)
+	return data
+}
+
+export async function resolvePendingReconciliation(
+	id: number,
+	executionID: string,
+	idempotencyKey: string
+): Promise<OrganizationPendingReconciliationResult> {
+	const { data } = await apiClient.post<OrganizationPendingReconciliationResult>(
+		`/admin/organizations/${id}/pending-reconciliations/${executionID}/resolve`,
+		{},
+		{ headers: { 'Idempotency-Key': idempotencyKey } }
+	)
+	return data
 }
 
 export async function listLedger(
@@ -214,11 +279,19 @@ const organizationsAPI = {
   getById,
   create,
   update,
+	disable,
+	reactivate,
+	getArchivePreview,
+	archive,
   listMembers,
   addMember,
   updateMemberRole,
   removeMember,
   getBalance,
+	getReport,
+  listPendingReconciliations,
+	getPendingReconciliation,
+	resolvePendingReconciliation,
   listLedger,
   credit,
   previewAllocation,

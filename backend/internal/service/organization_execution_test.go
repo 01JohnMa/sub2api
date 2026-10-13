@@ -94,6 +94,9 @@ type organizationExecutionRecoveryRepositoryStub struct {
 	pendingCommands  []OrganizationPendingAttemptCommand
 	reconcileCommand OrganizationPendingReconciliationCommand
 	reconcileResult  *OrganizationFinalExecutionEvidenceResult
+	pendingItems     []OrganizationPendingReconciliation
+	pendingPage      *OrganizationPendingReconciliationPage
+	pendingItem      *OrganizationPendingReconciliation
 }
 
 type organizationExecutionAutomaticEffectsRepositoryStub struct {
@@ -127,6 +130,14 @@ func (r *organizationExecutionRecoveryRepositoryStub) ReconcilePendingExecution(
 		return nil, errors.New("unexpected reconciliation")
 	}
 	return r.reconcileResult, nil
+}
+
+func (r *organizationExecutionRecoveryRepositoryStub) ListPendingReconciliations(_ context.Context, _ int64, _ OrganizationPendingReconciliationListParams) ([]OrganizationPendingReconciliation, *OrganizationPendingReconciliationPage, error) {
+	return r.pendingItems, r.pendingPage, nil
+}
+
+func (r *organizationExecutionRecoveryRepositoryStub) GetPendingReconciliation(_ context.Context, _ int64, _ string) (*OrganizationPendingReconciliation, error) {
+	return r.pendingItem, nil
 }
 
 func (r *organizationExecutionRecoveryRepositoryStub) RedriveAttemptAccountEffect(context.Context, string) (*OrganizationAttemptAccountEffectResult, error) {

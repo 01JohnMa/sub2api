@@ -409,7 +409,11 @@ func (a *organizationResponsesHTTPAdapter) resultForForward(
 			}, a.lastErr
 		}
 		if candidate.Account.Type == service.AccountTypeOAuth {
-			a.handler.gatewayService.UpdateCodexUsageSnapshotFromHeaders(a.c.Request.Context(), candidate.AccountID, result.ResponseHeaders)
+			requestContext := context.Background()
+			if a.c != nil && a.c.Request != nil {
+				requestContext = a.c.Request.Context()
+			}
+			a.handler.gatewayService.UpdateCodexUsageSnapshotFromHeaders(requestContext, candidate.AccountID, result.ResponseHeaders)
 		}
 		rawCost, tokens, err := a.handler.gatewayService.CalculateOrganizationResponsesActualCost(candidate, result)
 		if err != nil {
@@ -431,7 +435,8 @@ func (a *organizationResponsesHTTPAdapter) resultForForward(
 	}
 
 	var failoverErr *service.UpstreamFailoverError
-	if errors.As(forwardErr, &failoverErr) && !failoverErr.NoHTTPResponse && a.c.Writer.Size() == writerSizeBefore {
+	writerSizeUnchanged := a.c == nil || a.c.Writer == nil || a.c.Writer.Size() == writerSizeBefore
+	if errors.As(forwardErr, &failoverErr) && !failoverErr.NoHTTPResponse && writerSizeUnchanged {
 		a.handler.gatewayService.ReportOpenAIAccountScheduleResult(candidate.AccountID, false, nil)
 		a.handler.gatewayService.RecordOpenAIAccountSwitch()
 		a.lastFailover = failoverErr
@@ -441,9 +446,9 @@ func (a *organizationResponsesHTTPAdapter) resultForForward(
 			Observation: a.observation(request, candidate, nil, "0", service.UsageTokens{}, forwardErr, now),
 		}, nil
 	}
-	if isOrganizationResponsesProvenLocalRejection(forwardErr) {
+	if zeroProof, proven := organizationResponsesProvenLocalZeroProof(forwardErr); proven {
 		a.lastErr = forwardErr
-		a.zeroProof = "local_policy_rejected"
+		a.zeroProof = zeroProof
 		return &service.OrganizationExecutionAttemptResult{
 			Dispatched: false, TerminalOutcome: service.OrganizationExecutionTerminalOutcomeError, ZeroProof: a.zeroProof,
 		}, nil
@@ -499,22 +504,29 @@ func (a *organizationResponsesHTTPAdapter) pendingObservation(request service.Or
 	}
 }
 
-func isOrganizationResponsesProvenLocalRejection(err error) bool {
+func organizationResponsesProvenLocalZeroProof(err error) (string, bool) {
 	if err == nil {
-		return false
+		return "", false
 	}
 	var betaBlocked *service.BetaBlockedError
 	if errors.As(err, &betaBlocked) {
-		return true
+		return "local_policy_rejected", true
 	}
 	var fastBlocked *service.OpenAIFastBlockedError
 	if errors.As(err, &fastBlocked) {
-		return true
+		return "local_policy_rejected", true
 	}
 	var codexRestricted *service.OpenAICodexClientRestrictionError
 	if errors.As(err, &codexRestricted) {
-		return true
+		return "local_policy_rejected", true
 	}
 	var localPreDispatch *service.OpenAILocalPreDispatchError
-	return errors.As(err, &localPreDispatch)
+	if !errors.As(err, &localPreDispatch) {
+		return "", false
+	}
+	zeroProof := strings.TrimSpace(localPreDispatch.ZeroProof)
+	if zeroProof == "" {
+		zeroProof = "local_policy_rejected"
+	}
+	return zeroProof, true
 }

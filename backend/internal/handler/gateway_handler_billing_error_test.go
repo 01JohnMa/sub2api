@@ -48,6 +48,18 @@ func TestBillingErrorDetails_BillingServiceUnavailableMapsTo503(t *testing.T) {
 	require.Equal(t, 0, retryAfter, "non-RPM errors should not set Retry-After")
 }
 
+func TestBillingErrorDetails_OrganizationAdmissionErrors(t *testing.T) {
+	status, code, _, retryAfter := billingErrorDetails(service.ErrOrganizationBillingUnavailable)
+	require.Equal(t, http.StatusServiceUnavailable, status)
+	require.Equal(t, "organization_billing_unavailable", code)
+	require.Zero(t, retryAfter)
+
+	status, code, _, retryAfter = billingErrorDetails(service.ErrOrganizationAllocationInsufficient)
+	require.Equal(t, http.StatusConflict, status)
+	require.Equal(t, "organization_allocation_insufficient", code)
+	require.Zero(t, retryAfter)
+}
+
 func TestBillingErrorDetails_UnknownErrorFallsBackTo403(t *testing.T) {
 	status, code, msg, _ := billingErrorDetails(service.ErrInsufficientBalance)
 	require.Equal(t, http.StatusForbidden, status)

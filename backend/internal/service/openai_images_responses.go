@@ -934,6 +934,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthStreamingResponse(
 	responseFormat string,
 	streamPrefix string,
 	fallbackModel string,
+	clientDisconnectedOut *bool,
 ) (OpenAIUsage, int, []string, *int, error) {
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	c.Header("Content-Type", "text/event-stream")
@@ -961,6 +962,11 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthStreamingResponse(
 	streamMeta := openAIResponsesImageResult{Model: strings.TrimSpace(fallbackModel)}
 	var createdAt int64
 	clientDisconnected := false
+	defer func() {
+		if clientDisconnectedOut != nil {
+			*clientDisconnectedOut = clientDisconnected
+		}
+	}()
 	lastDownstreamWriteAt := time.Now()
 	var sseData openAISSEDataAccumulator
 	var processDataErr error
@@ -1370,13 +1376,14 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 	defer func() { _ = resp.Body.Close() }()
 
 	var (
-		usage            OpenAIUsage
-		imageCount       int
-		imageOutputSizes []string
-		firstTokenMs     *int
+		usage              OpenAIUsage
+		imageCount         int
+		imageOutputSizes   []string
+		firstTokenMs       *int
+		clientDisconnected bool
 	)
 	if parsed.Stream {
-		usage, imageCount, imageOutputSizes, firstTokenMs, err = s.handleOpenAIImagesOAuthStreamingResponse(resp, c, startTime, parsed.ResponseFormat, openAIImagesStreamPrefix(parsed), requestModel)
+		usage, imageCount, imageOutputSizes, firstTokenMs, err = s.handleOpenAIImagesOAuthStreamingResponse(resp, c, startTime, parsed.ResponseFormat, openAIImagesStreamPrefix(parsed), requestModel, &clientDisconnected)
 		if err != nil {
 			if imageCount > 0 {
 				return &OpenAIForwardResult{
@@ -1392,6 +1399,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 					ImageSize:        parsed.SizeTier,
 					ImageInputSize:   parsed.Size,
 					ImageOutputSizes: imageOutputSizes,
+					ClientDisconnect: clientDisconnected,
 				}, err
 			}
 			return nil, err
@@ -1401,9 +1409,6 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 		if err != nil {
 			return nil, err
 		}
-	}
-	if imageCount <= 0 {
-		imageCount = parsed.N
 	}
 	return &OpenAIForwardResult{
 		RequestID:        resp.Header.Get("x-request-id"),
@@ -1418,5 +1423,6 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 		ImageSize:        parsed.SizeTier,
 		ImageInputSize:   parsed.Size,
 		ImageOutputSizes: imageOutputSizes,
+		ClientDisconnect: clientDisconnected,
 	}, nil
 }

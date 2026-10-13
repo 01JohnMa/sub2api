@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1038,6 +1039,37 @@ func TestPassthroughUsageMeta_TracksReasoningEffortAcrossTurns(t *testing.T) {
 	require.NoError(t, errClear)
 	require.Nil(t, blockedClear)
 	require.Nil(t, meta.reasoningEffort.Load(), "新的 response.create 无 effort 且无可推导后缀时必须清空旧值")
+}
+
+func TestPassthroughUsageMeta_BindsConcurrentCompletionToRequestTurn(t *testing.T) {
+	meta := newOpenAIWSPassthroughUsageMeta("gpt-5.5", nil)
+	meta.initFromFirstFrame([]byte(`{"type":"response.create","model":"gpt-5.5","service_tier":"flex","reasoning":{"effort":"medium"}}`))
+	meta.updateFromResponseCreate(
+		[]byte(`{"type":"response.create","model":"gpt-5.5","service_tier":"priority","reasoning":{"effort":"high"}}`),
+		"gpt-5.5",
+		2,
+	)
+
+	var turn1Tier, turn1Reasoning, turn2Tier, turn2Reasoning *string
+	var wait sync.WaitGroup
+	wait.Add(2)
+	go func() {
+		defer wait.Done()
+		turn2Tier, turn2Reasoning = meta.takeMetadataForTurn(2)
+	}()
+	go func() {
+		defer wait.Done()
+		turn1Tier, turn1Reasoning = meta.takeMetadataForTurn(1)
+	}()
+	wait.Wait()
+
+	require.Equal(t, "flex", *turn1Tier)
+	require.Equal(t, "medium", *turn1Reasoning)
+	require.Equal(t, "priority", *turn2Tier)
+	require.Equal(t, "high", *turn2Reasoning)
+	tier, reasoning := meta.takeMetadataForTurn(1)
+	require.Nil(t, tier)
+	require.Nil(t, reasoning)
 }
 
 // TestPassthroughBilling_BlockedFrameDoesNotMutateServiceTier locks in the

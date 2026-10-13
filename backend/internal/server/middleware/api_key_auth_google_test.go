@@ -323,6 +323,159 @@ func TestApiKeyAuthWithSubscriptionGoogleSetsGroupContext(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 }
 
+func TestApiKeyAuthWithSubscriptionGoogleRejectsOrganizationKeyBeforePersonalBilling(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	organizationID := int64(88)
+	organizationRole := service.OrganizationRoleMember
+	apiKey := &service.APIKey{
+		ID:             100,
+		UserID:         7,
+		Key:            "organization-google-key",
+		OrganizationID: &organizationID,
+		OrganizationAuthorization: &service.OrganizationKeyAuthorization{
+			APIKeyID:                 100,
+			UserID:                   7,
+			OrganizationID:           organizationID,
+			OrganizationStatus:       service.OrganizationStatusActive,
+			AllocationID:             900,
+			AllocationUserID:         7,
+			AllocationOrganizationID: organizationID,
+			AllocationStatus:         service.StatusActive,
+			Available:                "10.00000000",
+			Reserved:                 "0.00000000",
+		},
+		Status: service.StatusActive,
+		User: &service.User{
+			ID:               7,
+			Role:             service.RoleUser,
+			Status:           service.StatusActive,
+			OrganizationID:   &organizationID,
+			OrganizationRole: &organizationRole,
+			Balance:          100,
+		},
+	}
+
+	apiKeyService := newTestAPIKeyService(fakeAPIKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			if key != apiKey.Key {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := *apiKey
+			userClone := *apiKey.User
+			clone.User = &userClone
+			return &clone, nil
+		},
+	})
+
+	r := gin.New()
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, &config.Config{RunMode: config.RunModeSimple}))
+	r.POST("/v1beta/models/*modelAction", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+
+	req := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-test:generateContent", nil)
+	req.Header.Set("x-goog-api-key", apiKey.Key)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	var resp googleErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, http.StatusForbidden, resp.Error.Code)
+	require.Equal(t, "organization spending is not enabled", resp.Error.Message)
+	require.Equal(t, "PERMISSION_DENIED", resp.Error.Status)
+}
+
+func TestApiKeyAuthWithSubscriptionGoogleMatchesStandardKeyGuards(t *testing.T) {
+	tests := []struct {
+		name       string
+		mutate     func(*service.APIKey)
+		wantStatus int
+		wantText   string
+	}{
+		{
+			name: "ip acl",
+			mutate: func(apiKey *service.APIKey) {
+				apiKey.IPWhitelist = []string{"203.0.113.10"}
+			},
+			wantStatus: http.StatusForbidden,
+			wantText:   "Access denied",
+		},
+		{
+			name: "exclusive group assignment",
+			mutate: func(apiKey *service.APIKey) {
+				groupID := int64(55)
+				apiKey.GroupID = &groupID
+				apiKey.Group = &service.Group{
+					ID:               groupID,
+					Status:           service.StatusActive,
+					IsExclusive:      true,
+					SubscriptionType: service.SubscriptionTypeStandard,
+				}
+			},
+			wantStatus: http.StatusForbidden,
+			wantText:   "分组不允许",
+		},
+		{
+			name: "runtime expiration",
+			mutate: func(apiKey *service.APIKey) {
+				expiresAt := time.Now().Add(-time.Minute)
+				apiKey.ExpiresAt = &expiresAt
+			},
+			wantStatus: http.StatusForbidden,
+			wantText:   "已过期",
+		},
+		{
+			name: "runtime quota exhaustion",
+			mutate: func(apiKey *service.APIKey) {
+				apiKey.Quota = 1
+				apiKey.QuotaUsed = 1
+			},
+			wantStatus: http.StatusTooManyRequests,
+			wantText:   "额度已用完",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			apiKey := &service.APIKey{
+				ID:     1,
+				UserID: 7,
+				Key:    "google-guard-key",
+				Status: service.StatusActive,
+				User: &service.User{
+					ID:          7,
+					Status:      service.StatusActive,
+					Role:        service.RoleUser,
+					Balance:     10,
+					Concurrency: 2,
+				},
+			}
+			tt.mutate(apiKey)
+			apiKeyService := newTestAPIKeyService(fakeAPIKeyRepo{
+				getByKey: func(context.Context, string) (*service.APIKey, error) {
+					clone := *apiKey
+					userClone := *apiKey.User
+					clone.User = &userClone
+					return &clone, nil
+				},
+			})
+			router := gin.New()
+			router.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, &config.Config{RunMode: config.RunModeStandard}))
+			router.POST("/v1beta/models/*modelAction", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+
+			req := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-test:generateContent", nil)
+			req.Header.Set("x-goog-api-key", apiKey.Key)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, tt.wantStatus, w.Code)
+			var response googleErrorResponse
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			require.Contains(t, response.Error.Message, tt.wantText)
+		})
+	}
+}
+
 func TestApiKeyAuthWithSubscriptionGoogle_QueryKeyAllowedOnV1Beta(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

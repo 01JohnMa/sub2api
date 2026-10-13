@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent/account"
@@ -20,6 +21,20 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/organization"
+	"github.com/Wei-Shaw/sub2api/ent/organizationallocation"
+	"github.com/Wei-Shaw/sub2api/ent/organizationattemptaccounteffect"
+	"github.com/Wei-Shaw/sub2api/ent/organizationattemptaccountposting"
+	"github.com/Wei-Shaw/sub2api/ent/organizationattemptevidence"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecution"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionattempt"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionincident"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionoutbox"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionreconciliationaudit"
+	"github.com/Wei-Shaw/sub2api/ent/organizationfinalexecutionevidence"
+	"github.com/Wei-Shaw/sub2api/ent/organizationledgeroperation"
+	"github.com/Wei-Shaw/sub2api/ent/organizationledgerposting"
+	"github.com/Wei-Shaw/sub2api/ent/organizationreservation"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
@@ -42,6 +57,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/shopspring/decimal"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -104,41 +120,41 @@ func init() {
 		}
 	}()
 	// apikeyDescStatus is the schema descriptor for status field.
-	apikeyDescStatus := apikeyFields[4].Descriptor()
+	apikeyDescStatus := apikeyFields[5].Descriptor()
 	// apikey.DefaultStatus holds the default value on creation for the status field.
 	apikey.DefaultStatus = apikeyDescStatus.Default.(string)
 	// apikey.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	apikey.StatusValidator = apikeyDescStatus.Validators[0].(func(string) error)
 	// apikeyDescQuota is the schema descriptor for quota field.
-	apikeyDescQuota := apikeyFields[8].Descriptor()
+	apikeyDescQuota := apikeyFields[9].Descriptor()
 	// apikey.DefaultQuota holds the default value on creation for the quota field.
 	apikey.DefaultQuota = apikeyDescQuota.Default.(float64)
 	// apikeyDescQuotaUsed is the schema descriptor for quota_used field.
-	apikeyDescQuotaUsed := apikeyFields[9].Descriptor()
+	apikeyDescQuotaUsed := apikeyFields[10].Descriptor()
 	// apikey.DefaultQuotaUsed holds the default value on creation for the quota_used field.
 	apikey.DefaultQuotaUsed = apikeyDescQuotaUsed.Default.(float64)
 	// apikeyDescRateLimit5h is the schema descriptor for rate_limit_5h field.
-	apikeyDescRateLimit5h := apikeyFields[11].Descriptor()
+	apikeyDescRateLimit5h := apikeyFields[12].Descriptor()
 	// apikey.DefaultRateLimit5h holds the default value on creation for the rate_limit_5h field.
 	apikey.DefaultRateLimit5h = apikeyDescRateLimit5h.Default.(float64)
 	// apikeyDescRateLimit1d is the schema descriptor for rate_limit_1d field.
-	apikeyDescRateLimit1d := apikeyFields[12].Descriptor()
+	apikeyDescRateLimit1d := apikeyFields[13].Descriptor()
 	// apikey.DefaultRateLimit1d holds the default value on creation for the rate_limit_1d field.
 	apikey.DefaultRateLimit1d = apikeyDescRateLimit1d.Default.(float64)
 	// apikeyDescRateLimit7d is the schema descriptor for rate_limit_7d field.
-	apikeyDescRateLimit7d := apikeyFields[13].Descriptor()
+	apikeyDescRateLimit7d := apikeyFields[14].Descriptor()
 	// apikey.DefaultRateLimit7d holds the default value on creation for the rate_limit_7d field.
 	apikey.DefaultRateLimit7d = apikeyDescRateLimit7d.Default.(float64)
 	// apikeyDescUsage5h is the schema descriptor for usage_5h field.
-	apikeyDescUsage5h := apikeyFields[14].Descriptor()
+	apikeyDescUsage5h := apikeyFields[15].Descriptor()
 	// apikey.DefaultUsage5h holds the default value on creation for the usage_5h field.
 	apikey.DefaultUsage5h = apikeyDescUsage5h.Default.(float64)
 	// apikeyDescUsage1d is the schema descriptor for usage_1d field.
-	apikeyDescUsage1d := apikeyFields[15].Descriptor()
+	apikeyDescUsage1d := apikeyFields[16].Descriptor()
 	// apikey.DefaultUsage1d holds the default value on creation for the usage_1d field.
 	apikey.DefaultUsage1d = apikeyDescUsage1d.Default.(float64)
 	// apikeyDescUsage7d is the schema descriptor for usage_7d field.
-	apikeyDescUsage7d := apikeyFields[16].Descriptor()
+	apikeyDescUsage7d := apikeyFields[17].Descriptor()
 	// apikey.DefaultUsage7d holds the default value on creation for the usage_7d field.
 	apikey.DefaultUsage7d = apikeyDescUsage7d.Default.(float64)
 	accountMixin := schema.Account{}.Mixin()
@@ -940,6 +956,827 @@ func init() {
 	identityadoptiondecisionDescDecidedAt := identityadoptiondecisionFields[4].Descriptor()
 	// identityadoptiondecision.DefaultDecidedAt holds the default value on creation for the decided_at field.
 	identityadoptiondecision.DefaultDecidedAt = identityadoptiondecisionDescDecidedAt.Default.(func() time.Time)
+	organizationMixin := schema.Organization{}.Mixin()
+	organizationMixinFields0 := organizationMixin[0].Fields()
+	_ = organizationMixinFields0
+	organizationFields := schema.Organization{}.Fields()
+	_ = organizationFields
+	// organizationDescCreatedAt is the schema descriptor for created_at field.
+	organizationDescCreatedAt := organizationMixinFields0[0].Descriptor()
+	// organization.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organization.DefaultCreatedAt = organizationDescCreatedAt.Default.(func() time.Time)
+	// organizationDescUpdatedAt is the schema descriptor for updated_at field.
+	organizationDescUpdatedAt := organizationMixinFields0[1].Descriptor()
+	// organization.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	organization.DefaultUpdatedAt = organizationDescUpdatedAt.Default.(func() time.Time)
+	// organization.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	organization.UpdateDefaultUpdatedAt = organizationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// organizationDescName is the schema descriptor for name field.
+	organizationDescName := organizationFields[0].Descriptor()
+	// organization.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	organization.NameValidator = func() func(string) error {
+		validators := organizationDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationDescCode is the schema descriptor for code field.
+	organizationDescCode := organizationFields[1].Descriptor()
+	// organization.CodeValidator is a validator for the "code" field. It is called by the builders before save.
+	organization.CodeValidator = func() func(string) error {
+		validators := organizationDescCode.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(code string) error {
+			for _, fn := range fns {
+				if err := fn(code); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationDescDescription is the schema descriptor for description field.
+	organizationDescDescription := organizationFields[2].Descriptor()
+	// organization.DefaultDescription holds the default value on creation for the description field.
+	organization.DefaultDescription = organizationDescDescription.Default.(string)
+	// organizationDescStatus is the schema descriptor for status field.
+	organizationDescStatus := organizationFields[3].Descriptor()
+	// organization.DefaultStatus holds the default value on creation for the status field.
+	organization.DefaultStatus = organizationDescStatus.Default.(string)
+	// organization.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	organization.StatusValidator = func() func(string) error {
+		validators := organizationDescStatus.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(status string) error {
+			for _, fn := range fns {
+				if err := fn(status); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationDescUnallocatedPool is the schema descriptor for unallocated_pool field.
+	organizationDescUnallocatedPool := organizationFields[5].Descriptor()
+	// organization.DefaultUnallocatedPool holds the default value on creation for the unallocated_pool field.
+	organization.DefaultUnallocatedPool = organizationDescUnallocatedPool.Default.(decimal.Decimal)
+	// organizationDescBalanceVersion is the schema descriptor for balance_version field.
+	organizationDescBalanceVersion := organizationFields[6].Descriptor()
+	// organization.DefaultBalanceVersion holds the default value on creation for the balance_version field.
+	organization.DefaultBalanceVersion = organizationDescBalanceVersion.Default.(int64)
+	organizationallocationMixin := schema.OrganizationAllocation{}.Mixin()
+	organizationallocationMixinFields0 := organizationallocationMixin[0].Fields()
+	_ = organizationallocationMixinFields0
+	organizationallocationFields := schema.OrganizationAllocation{}.Fields()
+	_ = organizationallocationFields
+	// organizationallocationDescCreatedAt is the schema descriptor for created_at field.
+	organizationallocationDescCreatedAt := organizationallocationMixinFields0[0].Descriptor()
+	// organizationallocation.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationallocation.DefaultCreatedAt = organizationallocationDescCreatedAt.Default.(func() time.Time)
+	// organizationallocationDescUpdatedAt is the schema descriptor for updated_at field.
+	organizationallocationDescUpdatedAt := organizationallocationMixinFields0[1].Descriptor()
+	// organizationallocation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	organizationallocation.DefaultUpdatedAt = organizationallocationDescUpdatedAt.Default.(func() time.Time)
+	// organizationallocation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	organizationallocation.UpdateDefaultUpdatedAt = organizationallocationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// organizationallocationDescStatus is the schema descriptor for status field.
+	organizationallocationDescStatus := organizationallocationFields[3].Descriptor()
+	// organizationallocation.DefaultStatus holds the default value on creation for the status field.
+	organizationallocation.DefaultStatus = organizationallocationDescStatus.Default.(string)
+	// organizationallocation.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	organizationallocation.StatusValidator = func() func(string) error {
+		validators := organizationallocationDescStatus.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(status string) error {
+			for _, fn := range fns {
+				if err := fn(status); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationallocationDescAvailable is the schema descriptor for available field.
+	organizationallocationDescAvailable := organizationallocationFields[4].Descriptor()
+	// organizationallocation.DefaultAvailable holds the default value on creation for the available field.
+	organizationallocation.DefaultAvailable = organizationallocationDescAvailable.Default.(decimal.Decimal)
+	// organizationallocationDescReserved is the schema descriptor for reserved field.
+	organizationallocationDescReserved := organizationallocationFields[5].Descriptor()
+	// organizationallocation.DefaultReserved holds the default value on creation for the reserved field.
+	organizationallocation.DefaultReserved = organizationallocationDescReserved.Default.(decimal.Decimal)
+	// organizationallocationDescVersion is the schema descriptor for version field.
+	organizationallocationDescVersion := organizationallocationFields[6].Descriptor()
+	// organizationallocation.DefaultVersion holds the default value on creation for the version field.
+	organizationallocation.DefaultVersion = organizationallocationDescVersion.Default.(int64)
+	organizationattemptaccounteffectMixin := schema.OrganizationAttemptAccountEffect{}.Mixin()
+	organizationattemptaccounteffectMixinFields0 := organizationattemptaccounteffectMixin[0].Fields()
+	_ = organizationattemptaccounteffectMixinFields0
+	organizationattemptaccounteffectFields := schema.OrganizationAttemptAccountEffect{}.Fields()
+	_ = organizationattemptaccounteffectFields
+	// organizationattemptaccounteffectDescCreatedAt is the schema descriptor for created_at field.
+	organizationattemptaccounteffectDescCreatedAt := organizationattemptaccounteffectMixinFields0[0].Descriptor()
+	// organizationattemptaccounteffect.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationattemptaccounteffect.DefaultCreatedAt = organizationattemptaccounteffectDescCreatedAt.Default.(func() time.Time)
+	// organizationattemptaccounteffectDescUpdatedAt is the schema descriptor for updated_at field.
+	organizationattemptaccounteffectDescUpdatedAt := organizationattemptaccounteffectMixinFields0[1].Descriptor()
+	// organizationattemptaccounteffect.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	organizationattemptaccounteffect.DefaultUpdatedAt = organizationattemptaccounteffectDescUpdatedAt.Default.(func() time.Time)
+	// organizationattemptaccounteffect.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	organizationattemptaccounteffect.UpdateDefaultUpdatedAt = organizationattemptaccounteffectDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// organizationattemptaccounteffectDescAttemptIDSnapshot is the schema descriptor for attempt_id_snapshot field.
+	organizationattemptaccounteffectDescAttemptIDSnapshot := organizationattemptaccounteffectFields[0].Descriptor()
+	// organizationattemptaccounteffect.AttemptIDSnapshotValidator is a validator for the "attempt_id_snapshot" field. It is called by the builders before save.
+	organizationattemptaccounteffect.AttemptIDSnapshotValidator = organizationattemptaccounteffectDescAttemptIDSnapshot.Validators[0].(func(string) error)
+	// organizationattemptaccounteffectDescExecutionIDSnapshot is the schema descriptor for execution_id_snapshot field.
+	organizationattemptaccounteffectDescExecutionIDSnapshot := organizationattemptaccounteffectFields[2].Descriptor()
+	// organizationattemptaccounteffect.ExecutionIDSnapshotValidator is a validator for the "execution_id_snapshot" field. It is called by the builders before save.
+	organizationattemptaccounteffect.ExecutionIDSnapshotValidator = organizationattemptaccounteffectDescExecutionIDSnapshot.Validators[0].(func(string) error)
+	// organizationattemptaccounteffectDescStatus is the schema descriptor for status field.
+	organizationattemptaccounteffectDescStatus := organizationattemptaccounteffectFields[13].Descriptor()
+	// organizationattemptaccounteffect.DefaultStatus holds the default value on creation for the status field.
+	organizationattemptaccounteffect.DefaultStatus = organizationattemptaccounteffectDescStatus.Default.(string)
+	// organizationattemptaccounteffect.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	organizationattemptaccounteffect.StatusValidator = func() func(string) error {
+		validators := organizationattemptaccounteffectDescStatus.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(status string) error {
+			for _, fn := range fns {
+				if err := fn(status); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationattemptaccounteffectDescAuditReason is the schema descriptor for audit_reason field.
+	organizationattemptaccounteffectDescAuditReason := organizationattemptaccounteffectFields[14].Descriptor()
+	// organizationattemptaccounteffect.AuditReasonValidator is a validator for the "audit_reason" field. It is called by the builders before save.
+	organizationattemptaccounteffect.AuditReasonValidator = organizationattemptaccounteffectDescAuditReason.Validators[0].(func(string) error)
+	organizationattemptaccountpostingFields := schema.OrganizationAttemptAccountPosting{}.Fields()
+	_ = organizationattemptaccountpostingFields
+	// organizationattemptaccountpostingDescAttemptIDSnapshot is the schema descriptor for attempt_id_snapshot field.
+	organizationattemptaccountpostingDescAttemptIDSnapshot := organizationattemptaccountpostingFields[0].Descriptor()
+	// organizationattemptaccountposting.AttemptIDSnapshotValidator is a validator for the "attempt_id_snapshot" field. It is called by the builders before save.
+	organizationattemptaccountposting.AttemptIDSnapshotValidator = organizationattemptaccountpostingDescAttemptIDSnapshot.Validators[0].(func(string) error)
+	// organizationattemptaccountpostingDescExecutionIDSnapshot is the schema descriptor for execution_id_snapshot field.
+	organizationattemptaccountpostingDescExecutionIDSnapshot := organizationattemptaccountpostingFields[4].Descriptor()
+	// organizationattemptaccountposting.ExecutionIDSnapshotValidator is a validator for the "execution_id_snapshot" field. It is called by the builders before save.
+	organizationattemptaccountposting.ExecutionIDSnapshotValidator = organizationattemptaccountpostingDescExecutionIDSnapshot.Validators[0].(func(string) error)
+	// organizationattemptaccountpostingDescPlatformOverageCost is the schema descriptor for platform_overage_cost field.
+	organizationattemptaccountpostingDescPlatformOverageCost := organizationattemptaccountpostingFields[11].Descriptor()
+	// organizationattemptaccountposting.DefaultPlatformOverageCost holds the default value on creation for the platform_overage_cost field.
+	organizationattemptaccountposting.DefaultPlatformOverageCost = organizationattemptaccountpostingDescPlatformOverageCost.Default.(decimal.Decimal)
+	// organizationattemptaccountpostingDescClassification is the schema descriptor for classification field.
+	organizationattemptaccountpostingDescClassification := organizationattemptaccountpostingFields[12].Descriptor()
+	// organizationattemptaccountposting.DefaultClassification holds the default value on creation for the classification field.
+	organizationattemptaccountposting.DefaultClassification = organizationattemptaccountpostingDescClassification.Default.(string)
+	// organizationattemptaccountposting.ClassificationValidator is a validator for the "classification" field. It is called by the builders before save.
+	organizationattemptaccountposting.ClassificationValidator = func() func(string) error {
+		validators := organizationattemptaccountpostingDescClassification.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(classification string) error {
+			for _, fn := range fns {
+				if err := fn(classification); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationattemptaccountpostingDescCreatedAt is the schema descriptor for created_at field.
+	organizationattemptaccountpostingDescCreatedAt := organizationattemptaccountpostingFields[14].Descriptor()
+	// organizationattemptaccountposting.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationattemptaccountposting.DefaultCreatedAt = organizationattemptaccountpostingDescCreatedAt.Default.(func() time.Time)
+	organizationattemptevidenceFields := schema.OrganizationAttemptEvidence{}.Fields()
+	_ = organizationattemptevidenceFields
+	// organizationattemptevidenceDescAttemptIDSnapshot is the schema descriptor for attempt_id_snapshot field.
+	organizationattemptevidenceDescAttemptIDSnapshot := organizationattemptevidenceFields[0].Descriptor()
+	// organizationattemptevidence.AttemptIDSnapshotValidator is a validator for the "attempt_id_snapshot" field. It is called by the builders before save.
+	organizationattemptevidence.AttemptIDSnapshotValidator = organizationattemptevidenceDescAttemptIDSnapshot.Validators[0].(func(string) error)
+	// organizationattemptevidenceDescExecutionIDSnapshot is the schema descriptor for execution_id_snapshot field.
+	organizationattemptevidenceDescExecutionIDSnapshot := organizationattemptevidenceFields[2].Descriptor()
+	// organizationattemptevidence.ExecutionIDSnapshotValidator is a validator for the "execution_id_snapshot" field. It is called by the builders before save.
+	organizationattemptevidence.ExecutionIDSnapshotValidator = organizationattemptevidenceDescExecutionIDSnapshot.Validators[0].(func(string) error)
+	// organizationattemptevidenceDescRouteSnapshotHash is the schema descriptor for route_snapshot_hash field.
+	organizationattemptevidenceDescRouteSnapshotHash := organizationattemptevidenceFields[8].Descriptor()
+	// organizationattemptevidence.RouteSnapshotHashValidator is a validator for the "route_snapshot_hash" field. It is called by the builders before save.
+	organizationattemptevidence.RouteSnapshotHashValidator = organizationattemptevidenceDescRouteSnapshotHash.Validators[0].(func(string) error)
+	// organizationattemptevidenceDescPricingSnapshotHash is the schema descriptor for pricing_snapshot_hash field.
+	organizationattemptevidenceDescPricingSnapshotHash := organizationattemptevidenceFields[10].Descriptor()
+	// organizationattemptevidence.PricingSnapshotHashValidator is a validator for the "pricing_snapshot_hash" field. It is called by the builders before save.
+	organizationattemptevidence.PricingSnapshotHashValidator = organizationattemptevidenceDescPricingSnapshotHash.Validators[0].(func(string) error)
+	// organizationattemptevidenceDescProviderCorrelationID is the schema descriptor for provider_correlation_id field.
+	organizationattemptevidenceDescProviderCorrelationID := organizationattemptevidenceFields[11].Descriptor()
+	// organizationattemptevidence.ProviderCorrelationIDValidator is a validator for the "provider_correlation_id" field. It is called by the builders before save.
+	organizationattemptevidence.ProviderCorrelationIDValidator = organizationattemptevidenceDescProviderCorrelationID.Validators[0].(func(string) error)
+	// organizationattemptevidenceDescProviderRequestID is the schema descriptor for provider_request_id field.
+	organizationattemptevidenceDescProviderRequestID := organizationattemptevidenceFields[12].Descriptor()
+	// organizationattemptevidence.ProviderRequestIDValidator is a validator for the "provider_request_id" field. It is called by the builders before save.
+	organizationattemptevidence.ProviderRequestIDValidator = organizationattemptevidenceDescProviderRequestID.Validators[0].(func(string) error)
+	// organizationattemptevidenceDescEvidenceSource is the schema descriptor for evidence_source field.
+	organizationattemptevidenceDescEvidenceSource := organizationattemptevidenceFields[13].Descriptor()
+	// organizationattemptevidence.DefaultEvidenceSource holds the default value on creation for the evidence_source field.
+	organizationattemptevidence.DefaultEvidenceSource = organizationattemptevidenceDescEvidenceSource.Default.(string)
+	// organizationattemptevidence.EvidenceSourceValidator is a validator for the "evidence_source" field. It is called by the builders before save.
+	organizationattemptevidence.EvidenceSourceValidator = organizationattemptevidenceDescEvidenceSource.Validators[0].(func(string) error)
+	// organizationattemptevidenceDescTerminalOutcome is the schema descriptor for terminal_outcome field.
+	organizationattemptevidenceDescTerminalOutcome := organizationattemptevidenceFields[14].Descriptor()
+	// organizationattemptevidence.DefaultTerminalOutcome holds the default value on creation for the terminal_outcome field.
+	organizationattemptevidence.DefaultTerminalOutcome = organizationattemptevidenceDescTerminalOutcome.Default.(string)
+	// organizationattemptevidence.TerminalOutcomeValidator is a validator for the "terminal_outcome" field. It is called by the builders before save.
+	organizationattemptevidence.TerminalOutcomeValidator = organizationattemptevidenceDescTerminalOutcome.Validators[0].(func(string) error)
+	// organizationattemptevidenceDescProvenanceHash is the schema descriptor for provenance_hash field.
+	organizationattemptevidenceDescProvenanceHash := organizationattemptevidenceFields[15].Descriptor()
+	// organizationattemptevidence.ProvenanceHashValidator is a validator for the "provenance_hash" field. It is called by the builders before save.
+	organizationattemptevidence.ProvenanceHashValidator = organizationattemptevidenceDescProvenanceHash.Validators[0].(func(string) error)
+	// organizationattemptevidenceDescEvidenceHash is the schema descriptor for evidence_hash field.
+	organizationattemptevidenceDescEvidenceHash := organizationattemptevidenceFields[17].Descriptor()
+	// organizationattemptevidence.EvidenceHashValidator is a validator for the "evidence_hash" field. It is called by the builders before save.
+	organizationattemptevidence.EvidenceHashValidator = organizationattemptevidenceDescEvidenceHash.Validators[0].(func(string) error)
+	// organizationattemptevidenceDescInputTokens is the schema descriptor for input_tokens field.
+	organizationattemptevidenceDescInputTokens := organizationattemptevidenceFields[18].Descriptor()
+	// organizationattemptevidence.DefaultInputTokens holds the default value on creation for the input_tokens field.
+	organizationattemptevidence.DefaultInputTokens = organizationattemptevidenceDescInputTokens.Default.(int64)
+	// organizationattemptevidenceDescOutputTokens is the schema descriptor for output_tokens field.
+	organizationattemptevidenceDescOutputTokens := organizationattemptevidenceFields[19].Descriptor()
+	// organizationattemptevidence.DefaultOutputTokens holds the default value on creation for the output_tokens field.
+	organizationattemptevidence.DefaultOutputTokens = organizationattemptevidenceDescOutputTokens.Default.(int64)
+	// organizationattemptevidenceDescCacheCreationTokens is the schema descriptor for cache_creation_tokens field.
+	organizationattemptevidenceDescCacheCreationTokens := organizationattemptevidenceFields[20].Descriptor()
+	// organizationattemptevidence.DefaultCacheCreationTokens holds the default value on creation for the cache_creation_tokens field.
+	organizationattemptevidence.DefaultCacheCreationTokens = organizationattemptevidenceDescCacheCreationTokens.Default.(int64)
+	// organizationattemptevidenceDescCacheReadTokens is the schema descriptor for cache_read_tokens field.
+	organizationattemptevidenceDescCacheReadTokens := organizationattemptevidenceFields[21].Descriptor()
+	// organizationattemptevidence.DefaultCacheReadTokens holds the default value on creation for the cache_read_tokens field.
+	organizationattemptevidence.DefaultCacheReadTokens = organizationattemptevidenceDescCacheReadTokens.Default.(int64)
+	// organizationattemptevidenceDescRawActualCost is the schema descriptor for raw_actual_cost field.
+	organizationattemptevidenceDescRawActualCost := organizationattemptevidenceFields[22].Descriptor()
+	// organizationattemptevidence.DefaultRawActualCost holds the default value on creation for the raw_actual_cost field.
+	organizationattemptevidence.DefaultRawActualCost = organizationattemptevidenceDescRawActualCost.Default.(decimal.Decimal)
+	// organizationattemptevidenceDescIngestedAt is the schema descriptor for ingested_at field.
+	organizationattemptevidenceDescIngestedAt := organizationattemptevidenceFields[24].Descriptor()
+	// organizationattemptevidence.DefaultIngestedAt holds the default value on creation for the ingested_at field.
+	organizationattemptevidence.DefaultIngestedAt = organizationattemptevidenceDescIngestedAt.Default.(func() time.Time)
+	// organizationattemptevidenceDescCreatedAt is the schema descriptor for created_at field.
+	organizationattemptevidenceDescCreatedAt := organizationattemptevidenceFields[25].Descriptor()
+	// organizationattemptevidence.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationattemptevidence.DefaultCreatedAt = organizationattemptevidenceDescCreatedAt.Default.(func() time.Time)
+	organizationexecutionMixin := schema.OrganizationExecution{}.Mixin()
+	organizationexecutionMixinFields0 := organizationexecutionMixin[0].Fields()
+	_ = organizationexecutionMixinFields0
+	organizationexecutionFields := schema.OrganizationExecution{}.Fields()
+	_ = organizationexecutionFields
+	// organizationexecutionDescCreatedAt is the schema descriptor for created_at field.
+	organizationexecutionDescCreatedAt := organizationexecutionMixinFields0[0].Descriptor()
+	// organizationexecution.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationexecution.DefaultCreatedAt = organizationexecutionDescCreatedAt.Default.(func() time.Time)
+	// organizationexecutionDescUpdatedAt is the schema descriptor for updated_at field.
+	organizationexecutionDescUpdatedAt := organizationexecutionMixinFields0[1].Descriptor()
+	// organizationexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	organizationexecution.DefaultUpdatedAt = organizationexecutionDescUpdatedAt.Default.(func() time.Time)
+	// organizationexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	organizationexecution.UpdateDefaultUpdatedAt = organizationexecutionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// organizationexecutionDescExecutionID is the schema descriptor for execution_id field.
+	organizationexecutionDescExecutionID := organizationexecutionFields[0].Descriptor()
+	// organizationexecution.ExecutionIDValidator is a validator for the "execution_id" field. It is called by the builders before save.
+	organizationexecution.ExecutionIDValidator = organizationexecutionDescExecutionID.Validators[0].(func(string) error)
+	// organizationexecutionDescCorrelationID is the schema descriptor for correlation_id field.
+	organizationexecutionDescCorrelationID := organizationexecutionFields[1].Descriptor()
+	// organizationexecution.CorrelationIDValidator is a validator for the "correlation_id" field. It is called by the builders before save.
+	organizationexecution.CorrelationIDValidator = organizationexecutionDescCorrelationID.Validators[0].(func(string) error)
+	// organizationexecutionDescEndpointFamily is the schema descriptor for endpoint_family field.
+	organizationexecutionDescEndpointFamily := organizationexecutionFields[9].Descriptor()
+	// organizationexecution.EndpointFamilyValidator is a validator for the "endpoint_family" field. It is called by the builders before save.
+	organizationexecution.EndpointFamilyValidator = organizationexecutionDescEndpointFamily.Validators[0].(func(string) error)
+	// organizationexecutionDescRequestShape is the schema descriptor for request_shape field.
+	organizationexecutionDescRequestShape := organizationexecutionFields[10].Descriptor()
+	// organizationexecution.RequestShapeValidator is a validator for the "request_shape" field. It is called by the builders before save.
+	organizationexecution.RequestShapeValidator = organizationexecutionDescRequestShape.Validators[0].(func(string) error)
+	// organizationexecutionDescModel is the schema descriptor for model field.
+	organizationexecutionDescModel := organizationexecutionFields[11].Descriptor()
+	// organizationexecution.ModelValidator is a validator for the "model" field. It is called by the builders before save.
+	organizationexecution.ModelValidator = organizationexecutionDescModel.Validators[0].(func(string) error)
+	// organizationexecutionDescClientRequestID is the schema descriptor for client_request_id field.
+	organizationexecutionDescClientRequestID := organizationexecutionFields[12].Descriptor()
+	// organizationexecution.ClientRequestIDValidator is a validator for the "client_request_id" field. It is called by the builders before save.
+	organizationexecution.ClientRequestIDValidator = organizationexecutionDescClientRequestID.Validators[0].(func(string) error)
+	// organizationexecutionDescBillingFingerprint is the schema descriptor for billing_fingerprint field.
+	organizationexecutionDescBillingFingerprint := organizationexecutionFields[13].Descriptor()
+	// organizationexecution.BillingFingerprintValidator is a validator for the "billing_fingerprint" field. It is called by the builders before save.
+	organizationexecution.BillingFingerprintValidator = organizationexecutionDescBillingFingerprint.Validators[0].(func(string) error)
+	// organizationexecutionDescCandidateSetHash is the schema descriptor for candidate_set_hash field.
+	organizationexecutionDescCandidateSetHash := organizationexecutionFields[15].Descriptor()
+	// organizationexecution.CandidateSetHashValidator is a validator for the "candidate_set_hash" field. It is called by the builders before save.
+	organizationexecution.CandidateSetHashValidator = organizationexecutionDescCandidateSetHash.Validators[0].(func(string) error)
+	// organizationexecutionDescPricingSnapshotHash is the schema descriptor for pricing_snapshot_hash field.
+	organizationexecutionDescPricingSnapshotHash := organizationexecutionFields[17].Descriptor()
+	// organizationexecution.PricingSnapshotHashValidator is a validator for the "pricing_snapshot_hash" field. It is called by the builders before save.
+	organizationexecution.PricingSnapshotHashValidator = organizationexecutionDescPricingSnapshotHash.Validators[0].(func(string) error)
+	// organizationexecutionDescIsBillable is the schema descriptor for is_billable field.
+	organizationexecutionDescIsBillable := organizationexecutionFields[19].Descriptor()
+	// organizationexecution.DefaultIsBillable holds the default value on creation for the is_billable field.
+	organizationexecution.DefaultIsBillable = organizationexecutionDescIsBillable.Default.(bool)
+	// organizationexecutionDescStatus is the schema descriptor for status field.
+	organizationexecutionDescStatus := organizationexecutionFields[20].Descriptor()
+	// organizationexecution.DefaultStatus holds the default value on creation for the status field.
+	organizationexecution.DefaultStatus = organizationexecutionDescStatus.Default.(string)
+	// organizationexecution.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	organizationexecution.StatusValidator = func() func(string) error {
+		validators := organizationexecutionDescStatus.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(status string) error {
+			for _, fn := range fns {
+				if err := fn(status); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationexecutionDescAcceptedAt is the schema descriptor for accepted_at field.
+	organizationexecutionDescAcceptedAt := organizationexecutionFields[21].Descriptor()
+	// organizationexecution.DefaultAcceptedAt holds the default value on creation for the accepted_at field.
+	organizationexecution.DefaultAcceptedAt = organizationexecutionDescAcceptedAt.Default.(func() time.Time)
+	organizationexecutionattemptMixin := schema.OrganizationExecutionAttempt{}.Mixin()
+	organizationexecutionattemptMixinFields0 := organizationexecutionattemptMixin[0].Fields()
+	_ = organizationexecutionattemptMixinFields0
+	organizationexecutionattemptFields := schema.OrganizationExecutionAttempt{}.Fields()
+	_ = organizationexecutionattemptFields
+	// organizationexecutionattemptDescCreatedAt is the schema descriptor for created_at field.
+	organizationexecutionattemptDescCreatedAt := organizationexecutionattemptMixinFields0[0].Descriptor()
+	// organizationexecutionattempt.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationexecutionattempt.DefaultCreatedAt = organizationexecutionattemptDescCreatedAt.Default.(func() time.Time)
+	// organizationexecutionattemptDescUpdatedAt is the schema descriptor for updated_at field.
+	organizationexecutionattemptDescUpdatedAt := organizationexecutionattemptMixinFields0[1].Descriptor()
+	// organizationexecutionattempt.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	organizationexecutionattempt.DefaultUpdatedAt = organizationexecutionattemptDescUpdatedAt.Default.(func() time.Time)
+	// organizationexecutionattempt.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	organizationexecutionattempt.UpdateDefaultUpdatedAt = organizationexecutionattemptDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// organizationexecutionattemptDescAttemptID is the schema descriptor for attempt_id field.
+	organizationexecutionattemptDescAttemptID := organizationexecutionattemptFields[0].Descriptor()
+	// organizationexecutionattempt.AttemptIDValidator is a validator for the "attempt_id" field. It is called by the builders before save.
+	organizationexecutionattempt.AttemptIDValidator = organizationexecutionattemptDescAttemptID.Validators[0].(func(string) error)
+	// organizationexecutionattemptDescExecutionIDSnapshot is the schema descriptor for execution_id_snapshot field.
+	organizationexecutionattemptDescExecutionIDSnapshot := organizationexecutionattemptFields[1].Descriptor()
+	// organizationexecutionattempt.ExecutionIDSnapshotValidator is a validator for the "execution_id_snapshot" field. It is called by the builders before save.
+	organizationexecutionattempt.ExecutionIDSnapshotValidator = organizationexecutionattemptDescExecutionIDSnapshot.Validators[0].(func(string) error)
+	// organizationexecutionattemptDescRouteSnapshotHash is the schema descriptor for route_snapshot_hash field.
+	organizationexecutionattemptDescRouteSnapshotHash := organizationexecutionattemptFields[8].Descriptor()
+	// organizationexecutionattempt.RouteSnapshotHashValidator is a validator for the "route_snapshot_hash" field. It is called by the builders before save.
+	organizationexecutionattempt.RouteSnapshotHashValidator = organizationexecutionattemptDescRouteSnapshotHash.Validators[0].(func(string) error)
+	// organizationexecutionattemptDescPricingSnapshotHash is the schema descriptor for pricing_snapshot_hash field.
+	organizationexecutionattemptDescPricingSnapshotHash := organizationexecutionattemptFields[10].Descriptor()
+	// organizationexecutionattempt.PricingSnapshotHashValidator is a validator for the "pricing_snapshot_hash" field. It is called by the builders before save.
+	organizationexecutionattempt.PricingSnapshotHashValidator = organizationexecutionattemptDescPricingSnapshotHash.Validators[0].(func(string) error)
+	// organizationexecutionattemptDescProviderCorrelationID is the schema descriptor for provider_correlation_id field.
+	organizationexecutionattemptDescProviderCorrelationID := organizationexecutionattemptFields[11].Descriptor()
+	// organizationexecutionattempt.ProviderCorrelationIDValidator is a validator for the "provider_correlation_id" field. It is called by the builders before save.
+	organizationexecutionattempt.ProviderCorrelationIDValidator = organizationexecutionattemptDescProviderCorrelationID.Validators[0].(func(string) error)
+	// organizationexecutionattemptDescProviderRequestID is the schema descriptor for provider_request_id field.
+	organizationexecutionattemptDescProviderRequestID := organizationexecutionattemptFields[12].Descriptor()
+	// organizationexecutionattempt.ProviderRequestIDValidator is a validator for the "provider_request_id" field. It is called by the builders before save.
+	organizationexecutionattempt.ProviderRequestIDValidator = organizationexecutionattemptDescProviderRequestID.Validators[0].(func(string) error)
+	// organizationexecutionattemptDescStatus is the schema descriptor for status field.
+	organizationexecutionattemptDescStatus := organizationexecutionattemptFields[13].Descriptor()
+	// organizationexecutionattempt.DefaultStatus holds the default value on creation for the status field.
+	organizationexecutionattempt.DefaultStatus = organizationexecutionattemptDescStatus.Default.(string)
+	// organizationexecutionattempt.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	organizationexecutionattempt.StatusValidator = func() func(string) error {
+		validators := organizationexecutionattemptDescStatus.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(status string) error {
+			for _, fn := range fns {
+				if err := fn(status); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	organizationexecutionincidentFields := schema.OrganizationExecutionIncident{}.Fields()
+	_ = organizationexecutionincidentFields
+	// organizationexecutionincidentDescExecutionIDSnapshot is the schema descriptor for execution_id_snapshot field.
+	organizationexecutionincidentDescExecutionIDSnapshot := organizationexecutionincidentFields[0].Descriptor()
+	// organizationexecutionincident.ExecutionIDSnapshotValidator is a validator for the "execution_id_snapshot" field. It is called by the builders before save.
+	organizationexecutionincident.ExecutionIDSnapshotValidator = organizationexecutionincidentDescExecutionIDSnapshot.Validators[0].(func(string) error)
+	// organizationexecutionincidentDescAttemptIDSnapshot is the schema descriptor for attempt_id_snapshot field.
+	organizationexecutionincidentDescAttemptIDSnapshot := organizationexecutionincidentFields[3].Descriptor()
+	// organizationexecutionincident.AttemptIDSnapshotValidator is a validator for the "attempt_id_snapshot" field. It is called by the builders before save.
+	organizationexecutionincident.AttemptIDSnapshotValidator = organizationexecutionincidentDescAttemptIDSnapshot.Validators[0].(func(string) error)
+	// organizationexecutionincidentDescIncidentType is the schema descriptor for incident_type field.
+	organizationexecutionincidentDescIncidentType := organizationexecutionincidentFields[5].Descriptor()
+	// organizationexecutionincident.IncidentTypeValidator is a validator for the "incident_type" field. It is called by the builders before save.
+	organizationexecutionincident.IncidentTypeValidator = organizationexecutionincidentDescIncidentType.Validators[0].(func(string) error)
+	// organizationexecutionincidentDescPublicReason is the schema descriptor for public_reason field.
+	organizationexecutionincidentDescPublicReason := organizationexecutionincidentFields[6].Descriptor()
+	// organizationexecutionincident.PublicReasonValidator is a validator for the "public_reason" field. It is called by the builders before save.
+	organizationexecutionincident.PublicReasonValidator = organizationexecutionincidentDescPublicReason.Validators[0].(func(string) error)
+	// organizationexecutionincidentDescInternalReason is the schema descriptor for internal_reason field.
+	organizationexecutionincidentDescInternalReason := organizationexecutionincidentFields[7].Descriptor()
+	// organizationexecutionincident.InternalReasonValidator is a validator for the "internal_reason" field. It is called by the builders before save.
+	organizationexecutionincident.InternalReasonValidator = organizationexecutionincidentDescInternalReason.Validators[0].(func(string) error)
+	// organizationexecutionincidentDescDetails is the schema descriptor for details field.
+	organizationexecutionincidentDescDetails := organizationexecutionincidentFields[8].Descriptor()
+	// organizationexecutionincident.DefaultDetails holds the default value on creation for the details field.
+	organizationexecutionincident.DefaultDetails = organizationexecutionincidentDescDetails.Default.(json.RawMessage)
+	// organizationexecutionincidentDescStatus is the schema descriptor for status field.
+	organizationexecutionincidentDescStatus := organizationexecutionincidentFields[9].Descriptor()
+	// organizationexecutionincident.DefaultStatus holds the default value on creation for the status field.
+	organizationexecutionincident.DefaultStatus = organizationexecutionincidentDescStatus.Default.(string)
+	// organizationexecutionincident.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	organizationexecutionincident.StatusValidator = organizationexecutionincidentDescStatus.Validators[0].(func(string) error)
+	// organizationexecutionincidentDescCreatedAt is the schema descriptor for created_at field.
+	organizationexecutionincidentDescCreatedAt := organizationexecutionincidentFields[10].Descriptor()
+	// organizationexecutionincident.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationexecutionincident.DefaultCreatedAt = organizationexecutionincidentDescCreatedAt.Default.(func() time.Time)
+	organizationexecutionoutboxMixin := schema.OrganizationExecutionOutbox{}.Mixin()
+	organizationexecutionoutboxMixinFields0 := organizationexecutionoutboxMixin[0].Fields()
+	_ = organizationexecutionoutboxMixinFields0
+	organizationexecutionoutboxFields := schema.OrganizationExecutionOutbox{}.Fields()
+	_ = organizationexecutionoutboxFields
+	// organizationexecutionoutboxDescCreatedAt is the schema descriptor for created_at field.
+	organizationexecutionoutboxDescCreatedAt := organizationexecutionoutboxMixinFields0[0].Descriptor()
+	// organizationexecutionoutbox.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationexecutionoutbox.DefaultCreatedAt = organizationexecutionoutboxDescCreatedAt.Default.(func() time.Time)
+	// organizationexecutionoutboxDescUpdatedAt is the schema descriptor for updated_at field.
+	organizationexecutionoutboxDescUpdatedAt := organizationexecutionoutboxMixinFields0[1].Descriptor()
+	// organizationexecutionoutbox.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	organizationexecutionoutbox.DefaultUpdatedAt = organizationexecutionoutboxDescUpdatedAt.Default.(func() time.Time)
+	// organizationexecutionoutbox.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	organizationexecutionoutbox.UpdateDefaultUpdatedAt = organizationexecutionoutboxDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// organizationexecutionoutboxDescExecutionIDSnapshot is the schema descriptor for execution_id_snapshot field.
+	organizationexecutionoutboxDescExecutionIDSnapshot := organizationexecutionoutboxFields[0].Descriptor()
+	// organizationexecutionoutbox.ExecutionIDSnapshotValidator is a validator for the "execution_id_snapshot" field. It is called by the builders before save.
+	organizationexecutionoutbox.ExecutionIDSnapshotValidator = organizationexecutionoutboxDescExecutionIDSnapshot.Validators[0].(func(string) error)
+	// organizationexecutionoutboxDescEventType is the schema descriptor for event_type field.
+	organizationexecutionoutboxDescEventType := organizationexecutionoutboxFields[5].Descriptor()
+	// organizationexecutionoutbox.EventTypeValidator is a validator for the "event_type" field. It is called by the builders before save.
+	organizationexecutionoutbox.EventTypeValidator = func() func(string) error {
+		validators := organizationexecutionoutboxDescEventType.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(event_type string) error {
+			for _, fn := range fns {
+				if err := fn(event_type); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationexecutionoutboxDescStatus is the schema descriptor for status field.
+	organizationexecutionoutboxDescStatus := organizationexecutionoutboxFields[7].Descriptor()
+	// organizationexecutionoutbox.DefaultStatus holds the default value on creation for the status field.
+	organizationexecutionoutbox.DefaultStatus = organizationexecutionoutboxDescStatus.Default.(string)
+	// organizationexecutionoutbox.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	organizationexecutionoutbox.StatusValidator = func() func(string) error {
+		validators := organizationexecutionoutboxDescStatus.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(status string) error {
+			for _, fn := range fns {
+				if err := fn(status); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	organizationexecutionreconciliationauditFields := schema.OrganizationExecutionReconciliationAudit{}.Fields()
+	_ = organizationexecutionreconciliationauditFields
+	// organizationexecutionreconciliationauditDescOperationID is the schema descriptor for operation_id field.
+	organizationexecutionreconciliationauditDescOperationID := organizationexecutionreconciliationauditFields[0].Descriptor()
+	// organizationexecutionreconciliationaudit.OperationIDValidator is a validator for the "operation_id" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.OperationIDValidator = organizationexecutionreconciliationauditDescOperationID.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescCorrelationID is the schema descriptor for correlation_id field.
+	organizationexecutionreconciliationauditDescCorrelationID := organizationexecutionreconciliationauditFields[1].Descriptor()
+	// organizationexecutionreconciliationaudit.CorrelationIDValidator is a validator for the "correlation_id" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.CorrelationIDValidator = organizationexecutionreconciliationauditDescCorrelationID.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescIdempotencyKeyHash is the schema descriptor for idempotency_key_hash field.
+	organizationexecutionreconciliationauditDescIdempotencyKeyHash := organizationexecutionreconciliationauditFields[2].Descriptor()
+	// organizationexecutionreconciliationaudit.IdempotencyKeyHashValidator is a validator for the "idempotency_key_hash" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.IdempotencyKeyHashValidator = organizationexecutionreconciliationauditDescIdempotencyKeyHash.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescCanonicalPayloadHash is the schema descriptor for canonical_payload_hash field.
+	organizationexecutionreconciliationauditDescCanonicalPayloadHash := organizationexecutionreconciliationauditFields[3].Descriptor()
+	// organizationexecutionreconciliationaudit.CanonicalPayloadHashValidator is a validator for the "canonical_payload_hash" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.CanonicalPayloadHashValidator = organizationexecutionreconciliationauditDescCanonicalPayloadHash.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescExecutionIDSnapshot is the schema descriptor for execution_id_snapshot field.
+	organizationexecutionreconciliationauditDescExecutionIDSnapshot := organizationexecutionreconciliationauditFields[4].Descriptor()
+	// organizationexecutionreconciliationaudit.ExecutionIDSnapshotValidator is a validator for the "execution_id_snapshot" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.ExecutionIDSnapshotValidator = organizationexecutionreconciliationauditDescExecutionIDSnapshot.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescSelectedAttemptIDSnapshot is the schema descriptor for selected_attempt_id_snapshot field.
+	organizationexecutionreconciliationauditDescSelectedAttemptIDSnapshot := organizationexecutionreconciliationauditFields[9].Descriptor()
+	// organizationexecutionreconciliationaudit.SelectedAttemptIDSnapshotValidator is a validator for the "selected_attempt_id_snapshot" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.SelectedAttemptIDSnapshotValidator = organizationexecutionreconciliationauditDescSelectedAttemptIDSnapshot.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescActorDisplaySnapshot is the schema descriptor for actor_display_snapshot field.
+	organizationexecutionreconciliationauditDescActorDisplaySnapshot := organizationexecutionreconciliationauditFields[15].Descriptor()
+	// organizationexecutionreconciliationaudit.ActorDisplaySnapshotValidator is a validator for the "actor_display_snapshot" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.ActorDisplaySnapshotValidator = organizationexecutionreconciliationauditDescActorDisplaySnapshot.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescActorRoleSnapshot is the schema descriptor for actor_role_snapshot field.
+	organizationexecutionreconciliationauditDescActorRoleSnapshot := organizationexecutionreconciliationauditFields[16].Descriptor()
+	// organizationexecutionreconciliationaudit.ActorRoleSnapshotValidator is a validator for the "actor_role_snapshot" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.ActorRoleSnapshotValidator = organizationexecutionreconciliationauditDescActorRoleSnapshot.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescAuthorizationScope is the schema descriptor for authorization_scope field.
+	organizationexecutionreconciliationauditDescAuthorizationScope := organizationexecutionreconciliationauditFields[17].Descriptor()
+	// organizationexecutionreconciliationaudit.AuthorizationScopeValidator is a validator for the "authorization_scope" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.AuthorizationScopeValidator = organizationexecutionreconciliationauditDescAuthorizationScope.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescAction is the schema descriptor for action field.
+	organizationexecutionreconciliationauditDescAction := organizationexecutionreconciliationauditFields[18].Descriptor()
+	// organizationexecutionreconciliationaudit.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.ActionValidator = organizationexecutionreconciliationauditDescAction.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescReservationStatusBefore is the schema descriptor for reservation_status_before field.
+	organizationexecutionreconciliationauditDescReservationStatusBefore := organizationexecutionreconciliationauditFields[22].Descriptor()
+	// organizationexecutionreconciliationaudit.ReservationStatusBeforeValidator is a validator for the "reservation_status_before" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.ReservationStatusBeforeValidator = organizationexecutionreconciliationauditDescReservationStatusBefore.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescReservationStatusAfter is the schema descriptor for reservation_status_after field.
+	organizationexecutionreconciliationauditDescReservationStatusAfter := organizationexecutionreconciliationauditFields[23].Descriptor()
+	// organizationexecutionreconciliationaudit.ReservationStatusAfterValidator is a validator for the "reservation_status_after" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.ReservationStatusAfterValidator = organizationexecutionreconciliationauditDescReservationStatusAfter.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescPublicReason is the schema descriptor for public_reason field.
+	organizationexecutionreconciliationauditDescPublicReason := organizationexecutionreconciliationauditFields[24].Descriptor()
+	// organizationexecutionreconciliationaudit.PublicReasonValidator is a validator for the "public_reason" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.PublicReasonValidator = organizationexecutionreconciliationauditDescPublicReason.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescInternalReason is the schema descriptor for internal_reason field.
+	organizationexecutionreconciliationauditDescInternalReason := organizationexecutionreconciliationauditFields[25].Descriptor()
+	// organizationexecutionreconciliationaudit.InternalReasonValidator is a validator for the "internal_reason" field. It is called by the builders before save.
+	organizationexecutionreconciliationaudit.InternalReasonValidator = organizationexecutionreconciliationauditDescInternalReason.Validators[0].(func(string) error)
+	// organizationexecutionreconciliationauditDescCreatedAt is the schema descriptor for created_at field.
+	organizationexecutionreconciliationauditDescCreatedAt := organizationexecutionreconciliationauditFields[27].Descriptor()
+	// organizationexecutionreconciliationaudit.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationexecutionreconciliationaudit.DefaultCreatedAt = organizationexecutionreconciliationauditDescCreatedAt.Default.(func() time.Time)
+	organizationfinalexecutionevidenceFields := schema.OrganizationFinalExecutionEvidence{}.Fields()
+	_ = organizationfinalexecutionevidenceFields
+	// organizationfinalexecutionevidenceDescExecutionIDSnapshot is the schema descriptor for execution_id_snapshot field.
+	organizationfinalexecutionevidenceDescExecutionIDSnapshot := organizationfinalexecutionevidenceFields[0].Descriptor()
+	// organizationfinalexecutionevidence.ExecutionIDSnapshotValidator is a validator for the "execution_id_snapshot" field. It is called by the builders before save.
+	organizationfinalexecutionevidence.ExecutionIDSnapshotValidator = organizationfinalexecutionevidenceDescExecutionIDSnapshot.Validators[0].(func(string) error)
+	// organizationfinalexecutionevidenceDescFinalAttemptIDSnapshot is the schema descriptor for final_attempt_id_snapshot field.
+	organizationfinalexecutionevidenceDescFinalAttemptIDSnapshot := organizationfinalexecutionevidenceFields[9].Descriptor()
+	// organizationfinalexecutionevidence.FinalAttemptIDSnapshotValidator is a validator for the "final_attempt_id_snapshot" field. It is called by the builders before save.
+	organizationfinalexecutionevidence.FinalAttemptIDSnapshotValidator = organizationfinalexecutionevidenceDescFinalAttemptIDSnapshot.Validators[0].(func(string) error)
+	// organizationfinalexecutionevidenceDescEndpointFamily is the schema descriptor for endpoint_family field.
+	organizationfinalexecutionevidenceDescEndpointFamily := organizationfinalexecutionevidenceFields[15].Descriptor()
+	// organizationfinalexecutionevidence.EndpointFamilyValidator is a validator for the "endpoint_family" field. It is called by the builders before save.
+	organizationfinalexecutionevidence.EndpointFamilyValidator = organizationfinalexecutionevidenceDescEndpointFamily.Validators[0].(func(string) error)
+	// organizationfinalexecutionevidenceDescRequestShape is the schema descriptor for request_shape field.
+	organizationfinalexecutionevidenceDescRequestShape := organizationfinalexecutionevidenceFields[16].Descriptor()
+	// organizationfinalexecutionevidence.RequestShapeValidator is a validator for the "request_shape" field. It is called by the builders before save.
+	organizationfinalexecutionevidence.RequestShapeValidator = organizationfinalexecutionevidenceDescRequestShape.Validators[0].(func(string) error)
+	// organizationfinalexecutionevidenceDescModel is the schema descriptor for model field.
+	organizationfinalexecutionevidenceDescModel := organizationfinalexecutionevidenceFields[17].Descriptor()
+	// organizationfinalexecutionevidence.ModelValidator is a validator for the "model" field. It is called by the builders before save.
+	organizationfinalexecutionevidence.ModelValidator = organizationfinalexecutionevidenceDescModel.Validators[0].(func(string) error)
+	// organizationfinalexecutionevidenceDescInputTokens is the schema descriptor for input_tokens field.
+	organizationfinalexecutionevidenceDescInputTokens := organizationfinalexecutionevidenceFields[18].Descriptor()
+	// organizationfinalexecutionevidence.DefaultInputTokens holds the default value on creation for the input_tokens field.
+	organizationfinalexecutionevidence.DefaultInputTokens = organizationfinalexecutionevidenceDescInputTokens.Default.(int64)
+	// organizationfinalexecutionevidenceDescOutputTokens is the schema descriptor for output_tokens field.
+	organizationfinalexecutionevidenceDescOutputTokens := organizationfinalexecutionevidenceFields[19].Descriptor()
+	// organizationfinalexecutionevidence.DefaultOutputTokens holds the default value on creation for the output_tokens field.
+	organizationfinalexecutionevidence.DefaultOutputTokens = organizationfinalexecutionevidenceDescOutputTokens.Default.(int64)
+	// organizationfinalexecutionevidenceDescCacheCreationTokens is the schema descriptor for cache_creation_tokens field.
+	organizationfinalexecutionevidenceDescCacheCreationTokens := organizationfinalexecutionevidenceFields[20].Descriptor()
+	// organizationfinalexecutionevidence.DefaultCacheCreationTokens holds the default value on creation for the cache_creation_tokens field.
+	organizationfinalexecutionevidence.DefaultCacheCreationTokens = organizationfinalexecutionevidenceDescCacheCreationTokens.Default.(int64)
+	// organizationfinalexecutionevidenceDescCacheReadTokens is the schema descriptor for cache_read_tokens field.
+	organizationfinalexecutionevidenceDescCacheReadTokens := organizationfinalexecutionevidenceFields[21].Descriptor()
+	// organizationfinalexecutionevidence.DefaultCacheReadTokens holds the default value on creation for the cache_read_tokens field.
+	organizationfinalexecutionevidence.DefaultCacheReadTokens = organizationfinalexecutionevidenceDescCacheReadTokens.Default.(int64)
+	// organizationfinalexecutionevidenceDescRawActualCost is the schema descriptor for raw_actual_cost field.
+	organizationfinalexecutionevidenceDescRawActualCost := organizationfinalexecutionevidenceFields[22].Descriptor()
+	// organizationfinalexecutionevidence.DefaultRawActualCost holds the default value on creation for the raw_actual_cost field.
+	organizationfinalexecutionevidence.DefaultRawActualCost = organizationfinalexecutionevidenceDescRawActualCost.Default.(decimal.Decimal)
+	// organizationfinalexecutionevidenceDescOrganizationSettledCost is the schema descriptor for organization_settled_cost field.
+	organizationfinalexecutionevidenceDescOrganizationSettledCost := organizationfinalexecutionevidenceFields[23].Descriptor()
+	// organizationfinalexecutionevidence.DefaultOrganizationSettledCost holds the default value on creation for the organization_settled_cost field.
+	organizationfinalexecutionevidence.DefaultOrganizationSettledCost = organizationfinalexecutionevidenceDescOrganizationSettledCost.Default.(decimal.Decimal)
+	// organizationfinalexecutionevidenceDescTerminalOutcome is the schema descriptor for terminal_outcome field.
+	organizationfinalexecutionevidenceDescTerminalOutcome := organizationfinalexecutionevidenceFields[24].Descriptor()
+	// organizationfinalexecutionevidence.TerminalOutcomeValidator is a validator for the "terminal_outcome" field. It is called by the builders before save.
+	organizationfinalexecutionevidence.TerminalOutcomeValidator = func() func(string) error {
+		validators := organizationfinalexecutionevidenceDescTerminalOutcome.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(terminal_outcome string) error {
+			for _, fn := range fns {
+				if err := fn(terminal_outcome); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationfinalexecutionevidenceDescIsBusinessLimited is the schema descriptor for is_business_limited field.
+	organizationfinalexecutionevidenceDescIsBusinessLimited := organizationfinalexecutionevidenceFields[25].Descriptor()
+	// organizationfinalexecutionevidence.DefaultIsBusinessLimited holds the default value on creation for the is_business_limited field.
+	organizationfinalexecutionevidence.DefaultIsBusinessLimited = organizationfinalexecutionevidenceDescIsBusinessLimited.Default.(bool)
+	// organizationfinalexecutionevidenceDescIsCountTokensProbe is the schema descriptor for is_count_tokens_probe field.
+	organizationfinalexecutionevidenceDescIsCountTokensProbe := organizationfinalexecutionevidenceFields[26].Descriptor()
+	// organizationfinalexecutionevidence.DefaultIsCountTokensProbe holds the default value on creation for the is_count_tokens_probe field.
+	organizationfinalexecutionevidence.DefaultIsCountTokensProbe = organizationfinalexecutionevidenceDescIsCountTokensProbe.Default.(bool)
+	// organizationfinalexecutionevidenceDescCreatedAt is the schema descriptor for created_at field.
+	organizationfinalexecutionevidenceDescCreatedAt := organizationfinalexecutionevidenceFields[30].Descriptor()
+	// organizationfinalexecutionevidence.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationfinalexecutionevidence.DefaultCreatedAt = organizationfinalexecutionevidenceDescCreatedAt.Default.(func() time.Time)
+	organizationledgeroperationFields := schema.OrganizationLedgerOperation{}.Fields()
+	_ = organizationledgeroperationFields
+	// organizationledgeroperationDescOperationID is the schema descriptor for operation_id field.
+	organizationledgeroperationDescOperationID := organizationledgeroperationFields[0].Descriptor()
+	// organizationledgeroperation.OperationIDValidator is a validator for the "operation_id" field. It is called by the builders before save.
+	organizationledgeroperation.OperationIDValidator = organizationledgeroperationDescOperationID.Validators[0].(func(string) error)
+	// organizationledgeroperationDescCorrelationID is the schema descriptor for correlation_id field.
+	organizationledgeroperationDescCorrelationID := organizationledgeroperationFields[1].Descriptor()
+	// organizationledgeroperation.CorrelationIDValidator is a validator for the "correlation_id" field. It is called by the builders before save.
+	organizationledgeroperation.CorrelationIDValidator = organizationledgeroperationDescCorrelationID.Validators[0].(func(string) error)
+	// organizationledgeroperationDescOperationType is the schema descriptor for operation_type field.
+	organizationledgeroperationDescOperationType := organizationledgeroperationFields[3].Descriptor()
+	// organizationledgeroperation.OperationTypeValidator is a validator for the "operation_type" field. It is called by the builders before save.
+	organizationledgeroperation.OperationTypeValidator = func() func(string) error {
+		validators := organizationledgeroperationDescOperationType.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(operation_type string) error {
+			for _, fn := range fns {
+				if err := fn(operation_type); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationledgeroperationDescAuthorizationScope is the schema descriptor for authorization_scope field.
+	organizationledgeroperationDescAuthorizationScope := organizationledgeroperationFields[4].Descriptor()
+	// organizationledgeroperation.AuthorizationScopeValidator is a validator for the "authorization_scope" field. It is called by the builders before save.
+	organizationledgeroperation.AuthorizationScopeValidator = organizationledgeroperationDescAuthorizationScope.Validators[0].(func(string) error)
+	// organizationledgeroperationDescActorExecutionIDSnapshot is the schema descriptor for actor_execution_id_snapshot field.
+	organizationledgeroperationDescActorExecutionIDSnapshot := organizationledgeroperationFields[7].Descriptor()
+	// organizationledgeroperation.ActorExecutionIDSnapshotValidator is a validator for the "actor_execution_id_snapshot" field. It is called by the builders before save.
+	organizationledgeroperation.ActorExecutionIDSnapshotValidator = organizationledgeroperationDescActorExecutionIDSnapshot.Validators[0].(func(string) error)
+	// organizationledgeroperationDescActorDisplaySnapshot is the schema descriptor for actor_display_snapshot field.
+	organizationledgeroperationDescActorDisplaySnapshot := organizationledgeroperationFields[9].Descriptor()
+	// organizationledgeroperation.ActorDisplaySnapshotValidator is a validator for the "actor_display_snapshot" field. It is called by the builders before save.
+	organizationledgeroperation.ActorDisplaySnapshotValidator = organizationledgeroperationDescActorDisplaySnapshot.Validators[0].(func(string) error)
+	// organizationledgeroperationDescActorRoleSnapshot is the schema descriptor for actor_role_snapshot field.
+	organizationledgeroperationDescActorRoleSnapshot := organizationledgeroperationFields[10].Descriptor()
+	// organizationledgeroperation.ActorRoleSnapshotValidator is a validator for the "actor_role_snapshot" field. It is called by the builders before save.
+	organizationledgeroperation.ActorRoleSnapshotValidator = organizationledgeroperationDescActorRoleSnapshot.Validators[0].(func(string) error)
+	// organizationledgeroperationDescCurrency is the schema descriptor for currency field.
+	organizationledgeroperationDescCurrency := organizationledgeroperationFields[11].Descriptor()
+	// organizationledgeroperation.DefaultCurrency holds the default value on creation for the currency field.
+	organizationledgeroperation.DefaultCurrency = organizationledgeroperationDescCurrency.Default.(string)
+	// organizationledgeroperation.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	organizationledgeroperation.CurrencyValidator = organizationledgeroperationDescCurrency.Validators[0].(func(string) error)
+	// organizationledgeroperationDescIdempotencyKeyHash is the schema descriptor for idempotency_key_hash field.
+	organizationledgeroperationDescIdempotencyKeyHash := organizationledgeroperationFields[12].Descriptor()
+	// organizationledgeroperation.IdempotencyKeyHashValidator is a validator for the "idempotency_key_hash" field. It is called by the builders before save.
+	organizationledgeroperation.IdempotencyKeyHashValidator = organizationledgeroperationDescIdempotencyKeyHash.Validators[0].(func(string) error)
+	// organizationledgeroperationDescCanonicalPayloadHash is the schema descriptor for canonical_payload_hash field.
+	organizationledgeroperationDescCanonicalPayloadHash := organizationledgeroperationFields[13].Descriptor()
+	// organizationledgeroperation.CanonicalPayloadHashValidator is a validator for the "canonical_payload_hash" field. It is called by the builders before save.
+	organizationledgeroperation.CanonicalPayloadHashValidator = organizationledgeroperationDescCanonicalPayloadHash.Validators[0].(func(string) error)
+	// organizationledgeroperationDescCreatedAt is the schema descriptor for created_at field.
+	organizationledgeroperationDescCreatedAt := organizationledgeroperationFields[18].Descriptor()
+	// organizationledgeroperation.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationledgeroperation.DefaultCreatedAt = organizationledgeroperationDescCreatedAt.Default.(func() time.Time)
+	organizationledgerpostingFields := schema.OrganizationLedgerPosting{}.Fields()
+	_ = organizationledgerpostingFields
+	// organizationledgerpostingDescOperationIDSnapshot is the schema descriptor for operation_id_snapshot field.
+	organizationledgerpostingDescOperationIDSnapshot := organizationledgerpostingFields[1].Descriptor()
+	// organizationledgerposting.OperationIDSnapshotValidator is a validator for the "operation_id_snapshot" field. It is called by the builders before save.
+	organizationledgerposting.OperationIDSnapshotValidator = organizationledgerpostingDescOperationIDSnapshot.Validators[0].(func(string) error)
+	// organizationledgerpostingDescBucketType is the schema descriptor for bucket_type field.
+	organizationledgerpostingDescBucketType := organizationledgerpostingFields[4].Descriptor()
+	// organizationledgerposting.BucketTypeValidator is a validator for the "bucket_type" field. It is called by the builders before save.
+	organizationledgerposting.BucketTypeValidator = func() func(string) error {
+		validators := organizationledgerpostingDescBucketType.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(bucket_type string) error {
+			for _, fn := range fns {
+				if err := fn(bucket_type); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationledgerpostingDescExecutionIDSnapshot is the schema descriptor for execution_id_snapshot field.
+	organizationledgerpostingDescExecutionIDSnapshot := organizationledgerpostingFields[10].Descriptor()
+	// organizationledgerposting.ExecutionIDSnapshotValidator is a validator for the "execution_id_snapshot" field. It is called by the builders before save.
+	organizationledgerposting.ExecutionIDSnapshotValidator = organizationledgerpostingDescExecutionIDSnapshot.Validators[0].(func(string) error)
+	// organizationledgerpostingDescCurrency is the schema descriptor for currency field.
+	organizationledgerpostingDescCurrency := organizationledgerpostingFields[14].Descriptor()
+	// organizationledgerposting.DefaultCurrency holds the default value on creation for the currency field.
+	organizationledgerposting.DefaultCurrency = organizationledgerpostingDescCurrency.Default.(string)
+	// organizationledgerposting.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	organizationledgerposting.CurrencyValidator = organizationledgerpostingDescCurrency.Validators[0].(func(string) error)
+	// organizationledgerpostingDescCreatedAt is the schema descriptor for created_at field.
+	organizationledgerpostingDescCreatedAt := organizationledgerpostingFields[21].Descriptor()
+	// organizationledgerposting.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationledgerposting.DefaultCreatedAt = organizationledgerpostingDescCreatedAt.Default.(func() time.Time)
+	organizationreservationMixin := schema.OrganizationReservation{}.Mixin()
+	organizationreservationMixinFields0 := organizationreservationMixin[0].Fields()
+	_ = organizationreservationMixinFields0
+	organizationreservationFields := schema.OrganizationReservation{}.Fields()
+	_ = organizationreservationFields
+	// organizationreservationDescCreatedAt is the schema descriptor for created_at field.
+	organizationreservationDescCreatedAt := organizationreservationMixinFields0[0].Descriptor()
+	// organizationreservation.DefaultCreatedAt holds the default value on creation for the created_at field.
+	organizationreservation.DefaultCreatedAt = organizationreservationDescCreatedAt.Default.(func() time.Time)
+	// organizationreservationDescUpdatedAt is the schema descriptor for updated_at field.
+	organizationreservationDescUpdatedAt := organizationreservationMixinFields0[1].Descriptor()
+	// organizationreservation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	organizationreservation.DefaultUpdatedAt = organizationreservationDescUpdatedAt.Default.(func() time.Time)
+	// organizationreservation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	organizationreservation.UpdateDefaultUpdatedAt = organizationreservationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// organizationreservationDescExecutionIDSnapshot is the schema descriptor for execution_id_snapshot field.
+	organizationreservationDescExecutionIDSnapshot := organizationreservationFields[0].Descriptor()
+	// organizationreservation.ExecutionIDSnapshotValidator is a validator for the "execution_id_snapshot" field. It is called by the builders before save.
+	organizationreservation.ExecutionIDSnapshotValidator = organizationreservationDescExecutionIDSnapshot.Validators[0].(func(string) error)
+	// organizationreservationDescBillingFingerprint is the schema descriptor for billing_fingerprint field.
+	organizationreservationDescBillingFingerprint := organizationreservationFields[7].Descriptor()
+	// organizationreservation.BillingFingerprintValidator is a validator for the "billing_fingerprint" field. It is called by the builders before save.
+	organizationreservation.BillingFingerprintValidator = organizationreservationDescBillingFingerprint.Validators[0].(func(string) error)
+	// organizationreservationDescCandidateSetHash is the schema descriptor for candidate_set_hash field.
+	organizationreservationDescCandidateSetHash := organizationreservationFields[9].Descriptor()
+	// organizationreservation.CandidateSetHashValidator is a validator for the "candidate_set_hash" field. It is called by the builders before save.
+	organizationreservation.CandidateSetHashValidator = organizationreservationDescCandidateSetHash.Validators[0].(func(string) error)
+	// organizationreservationDescPricingSnapshotHash is the schema descriptor for pricing_snapshot_hash field.
+	organizationreservationDescPricingSnapshotHash := organizationreservationFields[11].Descriptor()
+	// organizationreservation.PricingSnapshotHashValidator is a validator for the "pricing_snapshot_hash" field. It is called by the builders before save.
+	organizationreservation.PricingSnapshotHashValidator = organizationreservationDescPricingSnapshotHash.Validators[0].(func(string) error)
+	// organizationreservationDescSettledAmount is the schema descriptor for settled_amount field.
+	organizationreservationDescSettledAmount := organizationreservationFields[13].Descriptor()
+	// organizationreservation.DefaultSettledAmount holds the default value on creation for the settled_amount field.
+	organizationreservation.DefaultSettledAmount = organizationreservationDescSettledAmount.Default.(decimal.Decimal)
+	// organizationreservationDescReleasedAmount is the schema descriptor for released_amount field.
+	organizationreservationDescReleasedAmount := organizationreservationFields[14].Descriptor()
+	// organizationreservation.DefaultReleasedAmount holds the default value on creation for the released_amount field.
+	organizationreservation.DefaultReleasedAmount = organizationreservationDescReleasedAmount.Default.(decimal.Decimal)
+	// organizationreservationDescStatus is the schema descriptor for status field.
+	organizationreservationDescStatus := organizationreservationFields[15].Descriptor()
+	// organizationreservation.DefaultStatus holds the default value on creation for the status field.
+	organizationreservation.DefaultStatus = organizationreservationDescStatus.Default.(string)
+	// organizationreservation.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	organizationreservation.StatusValidator = func() func(string) error {
+		validators := organizationreservationDescStatus.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(status string) error {
+			for _, fn := range fns {
+				if err := fn(status); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationreservationDescReservedAt is the schema descriptor for reserved_at field.
+	organizationreservationDescReservedAt := organizationreservationFields[16].Descriptor()
+	// organizationreservation.DefaultReservedAt holds the default value on creation for the reserved_at field.
+	organizationreservation.DefaultReservedAt = organizationreservationDescReservedAt.Default.(func() time.Time)
 	paymentauditlogFields := schema.PaymentAuditLog{}.Fields()
 	_ = paymentauditlogFields
 	// paymentauditlogDescOrderID is the schema descriptor for order_id field.
@@ -1771,7 +2608,9 @@ func init() {
 	usagelog.DefaultCreatedAt = usagelogDescCreatedAt.Default.(func() time.Time)
 	userMixin := schema.User{}.Mixin()
 	userMixinHooks1 := userMixin[1].Hooks()
+	userHooks := schema.User{}.Hooks()
 	user.Hooks[0] = userMixinHooks1[0]
+	user.Hooks[1] = userHooks[0]
 	userMixinInters1 := userMixin[1].Interceptors()
 	user.Interceptors[0] = userMixinInters1[0]
 	userMixinFields0 := userMixin[0].Fields()
@@ -1844,44 +2683,62 @@ func init() {
 	user.DefaultStatus = userDescStatus.Default.(string)
 	// user.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	user.StatusValidator = userDescStatus.Validators[0].(func(string) error)
+	// userDescOrganizationRole is the schema descriptor for organization_role field.
+	userDescOrganizationRole := userFields[7].Descriptor()
+	// user.OrganizationRoleValidator is a validator for the "organization_role" field. It is called by the builders before save.
+	user.OrganizationRoleValidator = func() func(string) error {
+		validators := userDescOrganizationRole.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(organization_role string) error {
+			for _, fn := range fns {
+				if err := fn(organization_role); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	// userDescUsername is the schema descriptor for username field.
-	userDescUsername := userFields[6].Descriptor()
+	userDescUsername := userFields[8].Descriptor()
 	// user.DefaultUsername holds the default value on creation for the username field.
 	user.DefaultUsername = userDescUsername.Default.(string)
 	// user.UsernameValidator is a validator for the "username" field. It is called by the builders before save.
 	user.UsernameValidator = userDescUsername.Validators[0].(func(string) error)
 	// userDescNotes is the schema descriptor for notes field.
-	userDescNotes := userFields[7].Descriptor()
+	userDescNotes := userFields[9].Descriptor()
 	// user.DefaultNotes holds the default value on creation for the notes field.
 	user.DefaultNotes = userDescNotes.Default.(string)
 	// userDescTotpEnabled is the schema descriptor for totp_enabled field.
-	userDescTotpEnabled := userFields[9].Descriptor()
+	userDescTotpEnabled := userFields[11].Descriptor()
 	// user.DefaultTotpEnabled holds the default value on creation for the totp_enabled field.
 	user.DefaultTotpEnabled = userDescTotpEnabled.Default.(bool)
 	// userDescSignupSource is the schema descriptor for signup_source field.
-	userDescSignupSource := userFields[11].Descriptor()
+	userDescSignupSource := userFields[13].Descriptor()
 	// user.DefaultSignupSource holds the default value on creation for the signup_source field.
 	user.DefaultSignupSource = userDescSignupSource.Default.(string)
 	// user.SignupSourceValidator is a validator for the "signup_source" field. It is called by the builders before save.
 	user.SignupSourceValidator = userDescSignupSource.Validators[0].(func(string) error)
 	// userDescBalanceNotifyEnabled is the schema descriptor for balance_notify_enabled field.
-	userDescBalanceNotifyEnabled := userFields[14].Descriptor()
+	userDescBalanceNotifyEnabled := userFields[16].Descriptor()
 	// user.DefaultBalanceNotifyEnabled holds the default value on creation for the balance_notify_enabled field.
 	user.DefaultBalanceNotifyEnabled = userDescBalanceNotifyEnabled.Default.(bool)
 	// userDescBalanceNotifyThresholdType is the schema descriptor for balance_notify_threshold_type field.
-	userDescBalanceNotifyThresholdType := userFields[15].Descriptor()
+	userDescBalanceNotifyThresholdType := userFields[17].Descriptor()
 	// user.DefaultBalanceNotifyThresholdType holds the default value on creation for the balance_notify_threshold_type field.
 	user.DefaultBalanceNotifyThresholdType = userDescBalanceNotifyThresholdType.Default.(string)
 	// userDescBalanceNotifyExtraEmails is the schema descriptor for balance_notify_extra_emails field.
-	userDescBalanceNotifyExtraEmails := userFields[17].Descriptor()
+	userDescBalanceNotifyExtraEmails := userFields[19].Descriptor()
 	// user.DefaultBalanceNotifyExtraEmails holds the default value on creation for the balance_notify_extra_emails field.
 	user.DefaultBalanceNotifyExtraEmails = userDescBalanceNotifyExtraEmails.Default.(string)
 	// userDescTotalRecharged is the schema descriptor for total_recharged field.
-	userDescTotalRecharged := userFields[18].Descriptor()
+	userDescTotalRecharged := userFields[20].Descriptor()
 	// user.DefaultTotalRecharged holds the default value on creation for the total_recharged field.
 	user.DefaultTotalRecharged = userDescTotalRecharged.Default.(float64)
 	// userDescRpmLimit is the schema descriptor for rpm_limit field.
-	userDescRpmLimit := userFields[19].Descriptor()
+	userDescRpmLimit := userFields[21].Descriptor()
 	// user.DefaultRpmLimit holds the default value on creation for the rpm_limit field.
 	user.DefaultRpmLimit = userDescRpmLimit.Default.(int)
 	userallowedgroupFields := schema.UserAllowedGroup{}.Fields()

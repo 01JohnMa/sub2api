@@ -158,6 +158,14 @@ type OrganizationMembershipBillingCacheInvalidator interface {
 	InvalidateUserPlatformQuota(ctx context.Context, userID int64, platform string) error
 }
 
+// OrganizationMemberCacheTarget contains only stable IDs required by the
+// shared post-commit auth and billing cache invalidation path.
+type OrganizationMemberCacheTarget struct {
+	UserID    int64
+	APIKeyIDs []int64
+	GroupIDs  []int64
+}
+
 type OrganizationMemberRemovalActor struct {
 	UserID                int64
 	DisplayName           string
@@ -399,39 +407,63 @@ func (s *OrganizationMembershipService) invalidateRemovalCaches(ctx context.Cont
 	if result == nil || result.UserID <= 0 {
 		return
 	}
-	cacheCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	s.invalidateUser(cacheCtx, result.UserID)
-	if s.billingInvalidator == nil {
+	InvalidateOrganizationMemberCaches(ctx, s.authInvalidator, s.billingInvalidator, []OrganizationMemberCacheTarget{{
+		UserID: result.UserID, APIKeyIDs: result.APIKeyIDs, GroupIDs: result.GroupIDs,
+	}})
+}
+
+// InvalidateOrganizationMemberCaches is shared by membership and lifecycle
+// mutations. Cache failures are logged and ignored because authoritative DB
+// reads and locked execution admission remain the correctness boundary.
+func InvalidateOrganizationMemberCaches(
+	ctx context.Context,
+	authInvalidator APIKeyAuthCacheInvalidator,
+	billingInvalidator OrganizationMembershipBillingCacheInvalidator,
+	targets []OrganizationMemberCacheTarget,
+) {
+	if len(targets) == 0 {
 		return
 	}
-	if err := s.billingInvalidator.InvalidateUserBalance(cacheCtx, result.UserID); err != nil {
-		slog.Error("invalidate member removal balance cache failed", "user_id", result.UserID, "error", err)
-	}
-	for _, platform := range AllowedQuotaPlatforms {
-		if err := s.billingInvalidator.InvalidateUserPlatformQuota(cacheCtx, result.UserID, platform); err != nil {
-			slog.Error("invalidate member removal platform quota cache failed", "user_id", result.UserID, "platform", platform, "error", err)
-		}
-	}
-	seenGroups := make(map[int64]struct{}, len(result.GroupIDs))
-	for _, groupID := range result.GroupIDs {
-		if groupID <= 0 {
+	cacheCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	for _, target := range targets {
+		if target.UserID <= 0 {
 			continue
 		}
-		if _, exists := seenGroups[groupID]; exists {
+		if authInvalidator != nil {
+			authInvalidator.InvalidateAuthCacheByUserID(cacheCtx, target.UserID)
+		}
+		if billingInvalidator == nil {
 			continue
 		}
-		seenGroups[groupID] = struct{}{}
-		if err := s.billingInvalidator.InvalidateSubscription(cacheCtx, result.UserID, groupID); err != nil {
-			slog.Error("invalidate member removal subscription cache failed", "user_id", result.UserID, "group_id", groupID, "error", err)
+		if err := billingInvalidator.InvalidateUserBalance(cacheCtx, target.UserID); err != nil {
+			slog.Error("invalidate organization balance cache failed", "user_id", target.UserID, "error", err)
 		}
-	}
-	for _, keyID := range result.APIKeyIDs {
-		if keyID <= 0 {
-			continue
+		for _, platform := range AllowedQuotaPlatforms {
+			if err := billingInvalidator.InvalidateUserPlatformQuota(cacheCtx, target.UserID, platform); err != nil {
+				slog.Error("invalidate organization platform quota cache failed", "user_id", target.UserID, "platform", platform, "error", err)
+			}
 		}
-		if err := s.billingInvalidator.InvalidateAPIKeyRateLimit(cacheCtx, keyID); err != nil {
-			slog.Error("invalidate member removal api key cache failed", "user_id", result.UserID, "api_key_id", keyID, "error", err)
+		seenGroups := make(map[int64]struct{}, len(target.GroupIDs))
+		for _, groupID := range target.GroupIDs {
+			if groupID <= 0 {
+				continue
+			}
+			if _, exists := seenGroups[groupID]; exists {
+				continue
+			}
+			seenGroups[groupID] = struct{}{}
+			if err := billingInvalidator.InvalidateSubscription(cacheCtx, target.UserID, groupID); err != nil {
+				slog.Error("invalidate organization subscription cache failed", "user_id", target.UserID, "group_id", groupID, "error", err)
+			}
+		}
+		for _, keyID := range target.APIKeyIDs {
+			if keyID <= 0 {
+				continue
+			}
+			if err := billingInvalidator.InvalidateAPIKeyRateLimit(cacheCtx, keyID); err != nil {
+				slog.Error("invalidate organization api key rate limit cache failed", "user_id", target.UserID, "api_key_id", keyID, "error", err)
+			}
 		}
 	}
 }

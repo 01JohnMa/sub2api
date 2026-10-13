@@ -295,6 +295,30 @@ func (s *AuthService) RollbackOAuthEmailAccountCreation(ctx context.Context, use
 	if s == nil || s.userRepo == nil || userID <= 0 {
 		return ErrServiceUnavailable
 	}
+
+	// Reuse a caller-owned transaction when present. Unit-only service setups do
+	// not provide an Ent client, so retain their repository-backed behavior.
+	if dbent.TxFromContext(ctx) != nil || s.entClient == nil {
+		return s.rollbackOAuthEmailAccountCreation(ctx, userID, invitationCode)
+	}
+
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin oauth email rollback transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	txCtx := dbent.NewTxContext(ctx, tx)
+	if err := s.rollbackOAuthEmailAccountCreation(txCtx, userID, invitationCode); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit oauth email rollback transaction: %w", err)
+	}
+	return nil
+}
+
+func (s *AuthService) rollbackOAuthEmailAccountCreation(ctx context.Context, userID int64, invitationCode string) error {
 	if err := s.restoreOAuthRegistrationInvitation(ctx, invitationCode, userID); err != nil {
 		return err
 	}

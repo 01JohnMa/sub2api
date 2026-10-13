@@ -1,7 +1,9 @@
 package schema
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
@@ -20,9 +22,44 @@ type User struct {
 	ent.Schema
 }
 
+func (User) Hooks() []ent.Hook {
+	return []ent.Hook{
+		func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+				deleting := mutation.Op().Is(ent.OpDelete | ent.OpDeleteOne)
+				if !deleting && mutation.Op().Is(ent.OpUpdate|ent.OpUpdateOne) {
+					if change, ok := mutation.(interface{ DeletedAt() (time.Time, bool) }); ok {
+						_, deleting = change.DeletedAt()
+					}
+				}
+				if deleting {
+					if !mixins.IsUserDeletionAuthorized(ctx) {
+						return nil, mixins.ErrUserDeletionRequiresGuard
+					}
+					guard, ok := mutation.(interface {
+						GuardUserDeletion(context.Context) error
+					})
+					if !ok {
+						return nil, fmt.Errorf("unexpected user deletion mutation type %T", mutation)
+					}
+					if err := guard.GuardUserDeletion(ctx); err != nil {
+						return nil, err
+					}
+				}
+				return next.Mutate(ctx, mutation)
+			})
+		},
+	}
+}
+
 func (User) Annotations() []schema.Annotation {
 	return []schema.Annotation{
-		entsql.Annotation{Table: "users"},
+		entsql.Annotation{
+			Table: "users",
+			Checks: map[string]string{
+				"users_organization_assignment_check": "organization_id IS NULL AND organization_role IS NULL OR organization_id IS NOT NULL AND organization_role IS NOT NULL AND organization_role IN ('organization_admin', 'organization_member')",
+			},
+		},
 	}
 }
 
@@ -54,6 +91,14 @@ func (User) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
+		field.Int64("organization_id").
+			Optional().
+			Nillable(),
+		field.String("organization_role").
+			MaxLen(32).
+			Optional().
+			Nillable().
+			Validate(validateOrganizationRole),
 
 		// Optional profile fields (added later; default '' in DB migration)
 		field.String("username").
@@ -132,6 +177,16 @@ func (User) Edges() []ent.Edge {
 			Annotations(entsql.OnDelete(entsql.Cascade)),
 		edge.To("pending_auth_sessions", PendingAuthSession.Type),
 		edge.To("platform_quotas", UserPlatformQuota.Type),
+		edge.From("organization", Organization.Type).
+			Ref("members").
+			Field("organization_id").
+			Unique(),
+		edge.To("organization_allocations", OrganizationAllocation.Type).
+			Annotations(entsql.OnDelete(entsql.SetNull)),
+		edge.To("organization_executions", OrganizationExecution.Type).
+			Annotations(entsql.OnDelete(entsql.SetNull)),
+		edge.To("organization_final_execution_evidences", OrganizationFinalExecutionEvidence.Type).
+			Annotations(entsql.OnDelete(entsql.SetNull)),
 	}
 }
 
@@ -140,5 +195,15 @@ func (User) Indexes() []ent.Index {
 		// email 字段已在 Fields() 中声明 Unique()，无需重复索引
 		index.Fields("status"),
 		index.Fields("deleted_at"),
+		index.Fields("organization_id"),
+	}
+}
+
+func validateOrganizationRole(role string) error {
+	switch role {
+	case domain.OrganizationRoleAdmin, domain.OrganizationRoleMember:
+		return nil
+	default:
+		return fmt.Errorf("invalid organization role %q", role)
 	}
 }

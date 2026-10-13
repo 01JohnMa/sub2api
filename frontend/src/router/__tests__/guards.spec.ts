@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import router from '@/router'
 import { resolveCompletedSetupRedirectPath } from '@/router/setupRedirect'
 
 // Mock 导航加载状态
@@ -51,6 +52,7 @@ vi.mock('@/api/auth', () => ({
 interface MockAuthState {
   isAuthenticated: boolean
   isAdmin: boolean
+  isOrganizationAdmin?: boolean
   isSimpleMode: boolean
   backendModeEnabled: boolean
   hasPendingAuthSession: boolean
@@ -67,6 +69,17 @@ function simulateGuard(
 ): string | null {
   const requiresAuth = toMeta.requiresAuth !== false
   const requiresAdmin = toMeta.requiresAdmin === true
+  const requiresOrganizationAdmin = toMeta.requiresOrganizationAdmin === true
+  const forbidsOrganizationAdmin = toMeta.forbidsOrganizationAdmin === true
+
+  if (
+    forbidsOrganizationAdmin &&
+    authState.isAuthenticated &&
+    authState.isOrganizationAdmin === true &&
+    !authState.isAdmin
+  ) {
+    return '/organization/overview'
+  }
 
   if (toPath === '/setup' && authState.setupNeedsSetup === false) {
     return resolveCompletedSetupRedirectPath(authState.isAuthenticated, authState.isAdmin)
@@ -114,6 +127,10 @@ function simulateGuard(
     return '/dashboard'
   }
 
+  if (requiresOrganizationAdmin && authState.isOrganizationAdmin !== true) {
+    return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
+  }
+
   // 简易模式限制
   if (authState.isSimpleMode) {
     const restrictedPaths = [
@@ -155,6 +172,29 @@ function simulateGuard(
 }
 
 describe('路由守卫逻辑', () => {
+  const personalRoutePaths = [
+    '/dashboard',
+    '/usage',
+    '/keys',
+    '/profile',
+    '/subscriptions',
+    '/redeem',
+    '/affiliate',
+    '/available-channels',
+    '/monitor',
+    '/purchase',
+    '/orders',
+    '/payment/qrcode',
+    '/payment/result',
+    '/payment/stripe',
+    '/payment/airwallex',
+    '/payment/stripe-popup',
+  ]
+
+  function getRouteMeta(path: string): Record<string, any> {
+    return router.resolve(path).meta
+  }
+
   beforeEach(() => {
     setActivePinia(createPinia())
   })
@@ -252,6 +292,89 @@ describe('路由守卫逻辑', () => {
     it('访问用户页面允许通过', () => {
       const redirect = simulateGuard('/dashboard', {}, authState)
       expect(redirect).toBeNull()
+    })
+  })
+
+  describe('当前组织管理员路由', () => {
+    const organizationAdmin: MockAuthState = {
+      isAuthenticated: true,
+      isAdmin: false,
+      isOrganizationAdmin: true,
+      isSimpleMode: false,
+      backendModeEnabled: false,
+      hasPendingAuthSession: false,
+    }
+
+    it('active organization_admin 可以访问组织概览', () => {
+      expect(
+        simulateGuard('/organization/overview', { requiresOrganizationAdmin: true }, organizationAdmin)
+      ).toBeNull()
+    })
+
+    it('organization_member 访问组织概览时回退到个人仪表板', () => {
+      expect(
+        simulateGuard('/organization/overview', { requiresOrganizationAdmin: true }, {
+          ...organizationAdmin,
+          isOrganizationAdmin: false,
+        })
+      ).toBe('/dashboard')
+    })
+
+    it('无组织用户访问组织概览时回退到个人仪表板', () => {
+      expect(
+        simulateGuard('/organization/overview', { requiresOrganizationAdmin: true }, {
+          ...organizationAdmin,
+          isOrganizationAdmin: false,
+        })
+      ).toBe('/dashboard')
+    })
+
+    it('角色撤销或组织停用后的刷新状态不能访问组织概览', () => {
+      expect(
+        simulateGuard('/organization/overview', { requiresOrganizationAdmin: true }, {
+          ...organizationAdmin,
+          isOrganizationAdmin: false,
+        })
+      ).toBe('/dashboard')
+    })
+
+    it('没有组织角色的平台管理员回退到平台仪表板', () => {
+      expect(
+        simulateGuard('/organization/overview', { requiresOrganizationAdmin: true }, {
+          ...organizationAdmin,
+          isAdmin: true,
+          isOrganizationAdmin: false,
+        })
+      ).toBe('/admin/dashboard')
+    })
+
+    it.each(personalRoutePaths)(
+      'active organization_admin 访问个人入口 %s 时跳转到组织概览',
+      (path) => {
+        const routeMeta = getRouteMeta(path)
+        expect(routeMeta.forbidsOrganizationAdmin).toBe(true)
+        expect(simulateGuard(path, routeMeta, organizationAdmin)).toBe('/organization/overview')
+      }
+    )
+
+    it.each(personalRoutePaths)('平台管理员可以访问个人入口 %s', (path) => {
+      const routeMeta = getRouteMeta(path)
+      expect(
+        simulateGuard(path, routeMeta, {
+          ...organizationAdmin,
+          isAdmin: true,
+        })
+      ).toBeNull()
+    })
+
+    it.each(personalRoutePaths)('organization_member 可以访问个人入口 %s', (path) => {
+      const routeMeta = getRouteMeta(path)
+      expect(
+        simulateGuard(path, routeMeta, {
+          ...organizationAdmin,
+          isOrganizationAdmin: false,
+        })
+      ).toBeNull()
     })
   })
 

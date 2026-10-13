@@ -26,7 +26,7 @@ type organizationExecutionRepository struct {
 	client *dbent.Client
 }
 
-func NewOrganizationExecutionRepository(client *dbent.Client) service.OrganizationExecutionRepository {
+func NewOrganizationExecutionRepository(client *dbent.Client) *organizationExecutionRepository {
 	return &organizationExecutionRepository{client: client}
 }
 
@@ -89,6 +89,192 @@ func (r *organizationExecutionRepository) ReconcilePendingExecution(ctx context.
 	return withExecutionTransaction(r, ctx, "reconcile pending organization execution", func(txCtx context.Context, client *dbent.Client) (*service.OrganizationFinalExecutionEvidenceResult, error) {
 		return reconcilePendingOrganizationExecution(txCtx, client, command)
 	})
+}
+
+func (r *organizationExecutionRepository) ListPendingReconciliations(ctx context.Context, organizationID int64, params service.OrganizationPendingReconciliationListParams) ([]service.OrganizationPendingReconciliation, *service.OrganizationPendingReconciliationPage, error) {
+	if r == nil || r.client == nil {
+		return nil, nil, service.ErrOrganizationExecutionRepositoryUnavailable
+	}
+	if organizationID <= 0 || params.Page <= 0 || params.PageSize <= 0 || params.PageSize > 100 {
+		return nil, nil, service.ErrOrganizationExecutionInvalid
+	}
+	var total int64
+	if err := scanExecutionOne(ctx, r.client, `
+		SELECT COUNT(*) FROM organization_executions AS execution
+		LEFT JOIN organization_reservations AS reservation ON reservation.execution_ref_id = execution.id
+		WHERE execution.organization_id = $1
+			AND execution.status = $2
+			AND (
+				(execution.is_billable = TRUE AND reservation.status = $3)
+				OR (execution.is_billable = FALSE AND reservation.id IS NULL)
+			)
+	`, []any{organizationID, service.OrganizationExecutionStatePendingReconciliation, service.OrganizationReservationStatePendingReconciliation}, &total); err != nil {
+		return nil, nil, executionStorageError("count pending reconciliation executions", err)
+	}
+	page := &service.OrganizationPendingReconciliationPage{Total: total, Page: params.Page, PageSize: params.PageSize}
+	if total > 0 {
+		page.Pages = int((total + int64(params.PageSize) - 1) / int64(params.PageSize))
+	}
+	rows, err := r.client.QueryContext(ctx, `
+		SELECT execution.id, execution.execution_id, execution.organization_id,
+			COALESCE(reservation.allocation_id_snapshot, execution.allocation_id_snapshot, 0),
+			COALESCE(reservation.id, 0), execution.candidate_ceiling::text,
+			COALESCE(reservation.reserved_amount::text, '0'), execution.accepted_at
+		FROM organization_executions AS execution
+		LEFT JOIN organization_reservations AS reservation ON reservation.execution_ref_id = execution.id
+		WHERE execution.organization_id = $1
+			AND execution.status = $2
+			AND (
+				(execution.is_billable = TRUE AND reservation.status = $3)
+				OR (execution.is_billable = FALSE AND reservation.id IS NULL)
+			)
+		ORDER BY execution.accepted_at DESC, execution.id DESC
+		LIMIT $4 OFFSET $5
+	`, organizationID, service.OrganizationExecutionStatePendingReconciliation, service.OrganizationReservationStatePendingReconciliation, params.PageSize, (params.Page-1)*params.PageSize)
+	if err != nil {
+		return nil, nil, executionStorageError("list pending reconciliation executions", err)
+	}
+	defer func() { _ = rows.Close() }()
+	items := make([]service.OrganizationPendingReconciliation, 0)
+	for rows.Next() {
+		var executionRefID int64
+		item := service.OrganizationPendingReconciliation{}
+		if err := rows.Scan(&executionRefID, &item.ExecutionID, &item.OrganizationID, &item.AllocationID, &item.ReservationID, &item.CandidateCeiling, &item.ReservedAmount, &item.AcceptedAt); err != nil {
+			return nil, nil, executionStorageError("scan pending reconciliation execution", err)
+		}
+		if err := populatePendingReconciliationEvidence(ctx, r.client, executionRefID, &item); err != nil {
+			return nil, nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, executionStorageError("iterate pending reconciliation executions", err)
+	}
+	return items, page, nil
+}
+
+func (r *organizationExecutionRepository) GetPendingReconciliation(ctx context.Context, organizationID int64, executionID string) (*service.OrganizationPendingReconciliation, error) {
+	if r == nil || r.client == nil {
+		return nil, service.ErrOrganizationExecutionRepositoryUnavailable
+	}
+	item := &service.OrganizationPendingReconciliation{}
+	var executionRefID int64
+	err := scanExecutionOne(ctx, r.client, `
+		SELECT execution.id, execution.execution_id, execution.organization_id,
+			COALESCE(reservation.allocation_id_snapshot, execution.allocation_id_snapshot, 0),
+			COALESCE(reservation.id, 0), execution.candidate_ceiling::text,
+			COALESCE(reservation.reserved_amount::text, '0'), execution.accepted_at
+		FROM organization_executions AS execution
+		LEFT JOIN organization_reservations AS reservation ON reservation.execution_ref_id = execution.id
+		WHERE execution.organization_id = $1 AND execution.execution_id = $2
+			AND execution.status = $3
+			AND (
+				(execution.is_billable = TRUE AND reservation.status = $4)
+				OR (execution.is_billable = FALSE AND reservation.id IS NULL)
+			)
+	`, []any{organizationID, executionID, service.OrganizationExecutionStatePendingReconciliation, service.OrganizationReservationStatePendingReconciliation}, &executionRefID, &item.ExecutionID, &item.OrganizationID, &item.AllocationID, &item.ReservationID, &item.CandidateCeiling, &item.ReservedAmount, &item.AcceptedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, service.ErrOrganizationExecutionConflict
+		}
+		return nil, executionStorageError("load pending reconciliation execution", err)
+	}
+	if err := populatePendingReconciliationEvidence(ctx, r.client, executionRefID, item); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
+func populatePendingReconciliationEvidence(ctx context.Context, client *dbent.Client, executionRefID int64, item *service.OrganizationPendingReconciliation) error {
+	if item == nil {
+		return service.ErrOrganizationExecutionInvariant
+	}
+	attemptRows, err := client.QueryContext(ctx, `
+		SELECT attempt_id, attempt_sequence, status
+		FROM organization_execution_attempts
+		WHERE execution_ref_id = $1
+		ORDER BY attempt_sequence ASC, id ASC
+	`, executionRefID)
+	if err != nil {
+		return executionStorageError("list pending reconciliation attempts", err)
+	}
+	defer func() { _ = attemptRows.Close() }()
+	item.Attempts = make([]service.OrganizationPendingReconciliationAttempt, 0)
+	for attemptRows.Next() {
+		attempt := service.OrganizationPendingReconciliationAttempt{}
+		if err := attemptRows.Scan(&attempt.AttemptID, &attempt.AttemptSequence, &attempt.Status); err != nil {
+			return executionStorageError("scan pending reconciliation attempt", err)
+		}
+		item.Attempts = append(item.Attempts, attempt)
+	}
+	if err := attemptRows.Err(); err != nil {
+		return executionStorageError("iterate pending reconciliation attempts", err)
+	}
+	item.AttemptCount = len(item.Attempts)
+	candidates, err := loadOrganizationAttemptEvidenceCandidates(ctx, client, executionRefID, nil, false)
+	if err != nil {
+		return err
+	}
+	item.Evidence = make([]service.OrganizationPendingReconciliationEvidence, 0, len(candidates))
+	for _, candidate := range candidates {
+		item.Evidence = append(item.Evidence, service.OrganizationPendingReconciliationEvidence{
+			AttemptID: candidate.AttemptID, AttemptSequence: candidate.AttemptSequence,
+			EvidenceSource: candidate.EvidenceSource, TerminalOutcome: candidate.TerminalOutcome,
+			RawActualCost: candidate.RawActualCost, InputTokens: candidate.InputTokens,
+			OutputTokens: candidate.OutputTokens, CacheCreationTokens: candidate.CacheCreationTokens,
+			CacheReadTokens: candidate.CacheReadTokens, ProviderObservedAt: candidate.ProviderObservedAt,
+		})
+	}
+	evidenceSequences := make(map[int]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		evidenceSequences[candidate.AttemptSequence] = struct{}{}
+	}
+	for _, attempt := range item.Attempts {
+		if _, ok := evidenceSequences[attempt.AttemptSequence]; !ok {
+			// A later dispatched attempt without immutable evidence is still unknown;
+			// an earlier retry must not be selected as the final outcome.
+			return nil
+		}
+	}
+	selections := selectOrganizationAttemptEvidence(candidates)
+	if len(selections) == 0 {
+		return nil
+	}
+	sequences := make([]int, 0, len(selections))
+	for sequence := range selections {
+		sequences = append(sequences, sequence)
+	}
+	sort.Ints(sequences)
+	var selected *organizationAttemptEvidenceCandidate
+	for _, sequence := range sequences {
+		selection := selections[sequence]
+		if len(selection.Conflicts) > 0 {
+			item.Conflict = true
+			item.AllowedResolution = ""
+			return nil
+		}
+		if selection.Selected != nil {
+			selected = selection.Selected
+		}
+	}
+	if selected == nil || selected.TerminalOutcome == service.OrganizationAttemptEvidenceTerminalOutcomeUnknown {
+		return nil
+	}
+	cost, err := parseExecutionMoney(selected.RawActualCost)
+	if err != nil {
+		return service.ErrOrganizationExecutionInvariant.WithCause(err)
+	}
+	ceiling, err := parseExecutionMoney(item.CandidateCeiling)
+	if err != nil {
+		return service.ErrOrganizationExecutionInvariant.WithCause(err)
+	}
+	item.ComputedOrganizationAmount = fixedExecutionMoney(settleOrganizationExecutionCost(cost, ceiling))
+	if cost.IsZero() {
+		item.AllowedResolution = service.OrganizationReservationStateReleased
+	} else {
+		item.AllowedResolution = service.OrganizationReservationStateSettled
+	}
+	return nil
 }
 
 func (r *organizationExecutionRepository) RedriveAttemptAccountEffect(ctx context.Context, attemptID string) (*service.OrganizationAttemptAccountEffectResult, error) {
@@ -175,6 +361,7 @@ type organizationExecutionRecord struct {
 	APIKeyRefID          sql.NullInt64
 	EndpointFamily       string
 	RequestShape         string
+	Model                sql.NullString
 	BillingFingerprint   string
 	CandidateSnapshot    string
 	CandidateSetHash     string
@@ -514,20 +701,21 @@ func preDispatchRejectedExecution(ctx context.Context, client *dbent.Client, com
 			execution_id_snapshot, execution_ref_id, organization_id,
 			allocation_id_snapshot, allocation_ref_id,
 			user_id_snapshot, user_ref_id, api_key_id_snapshot, api_key_ref_id,
-			endpoint_family, request_shape, raw_actual_cost,
-			organization_settled_cost, terminal_outcome, is_business_limited,
+			endpoint_family, request_shape, model, raw_actual_cost,
+			organization_settled_cost, terminal_outcome, is_business_limited, is_count_tokens_probe,
 			zero_cost_proof, occurred_at
 		) VALUES (
 			$1, $2, $3, $4, NULL,
 			$5, NULL, $6, NULL,
-			$7, $8, 0,
-			0, $9, FALSE, $10, $11
+			$7, $8, $9, 0,
+			0, $10, FALSE, $11, $12, $13
 		)
 		RETURNING id
 	`, []any{
 		command.ExecutionID, execution.ID, command.Attribution.OrganizationID, command.Attribution.AllocationID,
 		command.Attribution.UserID, command.Attribution.APIKeyID,
-		command.EndpointFamily, command.RequestShape, service.OrganizationExecutionTerminalOutcomeError, proof, occurredAt,
+		command.EndpointFamily, command.RequestShape, nullableExecutionString(command.Model), service.OrganizationExecutionTerminalOutcomeError,
+		command.EndpointFamily == service.OrganizationEndpointFamilyTokenCounting, proof, occurredAt,
 	}, &finalID)
 	if err != nil {
 		return nil, executionStorageError("insert stale final evidence", err)
@@ -811,12 +999,25 @@ func reconcilePendingOrganizationExecution(ctx context.Context, client *dbent.Cl
 	if !validOrganizationReconciliationCommand(command) {
 		return nil, service.ErrOrganizationExecutionReconciliationForbidden
 	}
-	execution, err := loadExecutionByUUID(ctx, client, strings.TrimSpace(command.ExecutionID), false)
+	nonBillableExecution, err := loadNonBillableExecutionByUUID(ctx, client, strings.TrimSpace(command.ExecutionID), false)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, service.ErrOrganizationExecutionConflict
 		}
 		return nil, executionStorageError("load reconciliation execution", err)
+	}
+	if !nonBillableExecution.IsBillable {
+		return reconcilePendingNonBillableOrganizationExecution(ctx, client, command, nonBillableExecution)
+	}
+	execution, err := loadExecutionByUUID(ctx, client, strings.TrimSpace(command.ExecutionID), false)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, service.ErrOrganizationExecutionConflict
+		}
+		return nil, executionStorageError("load billable reconciliation execution", err)
+	}
+	if command.OrganizationID > 0 && execution.OrganizationID != command.OrganizationID {
+		return nil, service.ErrOrganizationExecutionConflict
 	}
 	reservation, err := loadReservationByExecution(ctx, client, execution.ID, false)
 	if err != nil {
@@ -859,6 +1060,13 @@ func reconcilePendingOrganizationExecution(ctx context.Context, client *dbent.Cl
 	}
 	if allocation == nil || reservation.Status != service.OrganizationReservationStatePendingReconciliation || execution.Status != service.OrganizationExecutionStatePendingReconciliation {
 		return nil, service.ErrOrganizationExecutionConflict
+	}
+	incompleteAttempts, err := countOrganizationExecutionAttemptsWithoutEvidence(ctx, client, execution.ID)
+	if err != nil {
+		return nil, err
+	}
+	if incompleteAttempts > 0 {
+		return nil, service.ErrOrganizationExecutionPendingReconciliation
 	}
 	candidates, err := loadOrganizationAttemptEvidenceCandidates(ctx, client, execution.ID, nil, true)
 	if err != nil {
@@ -915,6 +1123,165 @@ func reconcilePendingOrganizationExecution(ctx context.Context, client *dbent.Cl
 		return nil, err
 	}
 	return result, nil
+}
+
+func reconcilePendingNonBillableOrganizationExecution(
+	ctx context.Context,
+	client *dbent.Client,
+	command service.OrganizationPendingReconciliationCommand,
+	executionSnapshot *organizationNonBillableExecutionRecord,
+) (*service.OrganizationFinalExecutionEvidenceResult, error) {
+	if executionSnapshot == nil || executionSnapshot.IsBillable || !executionSnapshot.AllocationIDSnapshot.Valid {
+		return nil, service.ErrOrganizationExecutionConflict
+	}
+	if command.OrganizationID > 0 && executionSnapshot.OrganizationID != command.OrganizationID {
+		return nil, service.ErrOrganizationExecutionConflict
+	}
+	allocation, err := lockExecutionAllocation(ctx, client, executionSnapshot.AllocationIDSnapshot.Int64)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, service.ErrOrganizationExecutionConflict
+		}
+		return nil, executionStorageError("lock non-billable reconciliation allocation", err)
+	}
+	execution, err := loadNonBillableExecutionByUUID(ctx, client, executionSnapshot.ExecutionID, true)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, service.ErrOrganizationExecutionConflict
+		}
+		return nil, executionStorageError("lock non-billable reconciliation execution", err)
+	}
+	if execution.IsBillable || execution.ID != executionSnapshot.ID || execution.OrganizationID != executionSnapshot.OrganizationID ||
+		!execution.AllocationIDSnapshot.Valid || execution.AllocationIDSnapshot.Int64 != allocation.ID ||
+		allocation.OrganizationID != execution.OrganizationID || allocation.UserSnapshot != execution.UserIDSnapshot {
+		return nil, service.ErrOrganizationExecutionConflict
+	}
+	existingAudit, err := loadOrganizationExecutionReconciliationAuditByScopedKey(ctx, client, execution.OrganizationID, command.Actor.AuthorizationScope, command.IdempotencyKeyHash)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+	if existingAudit != nil && (existingAudit.ExecutionRefID != execution.ID || existingAudit.CanonicalPayloadHash != command.CanonicalPayloadHash) {
+		return nil, service.ErrIdempotencyKeyConflict
+	}
+	finalRecord, err := loadNonBillableFinalEvidenceByExecution(ctx, client, execution.ID, true)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, executionStorageError("load non-billable reconciliation final replay", err)
+	}
+	if finalRecord != nil {
+		if existingAudit == nil || !finalRecord.ReconciledAt.Valid {
+			return nil, service.ErrIdempotencyKeyConflict
+		}
+		final, err := nonBillableFinalEvidenceResult(execution, finalRecord, true)
+		if err != nil {
+			return nil, err
+		}
+		reconciledAt := finalRecord.ReconciledAt.Time.UTC()
+		return organizationNonBillableRecoveryResult(final, &reconciledAt, true), nil
+	}
+	if existingAudit != nil {
+		return nil, service.ErrOrganizationExecutionInvariant
+	}
+	if execution.Status != service.OrganizationExecutionStatePendingReconciliation {
+		return nil, service.ErrOrganizationExecutionConflict
+	}
+	incompleteAttempts, err := countOrganizationExecutionAttemptsWithoutEvidence(ctx, client, execution.ID)
+	if err != nil {
+		return nil, err
+	}
+	if incompleteAttempts > 0 {
+		return nil, service.ErrOrganizationExecutionPendingReconciliation
+	}
+	candidates, err := loadOrganizationAttemptEvidenceCandidates(ctx, client, execution.ID, nil, true)
+	if err != nil {
+		return nil, err
+	}
+	selections := selectOrganizationAttemptEvidence(candidates)
+	if len(selections) == 0 {
+		return nil, service.ErrOrganizationExecutionPendingReconciliation
+	}
+	sequences := make([]int, 0, len(selections))
+	for sequence := range selections {
+		sequences = append(sequences, sequence)
+	}
+	sort.Ints(sequences)
+	var finalSelection *organizationAttemptEvidenceCandidate
+	recoveryExecution := organizationRecoveryExecutionFromNonBillable(execution)
+	for _, sequence := range sequences {
+		selection := selections[sequence]
+		if len(selection.Conflicts) > 0 {
+			if err := persistProvenanceConflict(ctx, client, recoveryExecution, selection.Selected, selection.Conflicts, command.ReconciledAt); err != nil {
+				return nil, err
+			}
+			return nil, service.ErrOrganizationExecutionPendingReconciliation
+		}
+		if selection.Selected != nil {
+			finalSelection = selection.Selected
+		}
+	}
+	if finalSelection == nil || finalSelection.TerminalOutcome == service.OrganizationAttemptEvidenceTerminalOutcomeUnknown {
+		return nil, service.ErrOrganizationExecutionPendingReconciliation
+	}
+	actualCost, err := parseExecutionMoney(finalSelection.RawActualCost)
+	if err != nil || !actualCost.IsZero() {
+		return nil, service.ErrOrganizationExecutionInvariant
+	}
+	occurredAt := finalSelection.ProviderObservedAt.UTC()
+	if occurredAt.Before(execution.AcceptedAt.UTC()) {
+		occurredAt = execution.AcceptedAt.UTC()
+	}
+	reconciledAt := command.ReconciledAt.UTC()
+	nonBillableFinal, err := terminalizeNonBillableOrganizationExecutionAt(ctx, client, service.OrganizationNonBillableTerminalizationCommand{
+		ExecutionID: execution.ExecutionID, CorrelationID: execution.CorrelationID,
+		OrganizationID: execution.OrganizationID, UserID: execution.UserIDSnapshot, APIKeyID: execution.APIKeyIDSnapshot,
+		AllocationID: execution.AllocationIDSnapshot.Int64, FinalAttemptID: pointerRepositoryString(finalSelection.AttemptID),
+		FinalAttemptEvidenceID: pointerRepositoryInt64(finalSelection.ID), TerminalOutcome: finalSelection.TerminalOutcome,
+		OccurredAt: occurredAt,
+	}, &reconciledAt)
+	if err != nil {
+		return nil, err
+	}
+	result := organizationNonBillableRecoveryResult(nonBillableFinal, &reconciledAt, false)
+	reservationless := &organizationReservationRecord{
+		ExecutionRefID: execution.ID, ExecutionIDSnapshot: execution.ExecutionID, OrganizationID: execution.OrganizationID,
+		AllocationIDSnapshot: execution.AllocationIDSnapshot.Int64, ReservedAmount: "0.00000000",
+		Status: service.OrganizationReservationStatePendingReconciliation,
+	}
+	if err := insertOrganizationExecutionReconciliationAudit(ctx, client, recoveryExecution, reservationless, finalSelection, command, result, reconciledAt); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func organizationRecoveryExecutionFromNonBillable(execution *organizationNonBillableExecutionRecord) *organizationExecutionRecord {
+	if execution == nil {
+		return nil
+	}
+	return &organizationExecutionRecord{
+		ID: execution.ID, ExecutionID: execution.ExecutionID, CorrelationID: execution.CorrelationID,
+		OrganizationID: execution.OrganizationID, AllocationIDSnapshot: execution.AllocationIDSnapshot,
+		AllocationRefID: execution.AllocationRefID, UserIDSnapshot: execution.UserIDSnapshot, UserRefID: execution.UserRefID,
+		APIKeyIDSnapshot: execution.APIKeyIDSnapshot, APIKeyRefID: execution.APIKeyRefID, EndpointFamily: execution.EndpointFamily,
+		RequestShape: execution.RequestShape, Model: execution.Model, BillingFingerprint: execution.BillingFingerprint,
+		CandidateSnapshot: execution.CandidateSnapshot, CandidateSetHash: execution.CandidateSetHash,
+		PricingSnapshot: execution.PricingSnapshot, PricingSnapshotHash: execution.PricingSnapshotHash,
+		CandidateCeiling: execution.CandidateCeiling, Status: execution.Status, AcceptedAt: execution.AcceptedAt,
+		TerminalizedAt: execution.TerminalizedAt,
+	}
+}
+
+func organizationNonBillableRecoveryResult(final *service.OrganizationNonBillableFinalExecutionEvidenceResult, reconciledAt *time.Time, replayed bool) *service.OrganizationFinalExecutionEvidenceResult {
+	if final == nil {
+		return nil
+	}
+	return &service.OrganizationFinalExecutionEvidenceResult{
+		FinalEvidenceID: final.FinalEvidenceID, ExecutionID: final.ExecutionID, CorrelationID: final.CorrelationID,
+		OrganizationID: final.OrganizationID, UserID: final.UserID, APIKeyID: final.APIKeyID, AllocationID: final.AllocationID,
+		FinalAttemptID: final.FinalAttemptID, FinalAttemptEvidenceID: final.FinalAttemptEvidenceID,
+		TerminalOutcome: final.TerminalOutcome, BusinessLimited: final.BusinessLimited, RawActualCost: final.RawActualCost,
+		OrganizationSettledCost: final.OrganizationSettledCost, ZeroProof: final.ZeroProof,
+		ReservationState: service.OrganizationReservationStateReleased, ConsumptionPostingID: final.ConsumptionPostingID,
+		OccurredAt: final.OccurredAt, ReconciledAt: reconciledAt, Replayed: replayed,
+	}
 }
 
 func insertOrganizationExecutionReconciliationAudit(
@@ -983,10 +1350,26 @@ func insertOrganizationExecutionReconciliationAudit(
 	return nil
 }
 
+func countOrganizationExecutionAttemptsWithoutEvidence(ctx context.Context, client *dbent.Client, executionRefID int64) (int, error) {
+	var count int
+	if err := scanExecutionOne(ctx, client, `
+		SELECT COUNT(*)
+		FROM organization_execution_attempts AS attempt
+		WHERE attempt.execution_ref_id = $1
+			AND NOT EXISTS (
+				SELECT 1 FROM organization_attempt_evidences AS evidence
+				WHERE evidence.attempt_ref_id = attempt.id
+			)
+	`, []any{executionRefID}, &count); err != nil {
+		return 0, executionStorageError("count reconciliation attempts without evidence", err)
+	}
+	return count, nil
+}
+
 func validOrganizationReconciliationCommand(command service.OrganizationPendingReconciliationCommand) bool {
 	return strings.TrimSpace(command.ExecutionID) != "" && validOrganizationExecutionRepositoryUUID(command.OperationID) && validOrganizationExecutionRepositoryUUID(command.CorrelationID) &&
 		validOrganizationExecutionRepositoryHash(command.IdempotencyKeyHash) && validOrganizationExecutionRepositoryHash(command.CanonicalPayloadHash) &&
-		!command.ReconciledAt.IsZero() && command.Actor.UserID > 0 && command.Actor.Active &&
+		!command.ReconciledAt.IsZero() && command.OrganizationID >= 0 && command.Actor.UserID > 0 && command.Actor.Active &&
 		command.Actor.AuthorizationScope == domain.OrganizationFundingAuthorizationPlatformAdminJWT && command.Actor.PlatformRole == domain.RoleAdmin && strings.TrimSpace(command.Actor.DisplayName) != ""
 }
 
@@ -1446,15 +1829,26 @@ func redrivePendingOrganizationAttemptAccountEffects(ctx context.Context, client
 }
 
 type organizationExecutionOutboxRecord struct {
-	ID             int64
-	ExecutionID    string
-	EventType      string
-	Status         string
-	UserID         int64
-	APIKeyID       int64
-	EndpointFamily string
-	SettledCost    string
-	OccurredAt     time.Time
+	ID                  int64
+	ExecutionID         string
+	OrganizationID      int64
+	ClientRequestID     sql.NullString
+	EventType           string
+	Status              string
+	UserID              int64
+	APIKeyID            int64
+	AccountID           sql.NullInt64
+	EndpointFamily      string
+	Model               sql.NullString
+	InputTokens         int64
+	OutputTokens        int64
+	CacheCreationTokens int64
+	CacheReadTokens     int64
+	RawActualCost       string
+	SettledCost         string
+	TerminalOutcome     string
+	BusinessLimited     bool
+	OccurredAt          time.Time
 }
 
 func redriveOrganizationExecutionOutbox(ctx context.Context, client *dbent.Client, outboxID int64) (*service.OrganizationExecutionOutboxApplyResult, error) {
@@ -1474,6 +1868,21 @@ func redriveOrganizationExecutionOutbox(ctx context.Context, client *dbent.Clien
 	}
 	deletedTarget := false
 	switch outbox.EventType {
+	case "usage_projection":
+		if err := loadOrganizationExecutionOutboxProjectionDetails(ctx, client, outbox); err != nil {
+			return nil, err
+		}
+		deletedTarget, err = applyOrganizationUsageProjection(ctx, client, outbox)
+		if err != nil {
+			return nil, err
+		}
+	case "error_projection":
+		if err := loadOrganizationExecutionOutboxProjectionDetails(ctx, client, outbox); err != nil {
+			return nil, err
+		}
+		if err := applyOrganizationErrorProjection(ctx, client, outbox); err != nil {
+			return nil, err
+		}
 	case "api_key_quota":
 		var id int64
 		err := scanExecutionOne(ctx, client, `SELECT id FROM api_keys WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, []any{outbox.APIKeyID}, &id)
@@ -1569,7 +1978,7 @@ func redrivePendingOrganizationExecutionEffects(ctx context.Context, client *dbe
 		SELECT id
 		FROM organization_execution_outboxes
 			WHERE status = $1
-				AND event_type IN ('api_key_quota', 'user_platform_quota')
+				AND event_type IN ('usage_projection', 'error_projection', 'api_key_quota', 'user_platform_quota')
 			ORDER BY id
 			LIMIT $2
 			FOR UPDATE SKIP LOCKED
@@ -1626,6 +2035,226 @@ func loadOrganizationExecutionOutbox(ctx context.Context, client *dbent.Client, 
 		return nil, err
 	}
 	return record, nil
+}
+
+func loadOrganizationExecutionOutboxProjectionDetails(ctx context.Context, client *dbent.Client, outbox *organizationExecutionOutboxRecord) error {
+	if outbox == nil {
+		return service.ErrOrganizationExecutionInvariant
+	}
+	err := scanExecutionOne(ctx, client, `
+		SELECT outbox.organization_id, execution.client_request_id,
+			final.account_id_snapshot, COALESCE(final.model, ''),
+			COALESCE(final.input_tokens, 0), COALESCE(final.output_tokens, 0),
+			COALESCE(final.cache_creation_tokens, 0), COALESCE(final.cache_read_tokens, 0),
+			COALESCE(final.raw_actual_cost::text, '0'), COALESCE(final.terminal_outcome, ''),
+			COALESCE(final.is_business_limited, FALSE)
+		FROM organization_execution_outboxes AS outbox
+		LEFT JOIN organization_final_execution_evidences AS final ON final.id = outbox.final_evidence_id_snapshot
+		LEFT JOIN organization_executions AS execution ON execution.id = outbox.execution_ref_id
+		WHERE outbox.id = $1
+	`, []any{outbox.ID},
+		&outbox.OrganizationID, &outbox.ClientRequestID, &outbox.AccountID, &outbox.Model,
+		&outbox.InputTokens, &outbox.OutputTokens, &outbox.CacheCreationTokens, &outbox.CacheReadTokens,
+		&outbox.RawActualCost, &outbox.TerminalOutcome, &outbox.BusinessLimited,
+	)
+	if err == sql.ErrNoRows {
+		return service.ErrOrganizationExecutionConflict
+	}
+	if err != nil {
+		return executionStorageError("load execution outbox projection details", err)
+	}
+	return nil
+}
+
+// applyOrganizationUsageProjection writes an execution-scoped compatibility
+// row. Client request IDs remain metadata and are never used to rewrite an
+// older usage row. Organization settlement never reads the float legacy cost.
+func applyOrganizationUsageProjection(ctx context.Context, client *dbent.Client, outbox *organizationExecutionOutboxRecord) (bool, error) {
+	if outbox == nil || outbox.OrganizationID <= 0 || outbox.ExecutionID == "" || outbox.UserID <= 0 || outbox.APIKeyID <= 0 {
+		return false, service.ErrOrganizationExecutionInvariant
+	}
+	if !outbox.AccountID.Valid {
+		settledCost, err := parseExecutionMoney(outbox.SettledCost)
+		if err != nil {
+			return false, service.ErrOrganizationExecutionInvariant.WithCause(err)
+		}
+		if !settledCost.IsZero() {
+			return false, service.ErrOrganizationExecutionInvariant
+		}
+		// A proven-zero execution may legitimately have no dispatched Account.
+		// Reporting remains sourced from final evidence, so no compatibility
+		// usage row is required and the outbox can finish as an ordinary apply.
+		return false, nil
+	}
+	if outbox.AccountID.Int64 <= 0 {
+		return false, service.ErrOrganizationExecutionInvariant
+	}
+	deletedTarget, err := lockOrganizationUsageProjectionTargets(ctx, client, outbox)
+	if err != nil || deletedTarget {
+		return deletedTarget, err
+	}
+	model := strings.TrimSpace(outbox.Model.String)
+	if model == "" {
+		model = "organization_execution"
+	}
+	rawCost := strings.TrimSpace(outbox.RawActualCost)
+	if rawCost == "" {
+		rawCost = "0"
+	}
+	if parsed, err := decimal.NewFromString(rawCost); err != nil || parsed.IsNegative() {
+		return false, service.ErrOrganizationExecutionInvariant.WithCause(err)
+	}
+	requestID := "organization:" + outbox.ExecutionID
+	found, err := verifyOrganizationProjectionAttribution(ctx, client, "usage_logs", "execution_id = $1", []any{outbox.ExecutionID}, outbox, false)
+	if err != nil {
+		return false, err
+	}
+	if found {
+		return false, nil
+	}
+	var id int64
+	err = scanExecutionOne(ctx, client, `
+		INSERT INTO usage_logs (
+			user_id, api_key_id, account_id, request_id, model,
+			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+			total_cost, actual_cost, stream, created_at, organization_id, execution_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, FALSE, $11, $12, $13)
+		RETURNING id
+	`, []any{
+		outbox.UserID, outbox.APIKeyID, outbox.AccountID.Int64, requestID, model,
+		outbox.InputTokens, outbox.OutputTokens, outbox.CacheCreationTokens, outbox.CacheReadTokens,
+		rawCost, outbox.OccurredAt.UTC(), outbox.OrganizationID, outbox.ExecutionID,
+	}, &id)
+	if err == nil {
+		return false, nil
+	}
+	if err != sql.ErrNoRows {
+		return false, executionStorageError("insert usage projection", err)
+	}
+	found, err = verifyOrganizationProjectionAttribution(ctx, client, "usage_logs", "execution_id = $1", []any{outbox.ExecutionID}, outbox, false)
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		return false, service.ErrOrganizationExecutionInvariant
+	}
+	return false, nil
+}
+
+func lockOrganizationUsageProjectionTargets(ctx context.Context, client *dbent.Client, outbox *organizationExecutionOutboxRecord) (bool, error) {
+	for _, target := range []struct {
+		table string
+		id    int64
+	}{
+		{table: "users", id: outbox.UserID},
+		{table: "api_keys", id: outbox.APIKeyID},
+		{table: "accounts", id: outbox.AccountID.Int64},
+	} {
+		var id int64
+		err := scanExecutionOne(ctx, client, "SELECT id FROM "+target.table+" WHERE id = $1 AND deleted_at IS NULL FOR UPDATE", []any{target.id}, &id)
+		if err == sql.ErrNoRows {
+			return true, nil
+		}
+		if err != nil {
+			return false, executionStorageError("lock usage projection "+target.table, err)
+		}
+	}
+	return false, nil
+}
+
+// applyOrganizationErrorProjection writes one execution-scoped compatibility
+// row while allowing other error records for the same execution to coexist.
+func applyOrganizationErrorProjection(ctx context.Context, client *dbent.Client, outbox *organizationExecutionOutboxRecord) error {
+	if outbox == nil || outbox.OrganizationID <= 0 || outbox.ExecutionID == "" {
+		return service.ErrOrganizationExecutionInvariant
+	}
+	model := strings.TrimSpace(outbox.Model.String)
+	if model == "" {
+		model = "organization_execution"
+	}
+	requestID := outbox.ExecutionID
+	terminalOutcome := strings.TrimSpace(outbox.TerminalOutcome)
+	if terminalOutcome == "" {
+		terminalOutcome = service.OrganizationExecutionTerminalOutcomeError
+	}
+	found, err := verifyOrganizationProjectionAttribution(ctx, client, "ops_error_logs", "execution_id = $1", []any{outbox.ExecutionID}, outbox, true)
+	if err != nil {
+		return err
+	}
+	if found {
+		return nil
+	}
+	var id int64
+	err = scanExecutionOne(ctx, client, `
+		INSERT INTO ops_error_logs (
+			request_id, client_request_id, user_id, api_key_id, account_id,
+			platform, model, request_path, stream, error_phase, error_type,
+			status_code, is_business_limited, is_count_tokens, error_message,
+			created_at, organization_id, execution_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		RETURNING id
+	`, []any{
+		requestID, nullableExecutionString(outbox.ClientRequestID.String), nullableExecutionInt64Value(sql.NullInt64{Int64: outbox.UserID, Valid: outbox.UserID > 0}), nullableExecutionInt64Value(sql.NullInt64{Int64: outbox.APIKeyID, Valid: outbox.APIKeyID > 0}), nullableExecutionInt64Value(outbox.AccountID),
+		outbox.EndpointFamily, model, outbox.EndpointFamily, "terminal", "organization_execution_" + terminalOutcome, 500,
+		outbox.BusinessLimited, outbox.EndpointFamily == service.OrganizationEndpointFamilyTokenCounting,
+		"organization execution terminal outcome: " + terminalOutcome, outbox.OccurredAt.UTC(), outbox.OrganizationID, outbox.ExecutionID,
+	}, &id)
+	if err == nil {
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return executionStorageError("insert error projection", err)
+	}
+	found, err = verifyOrganizationProjectionAttribution(ctx, client, "ops_error_logs", "execution_id = $1", []any{outbox.ExecutionID}, outbox, true)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return service.ErrOrganizationExecutionInvariant
+	}
+	return nil
+}
+
+func nullableExecutionInt64Value(value sql.NullInt64) any {
+	if !value.Valid || value.Int64 <= 0 {
+		return nil
+	}
+	return value.Int64
+}
+
+func verifyOrganizationProjectionAttribution(ctx context.Context, client *dbent.Client, table, predicate string, args []any, outbox *organizationExecutionOutboxRecord, allowMultipleExact bool) (bool, error) {
+	query := "SELECT organization_id, execution_id FROM " + table + " WHERE " + predicate + " ORDER BY id DESC"
+	rows, err := client.QueryContext(ctx, query, args...)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, executionStorageError("verify projection attribution", err)
+	}
+	defer func() { _ = rows.Close() }()
+	found := false
+	for rows.Next() {
+		var organizationID sql.NullInt64
+		var executionID sql.NullString
+		if err := rows.Scan(&organizationID, &executionID); err != nil {
+			return false, executionStorageError("scan projection attribution", err)
+		}
+		if organizationID.Valid != executionID.Valid {
+			return true, service.ErrOrganizationExecutionConflict
+		}
+		if !organizationID.Valid {
+			continue
+		}
+		exact := organizationID.Int64 == outbox.OrganizationID && executionID.String == outbox.ExecutionID
+		if !exact || (found && !allowMultipleExact) {
+			return true, service.ErrOrganizationExecutionConflict
+		}
+		found = true
+	}
+	if err := rows.Err(); err != nil {
+		return false, executionStorageError("iterate projection attribution", err)
+	}
+	return found, nil
 }
 
 func organizationQuotaPlatform(endpointFamily string) (string, bool) {
@@ -1790,6 +2419,7 @@ func terminalizeOrganizationExecution(ctx context.Context, client *dbent.Client,
 		zeroProof = zeroProofJSON
 	}
 	var finalID int64
+	isCountTokensProbe := execution.EndpointFamily == service.OrganizationEndpointFamilyTokenCounting
 	err = scanExecutionOne(ctx, client, `
 		INSERT INTO organization_final_execution_evidences (
 			execution_id_snapshot, execution_ref_id, organization_id,
@@ -1797,20 +2427,20 @@ func terminalizeOrganizationExecution(ctx context.Context, client *dbent.Client,
 			user_id_snapshot, user_ref_id, api_key_id_snapshot, api_key_ref_id,
 			final_attempt_id_snapshot, final_attempt_ref_id,
 			final_attempt_evidence_id_snapshot, final_attempt_evidence_ref_id,
-			account_id_snapshot, account_ref_id, endpoint_family, request_shape,
+			account_id_snapshot, account_ref_id, endpoint_family, request_shape, model,
 			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
 			raw_actual_cost, organization_settled_cost, terminal_outcome,
-				is_business_limited, zero_cost_proof, occurred_at, reconciled_at
+				is_business_limited, is_count_tokens_probe, zero_cost_proof, occurred_at, reconciled_at
 		) VALUES (
 			$1, $2, $3,
 			$4, $5,
 			$6, $7, $8, $9,
 			$10, $11,
 			$12, $13,
-			$14, $15, $16, $17,
-			$18, $19, $20, $21,
-			$22, $23, $24,
-				$25, $26::jsonb, $27, $28
+			$14, $15, $16, $17, $18,
+			$19, $20, $21, $22,
+			$23, $24, $25,
+				$26, $27, $28::jsonb, $29, $30
 		)
 		RETURNING id
 	`, []any{
@@ -1819,10 +2449,10 @@ func terminalizeOrganizationExecution(ctx context.Context, client *dbent.Client,
 		command.UserID, userRefID, command.APIKeyID, apiKeyRefID,
 		finalAttemptUUID, finalAttemptRefID,
 		command.FinalAttemptEvidenceID, finalAttemptEvidenceRefID,
-		accountIDSnapshot, accountRefID, execution.EndpointFamily, execution.RequestShape,
+		accountIDSnapshot, accountRefID, execution.EndpointFamily, execution.RequestShape, nullableExecutionString(execution.Model.String),
 		inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens,
 		rawActualCost.String(), fixedExecutionMoney(settledAmount), command.TerminalOutcome,
-		command.BusinessLimited, zeroProof, command.OccurredAt.UTC(), command.ReconciledAt,
+		command.BusinessLimited, isCountTokensProbe, zeroProof, command.OccurredAt.UTC(), command.ReconciledAt,
 	}, &finalID)
 	if err != nil {
 		return nil, executionStorageError("insert final execution evidence", err)
@@ -2098,7 +2728,7 @@ func loadExecutionByUUID(ctx context.Context, client *dbent.Client, executionID 
 	query := `
 		SELECT id, execution_id, correlation_id, organization_id,
 			allocation_id_snapshot, allocation_ref_id, user_id_snapshot, user_ref_id,
-			api_key_id_snapshot, api_key_ref_id, endpoint_family, request_shape,
+			api_key_id_snapshot, api_key_ref_id, endpoint_family, request_shape, model,
 			billing_fingerprint, candidate_snapshot::text, candidate_set_hash,
 			pricing_snapshot::text, pricing_snapshot_hash, candidate_ceiling::text,
 			status, accepted_at, terminalized_at
@@ -2110,7 +2740,7 @@ func loadExecutionByUUID(ctx context.Context, client *dbent.Client, executionID 
 	err := scanExecutionOne(ctx, client, query, []any{executionID},
 		&record.ID, &record.ExecutionID, &record.CorrelationID, &record.OrganizationID,
 		&record.AllocationIDSnapshot, &record.AllocationRefID, &record.UserIDSnapshot, &record.UserRefID,
-		&record.APIKeyIDSnapshot, &record.APIKeyRefID, &record.EndpointFamily, &record.RequestShape,
+		&record.APIKeyIDSnapshot, &record.APIKeyRefID, &record.EndpointFamily, &record.RequestShape, &record.Model,
 		&record.BillingFingerprint, &record.CandidateSnapshot, &record.CandidateSetHash,
 		&record.PricingSnapshot, &record.PricingSnapshotHash, &record.CandidateCeiling,
 		&record.Status, &record.AcceptedAt, &record.TerminalizedAt,
@@ -2191,23 +2821,23 @@ func insertOrganizationExecution(ctx context.Context, client *dbent.Client, comm
 		INSERT INTO organization_executions (
 			execution_id, correlation_id, organization_id,
 			allocation_id_snapshot, allocation_ref_id, user_id_snapshot, user_ref_id,
-			api_key_id_snapshot, api_key_ref_id, endpoint_family, request_shape,
+			api_key_id_snapshot, api_key_ref_id, endpoint_family, request_shape, model,
 			client_request_id, billing_fingerprint, candidate_snapshot,
 			candidate_set_hash, pricing_snapshot, pricing_snapshot_hash,
 			candidate_ceiling, is_billable, status, accepted_at
 		) VALUES (
 			$1, $2, $3,
 			$4, $5, $6, $7,
-			$8, $9, $10, $11,
-			$12, $13, $14::jsonb,
-			$15, $16::jsonb, $17,
-			$18, TRUE, $19, $20
+			$8, $9, $10, $11, $12,
+			$13, $14, $15::jsonb,
+			$16, $17::jsonb, $18,
+			$19, TRUE, $20, $21
 		)
 		RETURNING id
 	`, []any{
 		command.ExecutionID, command.CorrelationID, command.Attribution.OrganizationID,
 		command.Attribution.AllocationID, allocationRefID, command.Attribution.UserID, userRefID,
-		command.Attribution.APIKeyID, keyRefID, command.EndpointFamily, command.RequestShape,
+		command.Attribution.APIKeyID, keyRefID, command.EndpointFamily, command.RequestShape, nullableExecutionString(command.Model),
 		nullableExecutionString(command.ClientRequestID), command.BillingFingerprint, command.CandidateSnapshotJSON,
 		command.CandidateSetHash, command.PricingSnapshotJSON, command.PricingSnapshotHash,
 		command.CandidateRouteMaximumCost, service.OrganizationExecutionStateAccepted, command.AcceptedAt.UTC(),

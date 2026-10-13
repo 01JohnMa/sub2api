@@ -17,6 +17,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/organization"
+	"github.com/Wei-Shaw/sub2api/ent/organizationallocation"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecution"
+	"github.com/Wei-Shaw/sub2api/ent/organizationfinalexecutionevidence"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
@@ -33,25 +37,29 @@ import (
 // UserQuery is the builder for querying User entities.
 type UserQuery struct {
 	config
-	ctx                       *QueryContext
-	order                     []user.OrderOption
-	inters                    []Interceptor
-	predicates                []predicate.User
-	withAPIKeys               *APIKeyQuery
-	withRedeemCodes           *RedeemCodeQuery
-	withSubscriptions         *UserSubscriptionQuery
-	withAssignedSubscriptions *UserSubscriptionQuery
-	withAnnouncementReads     *AnnouncementReadQuery
-	withAllowedGroups         *GroupQuery
-	withUsageLogs             *UsageLogQuery
-	withAttributeValues       *UserAttributeValueQuery
-	withPromoCodeUsages       *PromoCodeUsageQuery
-	withPaymentOrders         *PaymentOrderQuery
-	withAuthIdentities        *AuthIdentityQuery
-	withPendingAuthSessions   *PendingAuthSessionQuery
-	withPlatformQuotas        *UserPlatformQuotaQuery
-	withUserAllowedGroups     *UserAllowedGroupQuery
-	modifiers                 []func(*sql.Selector)
+	ctx                                     *QueryContext
+	order                                   []user.OrderOption
+	inters                                  []Interceptor
+	predicates                              []predicate.User
+	withAPIKeys                             *APIKeyQuery
+	withRedeemCodes                         *RedeemCodeQuery
+	withSubscriptions                       *UserSubscriptionQuery
+	withAssignedSubscriptions               *UserSubscriptionQuery
+	withAnnouncementReads                   *AnnouncementReadQuery
+	withAllowedGroups                       *GroupQuery
+	withUsageLogs                           *UsageLogQuery
+	withAttributeValues                     *UserAttributeValueQuery
+	withPromoCodeUsages                     *PromoCodeUsageQuery
+	withPaymentOrders                       *PaymentOrderQuery
+	withAuthIdentities                      *AuthIdentityQuery
+	withPendingAuthSessions                 *PendingAuthSessionQuery
+	withPlatformQuotas                      *UserPlatformQuotaQuery
+	withOrganization                        *OrganizationQuery
+	withOrganizationAllocations             *OrganizationAllocationQuery
+	withOrganizationExecutions              *OrganizationExecutionQuery
+	withOrganizationFinalExecutionEvidences *OrganizationFinalExecutionEvidenceQuery
+	withUserAllowedGroups                   *UserAllowedGroupQuery
+	modifiers                               []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -374,6 +382,94 @@ func (_q *UserQuery) QueryPlatformQuotas() *UserPlatformQuotaQuery {
 	return query
 }
 
+// QueryOrganization chains the current query on the "organization" edge.
+func (_q *UserQuery) QueryOrganization() *OrganizationQuery {
+	query := (&OrganizationClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, user.OrganizationTable, user.OrganizationColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryOrganizationAllocations chains the current query on the "organization_allocations" edge.
+func (_q *UserQuery) QueryOrganizationAllocations() *OrganizationAllocationQuery {
+	query := (&OrganizationAllocationClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(organizationallocation.Table, organizationallocation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.OrganizationAllocationsTable, user.OrganizationAllocationsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryOrganizationExecutions chains the current query on the "organization_executions" edge.
+func (_q *UserQuery) QueryOrganizationExecutions() *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.OrganizationExecutionsTable, user.OrganizationExecutionsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryOrganizationFinalExecutionEvidences chains the current query on the "organization_final_execution_evidences" edge.
+func (_q *UserQuery) QueryOrganizationFinalExecutionEvidences() *OrganizationFinalExecutionEvidenceQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.OrganizationFinalExecutionEvidencesTable, user.OrganizationFinalExecutionEvidencesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups chains the current query on the "user_allowed_groups" edge.
 func (_q *UserQuery) QueryUserAllowedGroups() *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: _q.config}).Query()
@@ -583,25 +679,29 @@ func (_q *UserQuery) Clone() *UserQuery {
 		return nil
 	}
 	return &UserQuery{
-		config:                    _q.config,
-		ctx:                       _q.ctx.Clone(),
-		order:                     append([]user.OrderOption{}, _q.order...),
-		inters:                    append([]Interceptor{}, _q.inters...),
-		predicates:                append([]predicate.User{}, _q.predicates...),
-		withAPIKeys:               _q.withAPIKeys.Clone(),
-		withRedeemCodes:           _q.withRedeemCodes.Clone(),
-		withSubscriptions:         _q.withSubscriptions.Clone(),
-		withAssignedSubscriptions: _q.withAssignedSubscriptions.Clone(),
-		withAnnouncementReads:     _q.withAnnouncementReads.Clone(),
-		withAllowedGroups:         _q.withAllowedGroups.Clone(),
-		withUsageLogs:             _q.withUsageLogs.Clone(),
-		withAttributeValues:       _q.withAttributeValues.Clone(),
-		withPromoCodeUsages:       _q.withPromoCodeUsages.Clone(),
-		withPaymentOrders:         _q.withPaymentOrders.Clone(),
-		withAuthIdentities:        _q.withAuthIdentities.Clone(),
-		withPendingAuthSessions:   _q.withPendingAuthSessions.Clone(),
-		withPlatformQuotas:        _q.withPlatformQuotas.Clone(),
-		withUserAllowedGroups:     _q.withUserAllowedGroups.Clone(),
+		config:                                  _q.config,
+		ctx:                                     _q.ctx.Clone(),
+		order:                                   append([]user.OrderOption{}, _q.order...),
+		inters:                                  append([]Interceptor{}, _q.inters...),
+		predicates:                              append([]predicate.User{}, _q.predicates...),
+		withAPIKeys:                             _q.withAPIKeys.Clone(),
+		withRedeemCodes:                         _q.withRedeemCodes.Clone(),
+		withSubscriptions:                       _q.withSubscriptions.Clone(),
+		withAssignedSubscriptions:               _q.withAssignedSubscriptions.Clone(),
+		withAnnouncementReads:                   _q.withAnnouncementReads.Clone(),
+		withAllowedGroups:                       _q.withAllowedGroups.Clone(),
+		withUsageLogs:                           _q.withUsageLogs.Clone(),
+		withAttributeValues:                     _q.withAttributeValues.Clone(),
+		withPromoCodeUsages:                     _q.withPromoCodeUsages.Clone(),
+		withPaymentOrders:                       _q.withPaymentOrders.Clone(),
+		withAuthIdentities:                      _q.withAuthIdentities.Clone(),
+		withPendingAuthSessions:                 _q.withPendingAuthSessions.Clone(),
+		withPlatformQuotas:                      _q.withPlatformQuotas.Clone(),
+		withOrganization:                        _q.withOrganization.Clone(),
+		withOrganizationAllocations:             _q.withOrganizationAllocations.Clone(),
+		withOrganizationExecutions:              _q.withOrganizationExecutions.Clone(),
+		withOrganizationFinalExecutionEvidences: _q.withOrganizationFinalExecutionEvidences.Clone(),
+		withUserAllowedGroups:                   _q.withUserAllowedGroups.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -751,6 +851,50 @@ func (_q *UserQuery) WithPlatformQuotas(opts ...func(*UserPlatformQuotaQuery)) *
 	return _q
 }
 
+// WithOrganization tells the query-builder to eager-load the nodes that are connected to
+// the "organization" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithOrganization(opts ...func(*OrganizationQuery)) *UserQuery {
+	query := (&OrganizationClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withOrganization = query
+	return _q
+}
+
+// WithOrganizationAllocations tells the query-builder to eager-load the nodes that are connected to
+// the "organization_allocations" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithOrganizationAllocations(opts ...func(*OrganizationAllocationQuery)) *UserQuery {
+	query := (&OrganizationAllocationClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withOrganizationAllocations = query
+	return _q
+}
+
+// WithOrganizationExecutions tells the query-builder to eager-load the nodes that are connected to
+// the "organization_executions" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithOrganizationExecutions(opts ...func(*OrganizationExecutionQuery)) *UserQuery {
+	query := (&OrganizationExecutionClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withOrganizationExecutions = query
+	return _q
+}
+
+// WithOrganizationFinalExecutionEvidences tells the query-builder to eager-load the nodes that are connected to
+// the "organization_final_execution_evidences" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithOrganizationFinalExecutionEvidences(opts ...func(*OrganizationFinalExecutionEvidenceQuery)) *UserQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withOrganizationFinalExecutionEvidences = query
+	return _q
+}
+
 // WithUserAllowedGroups tells the query-builder to eager-load the nodes that are connected to
 // the "user_allowed_groups" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *UserQuery) WithUserAllowedGroups(opts ...func(*UserAllowedGroupQuery)) *UserQuery {
@@ -840,7 +984,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [14]bool{
+		loadedTypes = [18]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
@@ -854,6 +998,10 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			_q.withAuthIdentities != nil,
 			_q.withPendingAuthSessions != nil,
 			_q.withPlatformQuotas != nil,
+			_q.withOrganization != nil,
+			_q.withOrganizationAllocations != nil,
+			_q.withOrganizationExecutions != nil,
+			_q.withOrganizationFinalExecutionEvidences != nil,
 			_q.withUserAllowedGroups != nil,
 		}
 	)
@@ -970,6 +1118,39 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 		if err := _q.loadPlatformQuotas(ctx, query, nodes,
 			func(n *User) { n.Edges.PlatformQuotas = []*UserPlatformQuota{} },
 			func(n *User, e *UserPlatformQuota) { n.Edges.PlatformQuotas = append(n.Edges.PlatformQuotas, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withOrganization; query != nil {
+		if err := _q.loadOrganization(ctx, query, nodes, nil,
+			func(n *User, e *Organization) { n.Edges.Organization = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withOrganizationAllocations; query != nil {
+		if err := _q.loadOrganizationAllocations(ctx, query, nodes,
+			func(n *User) { n.Edges.OrganizationAllocations = []*OrganizationAllocation{} },
+			func(n *User, e *OrganizationAllocation) {
+				n.Edges.OrganizationAllocations = append(n.Edges.OrganizationAllocations, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withOrganizationExecutions; query != nil {
+		if err := _q.loadOrganizationExecutions(ctx, query, nodes,
+			func(n *User) { n.Edges.OrganizationExecutions = []*OrganizationExecution{} },
+			func(n *User, e *OrganizationExecution) {
+				n.Edges.OrganizationExecutions = append(n.Edges.OrganizationExecutions, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withOrganizationFinalExecutionEvidences; query != nil {
+		if err := _q.loadOrganizationFinalExecutionEvidences(ctx, query, nodes,
+			func(n *User) { n.Edges.OrganizationFinalExecutionEvidences = []*OrganizationFinalExecutionEvidence{} },
+			func(n *User, e *OrganizationFinalExecutionEvidence) {
+				n.Edges.OrganizationFinalExecutionEvidences = append(n.Edges.OrganizationFinalExecutionEvidences, e)
+			}); err != nil {
 			return nil, err
 		}
 	}
@@ -1413,6 +1594,137 @@ func (_q *UserQuery) loadPlatformQuotas(ctx context.Context, query *UserPlatform
 	}
 	return nil
 }
+func (_q *UserQuery) loadOrganization(ctx context.Context, query *OrganizationQuery, nodes []*User, init func(*User), assign func(*User, *Organization)) error {
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*User)
+	for i := range nodes {
+		if nodes[i].OrganizationID == nil {
+			continue
+		}
+		fk := *nodes[i].OrganizationID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(organization.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "organization_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
+func (_q *UserQuery) loadOrganizationAllocations(ctx context.Context, query *OrganizationAllocationQuery, nodes []*User, init func(*User), assign func(*User, *OrganizationAllocation)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(organizationallocation.FieldUserRefID)
+	}
+	query.Where(predicate.OrganizationAllocation(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.OrganizationAllocationsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserRefID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "user_ref_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_ref_id" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadOrganizationExecutions(ctx context.Context, query *OrganizationExecutionQuery, nodes []*User, init func(*User), assign func(*User, *OrganizationExecution)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(organizationexecution.FieldUserRefID)
+	}
+	query.Where(predicate.OrganizationExecution(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.OrganizationExecutionsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserRefID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "user_ref_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_ref_id" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadOrganizationFinalExecutionEvidences(ctx context.Context, query *OrganizationFinalExecutionEvidenceQuery, nodes []*User, init func(*User), assign func(*User, *OrganizationFinalExecutionEvidence)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(organizationfinalexecutionevidence.FieldUserRefID)
+	}
+	query.Where(predicate.OrganizationFinalExecutionEvidence(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.OrganizationFinalExecutionEvidencesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserRefID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "user_ref_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_ref_id" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
 func (_q *UserQuery) loadUserAllowedGroups(ctx context.Context, query *UserAllowedGroupQuery, nodes []*User, init func(*User), assign func(*User, *UserAllowedGroup)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[int64]*User)
@@ -1471,6 +1783,9 @@ func (_q *UserQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != user.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withOrganization != nil {
+			_spec.Node.AddColumnOnce(user.FieldOrganizationID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

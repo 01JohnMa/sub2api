@@ -15,6 +15,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/organization"
+	"github.com/Wei-Shaw/sub2api/ent/organizationallocation"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecution"
+	"github.com/Wei-Shaw/sub2api/ent/organizationfinalexecutionevidence"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
@@ -161,6 +165,46 @@ func (_u *UserUpdate) SetNillableStatus(v *string) *UserUpdate {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
+	return _u
+}
+
+// SetOrganizationID sets the "organization_id" field.
+func (_u *UserUpdate) SetOrganizationID(v int64) *UserUpdate {
+	_u.mutation.SetOrganizationID(v)
+	return _u
+}
+
+// SetNillableOrganizationID sets the "organization_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableOrganizationID(v *int64) *UserUpdate {
+	if v != nil {
+		_u.SetOrganizationID(*v)
+	}
+	return _u
+}
+
+// ClearOrganizationID clears the value of the "organization_id" field.
+func (_u *UserUpdate) ClearOrganizationID() *UserUpdate {
+	_u.mutation.ClearOrganizationID()
+	return _u
+}
+
+// SetOrganizationRole sets the "organization_role" field.
+func (_u *UserUpdate) SetOrganizationRole(v string) *UserUpdate {
+	_u.mutation.SetOrganizationRole(v)
+	return _u
+}
+
+// SetNillableOrganizationRole sets the "organization_role" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableOrganizationRole(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetOrganizationRole(*v)
+	}
+	return _u
+}
+
+// ClearOrganizationRole clears the value of the "organization_role" field.
+func (_u *UserUpdate) ClearOrganizationRole() *UserUpdate {
+	_u.mutation.ClearOrganizationRole()
 	return _u
 }
 
@@ -606,6 +650,56 @@ func (_u *UserUpdate) AddPlatformQuotas(v ...*UserPlatformQuota) *UserUpdate {
 	return _u.AddPlatformQuotaIDs(ids...)
 }
 
+// SetOrganization sets the "organization" edge to the Organization entity.
+func (_u *UserUpdate) SetOrganization(v *Organization) *UserUpdate {
+	return _u.SetOrganizationID(v.ID)
+}
+
+// AddOrganizationAllocationIDs adds the "organization_allocations" edge to the OrganizationAllocation entity by IDs.
+func (_u *UserUpdate) AddOrganizationAllocationIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddOrganizationAllocationIDs(ids...)
+	return _u
+}
+
+// AddOrganizationAllocations adds the "organization_allocations" edges to the OrganizationAllocation entity.
+func (_u *UserUpdate) AddOrganizationAllocations(v ...*OrganizationAllocation) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddOrganizationAllocationIDs(ids...)
+}
+
+// AddOrganizationExecutionIDs adds the "organization_executions" edge to the OrganizationExecution entity by IDs.
+func (_u *UserUpdate) AddOrganizationExecutionIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddOrganizationExecutionIDs(ids...)
+	return _u
+}
+
+// AddOrganizationExecutions adds the "organization_executions" edges to the OrganizationExecution entity.
+func (_u *UserUpdate) AddOrganizationExecutions(v ...*OrganizationExecution) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddOrganizationExecutionIDs(ids...)
+}
+
+// AddOrganizationFinalExecutionEvidenceIDs adds the "organization_final_execution_evidences" edge to the OrganizationFinalExecutionEvidence entity by IDs.
+func (_u *UserUpdate) AddOrganizationFinalExecutionEvidenceIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddOrganizationFinalExecutionEvidenceIDs(ids...)
+	return _u
+}
+
+// AddOrganizationFinalExecutionEvidences adds the "organization_final_execution_evidences" edges to the OrganizationFinalExecutionEvidence entity.
+func (_u *UserUpdate) AddOrganizationFinalExecutionEvidences(v ...*OrganizationFinalExecutionEvidence) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddOrganizationFinalExecutionEvidenceIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
@@ -884,6 +978,75 @@ func (_u *UserUpdate) RemovePlatformQuotas(v ...*UserPlatformQuota) *UserUpdate 
 	return _u.RemovePlatformQuotaIDs(ids...)
 }
 
+// ClearOrganization clears the "organization" edge to the Organization entity.
+func (_u *UserUpdate) ClearOrganization() *UserUpdate {
+	_u.mutation.ClearOrganization()
+	return _u
+}
+
+// ClearOrganizationAllocations clears all "organization_allocations" edges to the OrganizationAllocation entity.
+func (_u *UserUpdate) ClearOrganizationAllocations() *UserUpdate {
+	_u.mutation.ClearOrganizationAllocations()
+	return _u
+}
+
+// RemoveOrganizationAllocationIDs removes the "organization_allocations" edge to OrganizationAllocation entities by IDs.
+func (_u *UserUpdate) RemoveOrganizationAllocationIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveOrganizationAllocationIDs(ids...)
+	return _u
+}
+
+// RemoveOrganizationAllocations removes "organization_allocations" edges to OrganizationAllocation entities.
+func (_u *UserUpdate) RemoveOrganizationAllocations(v ...*OrganizationAllocation) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveOrganizationAllocationIDs(ids...)
+}
+
+// ClearOrganizationExecutions clears all "organization_executions" edges to the OrganizationExecution entity.
+func (_u *UserUpdate) ClearOrganizationExecutions() *UserUpdate {
+	_u.mutation.ClearOrganizationExecutions()
+	return _u
+}
+
+// RemoveOrganizationExecutionIDs removes the "organization_executions" edge to OrganizationExecution entities by IDs.
+func (_u *UserUpdate) RemoveOrganizationExecutionIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveOrganizationExecutionIDs(ids...)
+	return _u
+}
+
+// RemoveOrganizationExecutions removes "organization_executions" edges to OrganizationExecution entities.
+func (_u *UserUpdate) RemoveOrganizationExecutions(v ...*OrganizationExecution) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveOrganizationExecutionIDs(ids...)
+}
+
+// ClearOrganizationFinalExecutionEvidences clears all "organization_final_execution_evidences" edges to the OrganizationFinalExecutionEvidence entity.
+func (_u *UserUpdate) ClearOrganizationFinalExecutionEvidences() *UserUpdate {
+	_u.mutation.ClearOrganizationFinalExecutionEvidences()
+	return _u
+}
+
+// RemoveOrganizationFinalExecutionEvidenceIDs removes the "organization_final_execution_evidences" edge to OrganizationFinalExecutionEvidence entities by IDs.
+func (_u *UserUpdate) RemoveOrganizationFinalExecutionEvidenceIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveOrganizationFinalExecutionEvidenceIDs(ids...)
+	return _u
+}
+
+// RemoveOrganizationFinalExecutionEvidences removes "organization_final_execution_evidences" edges to OrganizationFinalExecutionEvidence entities.
+func (_u *UserUpdate) RemoveOrganizationFinalExecutionEvidences(v ...*OrganizationFinalExecutionEvidence) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveOrganizationFinalExecutionEvidenceIDs(ids...)
+}
+
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *UserUpdate) Save(ctx context.Context) (int, error) {
 	if err := _u.defaults(); err != nil {
@@ -948,6 +1111,11 @@ func (_u *UserUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "User.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.OrganizationRole(); ok {
+		if err := user.OrganizationRoleValidator(v); err != nil {
+			return &ValidationError{Name: "organization_role", err: fmt.Errorf(`ent: validator failed for field "User.organization_role": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Username(); ok {
 		if err := user.UsernameValidator(v); err != nil {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
@@ -1005,6 +1173,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OrganizationRole(); ok {
+		_spec.SetField(user.FieldOrganizationRole, field.TypeString, value)
+	}
+	if _u.mutation.OrganizationRoleCleared() {
+		_spec.ClearField(user.FieldOrganizationRole, field.TypeString)
 	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)
@@ -1669,6 +1843,170 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.OrganizationCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   user.OrganizationTable,
+			Columns: []string{user.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   user.OrganizationTable,
+			Columns: []string{user.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OrganizationAllocationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationAllocationsTable,
+			Columns: []string{user.OrganizationAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationallocation.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedOrganizationAllocationsIDs(); len(nodes) > 0 && !_u.mutation.OrganizationAllocationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationAllocationsTable,
+			Columns: []string{user.OrganizationAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationallocation.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationAllocationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationAllocationsTable,
+			Columns: []string{user.OrganizationAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationallocation.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OrganizationExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationExecutionsTable,
+			Columns: []string{user.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedOrganizationExecutionsIDs(); len(nodes) > 0 && !_u.mutation.OrganizationExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationExecutionsTable,
+			Columns: []string{user.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationExecutionsTable,
+			Columns: []string{user.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OrganizationFinalExecutionEvidencesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{user.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedOrganizationFinalExecutionEvidencesIDs(); len(nodes) > 0 && !_u.mutation.OrganizationFinalExecutionEvidencesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{user.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationFinalExecutionEvidencesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{user.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -1810,6 +2148,46 @@ func (_u *UserUpdateOne) SetNillableStatus(v *string) *UserUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
+	return _u
+}
+
+// SetOrganizationID sets the "organization_id" field.
+func (_u *UserUpdateOne) SetOrganizationID(v int64) *UserUpdateOne {
+	_u.mutation.SetOrganizationID(v)
+	return _u
+}
+
+// SetNillableOrganizationID sets the "organization_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableOrganizationID(v *int64) *UserUpdateOne {
+	if v != nil {
+		_u.SetOrganizationID(*v)
+	}
+	return _u
+}
+
+// ClearOrganizationID clears the value of the "organization_id" field.
+func (_u *UserUpdateOne) ClearOrganizationID() *UserUpdateOne {
+	_u.mutation.ClearOrganizationID()
+	return _u
+}
+
+// SetOrganizationRole sets the "organization_role" field.
+func (_u *UserUpdateOne) SetOrganizationRole(v string) *UserUpdateOne {
+	_u.mutation.SetOrganizationRole(v)
+	return _u
+}
+
+// SetNillableOrganizationRole sets the "organization_role" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableOrganizationRole(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetOrganizationRole(*v)
+	}
+	return _u
+}
+
+// ClearOrganizationRole clears the value of the "organization_role" field.
+func (_u *UserUpdateOne) ClearOrganizationRole() *UserUpdateOne {
+	_u.mutation.ClearOrganizationRole()
 	return _u
 }
 
@@ -2255,6 +2633,56 @@ func (_u *UserUpdateOne) AddPlatformQuotas(v ...*UserPlatformQuota) *UserUpdateO
 	return _u.AddPlatformQuotaIDs(ids...)
 }
 
+// SetOrganization sets the "organization" edge to the Organization entity.
+func (_u *UserUpdateOne) SetOrganization(v *Organization) *UserUpdateOne {
+	return _u.SetOrganizationID(v.ID)
+}
+
+// AddOrganizationAllocationIDs adds the "organization_allocations" edge to the OrganizationAllocation entity by IDs.
+func (_u *UserUpdateOne) AddOrganizationAllocationIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddOrganizationAllocationIDs(ids...)
+	return _u
+}
+
+// AddOrganizationAllocations adds the "organization_allocations" edges to the OrganizationAllocation entity.
+func (_u *UserUpdateOne) AddOrganizationAllocations(v ...*OrganizationAllocation) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddOrganizationAllocationIDs(ids...)
+}
+
+// AddOrganizationExecutionIDs adds the "organization_executions" edge to the OrganizationExecution entity by IDs.
+func (_u *UserUpdateOne) AddOrganizationExecutionIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddOrganizationExecutionIDs(ids...)
+	return _u
+}
+
+// AddOrganizationExecutions adds the "organization_executions" edges to the OrganizationExecution entity.
+func (_u *UserUpdateOne) AddOrganizationExecutions(v ...*OrganizationExecution) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddOrganizationExecutionIDs(ids...)
+}
+
+// AddOrganizationFinalExecutionEvidenceIDs adds the "organization_final_execution_evidences" edge to the OrganizationFinalExecutionEvidence entity by IDs.
+func (_u *UserUpdateOne) AddOrganizationFinalExecutionEvidenceIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddOrganizationFinalExecutionEvidenceIDs(ids...)
+	return _u
+}
+
+// AddOrganizationFinalExecutionEvidences adds the "organization_final_execution_evidences" edges to the OrganizationFinalExecutionEvidence entity.
+func (_u *UserUpdateOne) AddOrganizationFinalExecutionEvidences(v ...*OrganizationFinalExecutionEvidence) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddOrganizationFinalExecutionEvidenceIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
@@ -2533,6 +2961,75 @@ func (_u *UserUpdateOne) RemovePlatformQuotas(v ...*UserPlatformQuota) *UserUpda
 	return _u.RemovePlatformQuotaIDs(ids...)
 }
 
+// ClearOrganization clears the "organization" edge to the Organization entity.
+func (_u *UserUpdateOne) ClearOrganization() *UserUpdateOne {
+	_u.mutation.ClearOrganization()
+	return _u
+}
+
+// ClearOrganizationAllocations clears all "organization_allocations" edges to the OrganizationAllocation entity.
+func (_u *UserUpdateOne) ClearOrganizationAllocations() *UserUpdateOne {
+	_u.mutation.ClearOrganizationAllocations()
+	return _u
+}
+
+// RemoveOrganizationAllocationIDs removes the "organization_allocations" edge to OrganizationAllocation entities by IDs.
+func (_u *UserUpdateOne) RemoveOrganizationAllocationIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveOrganizationAllocationIDs(ids...)
+	return _u
+}
+
+// RemoveOrganizationAllocations removes "organization_allocations" edges to OrganizationAllocation entities.
+func (_u *UserUpdateOne) RemoveOrganizationAllocations(v ...*OrganizationAllocation) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveOrganizationAllocationIDs(ids...)
+}
+
+// ClearOrganizationExecutions clears all "organization_executions" edges to the OrganizationExecution entity.
+func (_u *UserUpdateOne) ClearOrganizationExecutions() *UserUpdateOne {
+	_u.mutation.ClearOrganizationExecutions()
+	return _u
+}
+
+// RemoveOrganizationExecutionIDs removes the "organization_executions" edge to OrganizationExecution entities by IDs.
+func (_u *UserUpdateOne) RemoveOrganizationExecutionIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveOrganizationExecutionIDs(ids...)
+	return _u
+}
+
+// RemoveOrganizationExecutions removes "organization_executions" edges to OrganizationExecution entities.
+func (_u *UserUpdateOne) RemoveOrganizationExecutions(v ...*OrganizationExecution) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveOrganizationExecutionIDs(ids...)
+}
+
+// ClearOrganizationFinalExecutionEvidences clears all "organization_final_execution_evidences" edges to the OrganizationFinalExecutionEvidence entity.
+func (_u *UserUpdateOne) ClearOrganizationFinalExecutionEvidences() *UserUpdateOne {
+	_u.mutation.ClearOrganizationFinalExecutionEvidences()
+	return _u
+}
+
+// RemoveOrganizationFinalExecutionEvidenceIDs removes the "organization_final_execution_evidences" edge to OrganizationFinalExecutionEvidence entities by IDs.
+func (_u *UserUpdateOne) RemoveOrganizationFinalExecutionEvidenceIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveOrganizationFinalExecutionEvidenceIDs(ids...)
+	return _u
+}
+
+// RemoveOrganizationFinalExecutionEvidences removes "organization_final_execution_evidences" edges to OrganizationFinalExecutionEvidence entities.
+func (_u *UserUpdateOne) RemoveOrganizationFinalExecutionEvidences(v ...*OrganizationFinalExecutionEvidence) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveOrganizationFinalExecutionEvidenceIDs(ids...)
+}
+
 // Where appends a list predicates to the UserUpdate builder.
 func (_u *UserUpdateOne) Where(ps ...predicate.User) *UserUpdateOne {
 	_u.mutation.Where(ps...)
@@ -2610,6 +3107,11 @@ func (_u *UserUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "User.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.OrganizationRole(); ok {
+		if err := user.OrganizationRoleValidator(v); err != nil {
+			return &ValidationError{Name: "organization_role", err: fmt.Errorf(`ent: validator failed for field "User.organization_role": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Username(); ok {
 		if err := user.UsernameValidator(v); err != nil {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
@@ -2684,6 +3186,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OrganizationRole(); ok {
+		_spec.SetField(user.FieldOrganizationRole, field.TypeString, value)
+	}
+	if _u.mutation.OrganizationRoleCleared() {
+		_spec.ClearField(user.FieldOrganizationRole, field.TypeString)
 	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)
@@ -3341,6 +3849,170 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OrganizationCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   user.OrganizationTable,
+			Columns: []string{user.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   user.OrganizationTable,
+			Columns: []string{user.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OrganizationAllocationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationAllocationsTable,
+			Columns: []string{user.OrganizationAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationallocation.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedOrganizationAllocationsIDs(); len(nodes) > 0 && !_u.mutation.OrganizationAllocationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationAllocationsTable,
+			Columns: []string{user.OrganizationAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationallocation.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationAllocationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationAllocationsTable,
+			Columns: []string{user.OrganizationAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationallocation.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OrganizationExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationExecutionsTable,
+			Columns: []string{user.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedOrganizationExecutionsIDs(); len(nodes) > 0 && !_u.mutation.OrganizationExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationExecutionsTable,
+			Columns: []string{user.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationExecutionsTable,
+			Columns: []string{user.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OrganizationFinalExecutionEvidencesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{user.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedOrganizationFinalExecutionEvidencesIDs(); len(nodes) > 0 && !_u.mutation.OrganizationFinalExecutionEvidencesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{user.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationFinalExecutionEvidencesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{user.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

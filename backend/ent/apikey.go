@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/organization"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
@@ -34,6 +35,8 @@ type APIKey struct {
 	Name string `json:"name,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID *int64 `json:"group_id,omitempty"`
+	// OrganizationID holds the value of the "organization_id" field.
+	OrganizationID *int64 `json:"organization_id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
 	// Last usage time of this API key
@@ -78,11 +81,17 @@ type APIKeyEdges struct {
 	User *User `json:"user,omitempty"`
 	// Group holds the value of the group edge.
 	Group *Group `json:"group,omitempty"`
+	// Organization holds the value of the organization edge.
+	Organization *Organization `json:"organization,omitempty"`
 	// UsageLogs holds the value of the usage_logs edge.
 	UsageLogs []*UsageLog `json:"usage_logs,omitempty"`
+	// OrganizationExecutions holds the value of the organization_executions edge.
+	OrganizationExecutions []*OrganizationExecution `json:"organization_executions,omitempty"`
+	// OrganizationFinalExecutionEvidences holds the value of the organization_final_execution_evidences edge.
+	OrganizationFinalExecutionEvidences []*OrganizationFinalExecutionEvidence `json:"organization_final_execution_evidences,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [6]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -107,13 +116,42 @@ func (e APIKeyEdges) GroupOrErr() (*Group, error) {
 	return nil, &NotLoadedError{edge: "group"}
 }
 
+// OrganizationOrErr returns the Organization value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e APIKeyEdges) OrganizationOrErr() (*Organization, error) {
+	if e.Organization != nil {
+		return e.Organization, nil
+	} else if e.loadedTypes[2] {
+		return nil, &NotFoundError{label: organization.Label}
+	}
+	return nil, &NotLoadedError{edge: "organization"}
+}
+
 // UsageLogsOrErr returns the UsageLogs value or an error if the edge
 // was not loaded in eager-loading.
 func (e APIKeyEdges) UsageLogsOrErr() ([]*UsageLog, error) {
-	if e.loadedTypes[2] {
+	if e.loadedTypes[3] {
 		return e.UsageLogs, nil
 	}
 	return nil, &NotLoadedError{edge: "usage_logs"}
+}
+
+// OrganizationExecutionsOrErr returns the OrganizationExecutions value or an error if the edge
+// was not loaded in eager-loading.
+func (e APIKeyEdges) OrganizationExecutionsOrErr() ([]*OrganizationExecution, error) {
+	if e.loadedTypes[4] {
+		return e.OrganizationExecutions, nil
+	}
+	return nil, &NotLoadedError{edge: "organization_executions"}
+}
+
+// OrganizationFinalExecutionEvidencesOrErr returns the OrganizationFinalExecutionEvidences value or an error if the edge
+// was not loaded in eager-loading.
+func (e APIKeyEdges) OrganizationFinalExecutionEvidencesOrErr() ([]*OrganizationFinalExecutionEvidence, error) {
+	if e.loadedTypes[5] {
+		return e.OrganizationFinalExecutionEvidences, nil
+	}
+	return nil, &NotLoadedError{edge: "organization_final_execution_evidences"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -125,7 +163,7 @@ func (*APIKey) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case apikey.FieldQuota, apikey.FieldQuotaUsed, apikey.FieldRateLimit5h, apikey.FieldRateLimit1d, apikey.FieldRateLimit7d, apikey.FieldUsage5h, apikey.FieldUsage1d, apikey.FieldUsage7d:
 			values[i] = new(sql.NullFloat64)
-		case apikey.FieldID, apikey.FieldUserID, apikey.FieldGroupID:
+		case apikey.FieldID, apikey.FieldUserID, apikey.FieldGroupID, apikey.FieldOrganizationID:
 			values[i] = new(sql.NullInt64)
 		case apikey.FieldKey, apikey.FieldName, apikey.FieldStatus:
 			values[i] = new(sql.NullString)
@@ -195,6 +233,13 @@ func (_m *APIKey) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.GroupID = new(int64)
 				*_m.GroupID = value.Int64
+			}
+		case apikey.FieldOrganizationID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field organization_id", values[i])
+			} else if value.Valid {
+				_m.OrganizationID = new(int64)
+				*_m.OrganizationID = value.Int64
 			}
 		case apikey.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -324,9 +369,24 @@ func (_m *APIKey) QueryGroup() *GroupQuery {
 	return NewAPIKeyClient(_m.config).QueryGroup(_m)
 }
 
+// QueryOrganization queries the "organization" edge of the APIKey entity.
+func (_m *APIKey) QueryOrganization() *OrganizationQuery {
+	return NewAPIKeyClient(_m.config).QueryOrganization(_m)
+}
+
 // QueryUsageLogs queries the "usage_logs" edge of the APIKey entity.
 func (_m *APIKey) QueryUsageLogs() *UsageLogQuery {
 	return NewAPIKeyClient(_m.config).QueryUsageLogs(_m)
+}
+
+// QueryOrganizationExecutions queries the "organization_executions" edge of the APIKey entity.
+func (_m *APIKey) QueryOrganizationExecutions() *OrganizationExecutionQuery {
+	return NewAPIKeyClient(_m.config).QueryOrganizationExecutions(_m)
+}
+
+// QueryOrganizationFinalExecutionEvidences queries the "organization_final_execution_evidences" edge of the APIKey entity.
+func (_m *APIKey) QueryOrganizationFinalExecutionEvidences() *OrganizationFinalExecutionEvidenceQuery {
+	return NewAPIKeyClient(_m.config).QueryOrganizationFinalExecutionEvidences(_m)
 }
 
 // Update returns a builder for updating this APIKey.
@@ -374,6 +434,11 @@ func (_m *APIKey) String() string {
 	builder.WriteString(", ")
 	if v := _m.GroupID; v != nil {
 		builder.WriteString("group_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.OrganizationID; v != nil {
+		builder.WriteString("organization_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

@@ -2130,6 +2130,27 @@ export default {
       failedToCreate: 'Failed to create organization',
       failedToUpdate: 'Failed to update organization',
       statusManagedSeparately: 'Lifecycle status is managed separately and cannot be changed here.',
+      lifecycle: {
+        title: 'Lifecycle',
+        description: 'Lifecycle changes preserve members, keys, allocations, reservations, and history.',
+        disable: 'Disable',
+        reactivate: 'Reactivate',
+        archive: 'Archive',
+        disableTitle: 'Disable Organization',
+        reactivateTitle: 'Reactivate Organization',
+        archiveTitle: 'Archive Organization Permanently',
+        disableConfirmation: 'Disable this organization? New organization administrator access and organization API key execution will stop immediately.',
+        reactivateConfirmation: 'Reactivate this organization? Organization administrator access and new organization API key execution can resume.',
+        archiveConfirmation: 'Archive this organization permanently? {amount} USD of unallocated funds will be frozen forever. This cannot be undone.',
+        frozenUnallocated: 'Unallocated funds to freeze',
+        balanceVersion: 'Confirmation balance version',
+        disableSucceeded: 'Organization disabled',
+        reactivateSucceeded: 'Organization reactivated',
+        archiveSucceeded: 'Organization archived permanently',
+        failedToLoadPreview: 'Failed to load the current archive confirmation.',
+        versionConflict: 'The organization changed. Review the refreshed archive confirmation and try again.',
+        failed: 'Failed to update organization lifecycle'
+      },
       members: {
         title: 'Members',
         safeDataHint: 'Only organization-scoped member data and organization allocation snapshots are shown.',
@@ -2212,6 +2233,38 @@ export default {
           actor: 'Actor',
           reason: 'Reason'
         }
+      },
+      reconciliation: {
+        title: 'Pending Reconciliation',
+        description: 'Only server-captured evidence can settle or release a pending reservation.',
+        empty: 'No pending reconciliations.',
+        conflict: 'Evidence conflict',
+        awaitingEvidence: 'Awaiting evidence',
+        allowedResolution: 'Allowed resolution',
+        computedAmount: 'Organization amount',
+        candidateCeiling: 'Candidate ceiling',
+        attempt: 'Attempt',
+        attemptCount: '{count} attempts',
+        attemptStatuses: {
+          created: 'created',
+          dispatched: 'dispatched',
+          final_usage_observed: 'final usage observed'
+        },
+        evidenceSources: {
+          adapter_direct: 'adapter direct',
+          provider_query: 'provider query'
+        },
+        outcomes: {
+          success: 'success',
+          error: 'error',
+          unknown: 'unknown'
+        },
+        resolve: 'Confirm server result',
+        confirmTitle: 'Confirm Reconciliation',
+        confirmMessage: 'Apply the server-calculated resolution using immutable evidence? This action cannot select evidence or enter an amount.',
+        resolved: 'Pending execution reconciled',
+        failedToLoad: 'Failed to load pending reconciliations',
+        failedToResolve: 'Failed to reconcile pending execution'
       },
       allocations: {
         title: 'Platform Member Allocation',
@@ -6749,7 +6802,7 @@ export default {
   organization: {
     overview: {
       title: 'Organization Overview',
-      description: 'Manage members and distribute your organization funds',
+      description: 'Manage members and view organization statistics',
       code: 'Organization Code',
       status: 'Status',
       currency: 'Currency',
@@ -6768,9 +6821,60 @@ export default {
         unavailable: 'Balance data is unavailable.',
         failedToLoad: 'Failed to load organization balance'
       },
+      reconciliation: {
+        title: 'Pending Reconciliation Status',
+        description: 'Only the count and status are shown for organization administrators.',
+        pending: 'Pending',
+        clear: 'Clear',
+        unavailable: 'Reconciliation status is unavailable.',
+        failedToLoad: 'Failed to load reconciliation status'
+      },
+      reporting: {
+        title: 'Usage Report',
+        description: 'Usage and attributable errors are aggregated by request time.',
+        start: 'Start',
+        end: 'End (exclusive)',
+        apply: 'Apply',
+        requests: 'Requests',
+        success: 'Success',
+        errors: 'Errors',
+        activeMembers: 'Active members',
+        tokens: 'Tokens',
+        input: 'Input',
+        output: 'Output',
+        cacheCreation: 'Cache create',
+        cacheRead: 'Cache read',
+        cost: 'Settled cost',
+        currentMembers: 'Current members',
+        apiKeys: 'API Keys',
+        businessLimited: 'Business-limited',
+        slaErrors: 'SLA errors',
+        successRate: 'Success rate',
+        errorRate: 'Error rate',
+        models: 'Models',
+        trends: 'Daily trend',
+        memberUsage: 'Member usage',
+        departed: 'Departed members (historical)',
+        keyMetadata: 'API Key metadata',
+        keysEmpty: 'No current organization API Keys.',
+        never: 'Never',
+        empty: 'No final execution evidence in this range.',
+        unavailable: 'Report data is unavailable.',
+        invalidRange: 'Select a valid start date before the exclusive end date.',
+        failedToLoad: 'Failed to load organization report',
+        columns: { model: 'Model', date: 'Date', member: 'Member', requests: 'Requests', success: 'Success', errors: 'Errors', input: 'Input tokens', output: 'Output tokens', cacheCreation: 'Cache creation tokens', cacheRead: 'Cache read tokens', cost: 'Settled cost', keyName: 'Key name', status: 'Status', quota: 'Quota', quotaUsed: 'Used', lastUsed: 'Last used', expires: 'Expires' }
+      },
+      ledger: {
+        title: 'Organization Ledger',
+        noReason: 'No public reason',
+        empty: 'No public ledger entries.',
+        columns: { operation: 'Operation', actor: 'Actor', reason: 'Public reason', bucket: 'Bucket', occurredAt: 'Occurred at', before: 'Before', delta: 'Change', after: 'After' },
+        operations: { organization_credit: 'Organization credit', equal_allocation: 'Equal allocation', custom_allocation: 'Custom allocation', allocation_reclaim: 'Allocation reclaim', member_removal_reclaim: 'Member removal reclaim', reservation: 'Reservation', consumption: 'Consumption', release: 'Release' },
+        buckets: { unallocated: 'Unallocated pool', allocation_available: 'Member available', allocation_reserved: 'Member reserved' }
+      },
       members: {
         title: 'Organization Members',
-        description: 'Members and their organization allocation summary',
+        description: 'Organization members and their account status summary',
         addAction: 'Add Member',
         addTitle: 'Add Organization Member',
         addDescription: 'Enter one exact registered email address or one exact user ID.',

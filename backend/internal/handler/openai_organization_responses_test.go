@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,15 +26,25 @@ import (
 
 type organizationResponsesAccountRepoStub struct {
 	service.AccountRepository
-	account service.Account
+	account  service.Account
+	accounts []service.Account
 }
 
-func (r *organizationResponsesAccountRepoStub) GetByID(context.Context, int64) (*service.Account, error) {
+func (r *organizationResponsesAccountRepoStub) GetByID(_ context.Context, accountID int64) (*service.Account, error) {
+	for index := range r.accounts {
+		if r.accounts[index].ID == accountID {
+			copy := r.accounts[index]
+			return &copy, nil
+		}
+	}
 	copy := r.account
 	return &copy, nil
 }
 
 func (r *organizationResponsesAccountRepoStub) ListSchedulableByGroupIDAndPlatform(context.Context, int64, string) ([]service.Account, error) {
+	if len(r.accounts) > 0 {
+		return append([]service.Account(nil), r.accounts...), nil
+	}
 	return []service.Account{r.account}, nil
 }
 
@@ -80,6 +91,49 @@ func (organizationResponsesConcurrencyCacheStub) ReleaseUserSlot(context.Context
 	return nil
 }
 
+type organizationResponsesCountingConcurrencyCache struct {
+	service.ConcurrencyCache
+	mu              sync.Mutex
+	userAcquires    int
+	userReleases    int
+	accountAcquires int
+	accountReleases int
+}
+
+func (c *organizationResponsesCountingConcurrencyCache) AcquireAccountSlot(context.Context, int64, int, string) (bool, error) {
+	c.mu.Lock()
+	c.accountAcquires++
+	c.mu.Unlock()
+	return true, nil
+}
+
+func (c *organizationResponsesCountingConcurrencyCache) ReleaseAccountSlot(context.Context, int64, string) error {
+	c.mu.Lock()
+	c.accountReleases++
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *organizationResponsesCountingConcurrencyCache) AcquireUserSlot(context.Context, int64, int, string) (bool, error) {
+	c.mu.Lock()
+	c.userAcquires++
+	c.mu.Unlock()
+	return true, nil
+}
+
+func (c *organizationResponsesCountingConcurrencyCache) ReleaseUserSlot(context.Context, int64, string) error {
+	c.mu.Lock()
+	c.userReleases++
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *organizationResponsesCountingConcurrencyCache) counts() (userAcquires, userReleases, accountAcquires, accountReleases int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.userAcquires, c.userReleases, c.accountAcquires, c.accountReleases
+}
+
 type organizationResponsesUserPlatformQuotaRepoStub struct {
 	service.UserPlatformQuotaRepository
 }
@@ -106,6 +160,68 @@ func (organizationResponsesUserRPMCacheStub) GetUserRPM(context.Context, int64) 
 	return 0, nil
 }
 
+type organizationResponsesCountingRPMCache struct {
+	mu         sync.Mutex
+	groupCalls int
+	userCalls  int
+}
+
+func (c *organizationResponsesCountingRPMCache) IncrementUserGroupRPM(context.Context, int64, int64) (int, error) {
+	c.mu.Lock()
+	c.groupCalls++
+	c.mu.Unlock()
+	return 1, nil
+}
+
+func (c *organizationResponsesCountingRPMCache) IncrementUserRPM(context.Context, int64) (int, error) {
+	c.mu.Lock()
+	c.userCalls++
+	c.mu.Unlock()
+	return 1, nil
+}
+
+func (*organizationResponsesCountingRPMCache) GetUserGroupRPM(context.Context, int64, int64) (int, error) {
+	return 0, nil
+}
+
+func (*organizationResponsesCountingRPMCache) GetUserRPM(context.Context, int64) (int, error) {
+	return 0, nil
+}
+
+func (c *organizationResponsesCountingRPMCache) counts() (groupCalls, userCalls int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.groupCalls, c.userCalls
+}
+
+type organizationResponsesCountingAPIKeyRateRepo struct {
+	service.APIKeyRepository
+	mu    sync.Mutex
+	calls int
+}
+
+func (r *organizationResponsesCountingAPIKeyRateRepo) GetRateLimitData(context.Context, int64) (*service.APIKeyRateLimitData, error) {
+	r.mu.Lock()
+	r.calls++
+	r.mu.Unlock()
+	windowStart := time.Now().UTC()
+	return &service.APIKeyRateLimitData{
+		Window5hStart: &windowStart,
+		Window1dStart: &windowStart,
+		Window7dStart: &windowStart,
+	}, nil
+}
+
+func (*organizationResponsesCountingAPIKeyRateRepo) ResetRateLimitWindows(context.Context, int64) error {
+	return nil
+}
+
+func (r *organizationResponsesCountingAPIKeyRateRepo) count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.calls
+}
+
 type organizationResponsesUserGroupRateRepoStub struct {
 	service.UserGroupRateRepository
 }
@@ -116,12 +232,16 @@ func (organizationResponsesUserGroupRateRepoStub) GetRPMOverrideByUserAndGroup(c
 }
 
 type organizationResponsesExecutionRepoStub struct {
-	reserveCommand  service.OrganizationExecutionReservationCommand
-	attemptCommand  service.OrganizationAttemptEvidenceCommand
-	terminalCommand service.OrganizationTerminalizationCommand
+	reserveCommand   service.OrganizationExecutionReservationCommand
+	reserveCalls     int
+	attemptCommand   service.OrganizationAttemptEvidenceCommand
+	attemptCommands  []service.OrganizationAttemptEvidenceCommand
+	terminalCommand  service.OrganizationTerminalizationCommand
+	terminalizeCalls int
 }
 
 func (r *organizationResponsesExecutionRepoStub) Reserve(_ context.Context, command service.OrganizationExecutionReservationCommand) (*service.OrganizationExecutionReservationResult, error) {
+	r.reserveCalls++
 	r.reserveCommand = command
 	if command.PreDispatchZeroProof != "" {
 		occurredAt := time.Now().UTC()
@@ -296,10 +416,12 @@ func TestOrganizationResponsesEarlyRequestValidationCreatesZeroCostFinalEvidence
 
 func (r *organizationResponsesExecutionRepoStub) RecordAttemptEvidence(_ context.Context, command service.OrganizationAttemptEvidenceCommand) (*service.OrganizationAttemptEvidenceResult, error) {
 	r.attemptCommand = command
-	return &service.OrganizationAttemptEvidenceResult{AttemptEvidenceID: 202, ExecutionID: command.ExecutionID, AttemptID: command.AttemptID}, nil
+	r.attemptCommands = append(r.attemptCommands, command)
+	return &service.OrganizationAttemptEvidenceResult{AttemptEvidenceID: int64(201 + len(r.attemptCommands)), ExecutionID: command.ExecutionID, AttemptID: command.AttemptID}, nil
 }
 
 func (r *organizationResponsesExecutionRepoStub) Terminalize(_ context.Context, command service.OrganizationTerminalizationCommand) (*service.OrganizationFinalExecutionEvidenceResult, error) {
+	r.terminalizeCalls++
 	r.terminalCommand = command
 	rawCost := "0"
 	settledCost := "0.00000000"
@@ -405,6 +527,98 @@ func TestOrganizationResponsesHTTPAliasesShareExecutionSnapshotsAndProviderCorre
 	}
 }
 
+func TestOrganizationResponsesFrozenChatFallbackUsesOneFinalOrganizationDebit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{RunMode: config.RunModeStandard, Log: config.LogConfig{Environment: "development"}}
+	cfg.Default.RateMultiplier = 1
+	cfg.Gateway.MaxAccountSwitches = 1
+	enableOrganizationResponsesTestCapability(cfg)
+
+	groupID := int64(42)
+	accounts := []service.Account{
+		{
+			ID: 55, Name: "native", Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
+			Status: service.StatusActive, Schedulable: true, Concurrency: 2, Priority: 1, GroupIDs: []int64{groupID},
+			Credentials: map[string]any{"api_key": "test-upstream-key", "base_url": "https://api.openai.com"},
+			Extra:       map[string]any{openai_compat.ExtraKeyResponsesMode: string(openai_compat.ResponsesSupportModeForceResponses)},
+		},
+		{
+			ID: 66, Name: "chat fallback", Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
+			Status: service.StatusActive, Schedulable: true, Concurrency: 2, Priority: 2, GroupIDs: []int64{groupID},
+			Credentials: map[string]any{"api_key": "test-upstream-key", "base_url": "https://api.openai.com"},
+			Extra:       map[string]any{openai_compat.ExtraKeyResponsesMode: string(openai_compat.ResponsesSupportModeForceChatCompletions)},
+		},
+	}
+	upstream := &organizationResponsesFailoverUpstreamStub{}
+	concurrency := service.NewConcurrencyService(organizationResponsesConcurrencyCacheStub{})
+	billing := service.NewBillingService(cfg, nil)
+	gateway := service.NewOpenAIGatewayService(
+		&organizationResponsesAccountRepoStub{accounts: accounts}, nil, nil, nil, nil, nil, nil, cfg, nil, concurrency, billing,
+		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil,
+	)
+	billingCache := service.NewBillingCacheService(
+		nil, nil, nil, nil, organizationResponsesUserRPMCacheStub{}, organizationResponsesUserGroupRateRepoStub{}, cfg,
+		organizationResponsesUserPlatformQuotaRepoStub{},
+	)
+	t.Cleanup(billingCache.Stop)
+	executionRepo := &organizationResponsesExecutionRepoStub{}
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
+
+	body := []byte(`{"model":"gpt-5.4","input":"hello","max_output_tokens":64}`)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))
+	apiKey := organizationResponsesAuthorizedAPIKey()
+	c.Set(string(middleware2.ContextKeyOrganizationKeyAuthorization), apiKey.OrganizationAuthorization)
+	setOpenAIClientTransportHTTP(c)
+	streamStarted := false
+
+	handler.handleOrganizationResponses(c, apiKey, middleware2.AuthSubject{UserID: apiKey.User.ID, Concurrency: apiKey.User.Concurrency}, nil, body, "gpt-5.4", false, body, zap.NewNop(), &streamStarted)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, []int64{55, 66}, upstream.accountIDs)
+	require.Equal(t, 1, executionRepo.reserveCalls)
+	require.Len(t, executionRepo.attemptCommands, 2)
+	require.Equal(t, int64(55), executionRepo.attemptCommands[0].AccountID)
+	require.Equal(t, int64(66), executionRepo.attemptCommands[1].AccountID)
+	require.Equal(t, service.OrganizationExecutionTerminalOutcomeSuccess, executionRepo.terminalCommand.TerminalOutcome)
+	require.Equal(t, 1, executionRepo.terminalizeCalls)
+	require.NotNil(t, executionRepo.terminalCommand.FinalAttemptID)
+	require.Equal(t, executionRepo.attemptCommands[1].AttemptID, *executionRepo.terminalCommand.FinalAttemptID)
+	require.NotEqual(t, executionRepo.attemptCommands[0].AttemptID, *executionRepo.terminalCommand.FinalAttemptID)
+	require.True(t, gjson.Get(executionRepo.reserveCommand.CandidateSnapshotJSON, "candidates.1.route").Exists())
+	require.Equal(t, service.OrganizationResponsesRouteChatFallback, gjson.Get(executionRepo.reserveCommand.CandidateSnapshotJSON, "candidates.1.route").String())
+	require.Equal(t, "0", executionRepo.attemptCommands[0].RawActualCost)
+	require.NotEqual(t, "0", executionRepo.attemptCommands[1].RawActualCost)
+}
+
+type organizationResponsesFailoverUpstreamStub struct {
+	accountIDs []int64
+}
+
+func (u *organizationResponsesFailoverUpstreamStub) Do(req *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
+	u.accountIDs = append(u.accountIDs, accountID)
+	if len(u.accountIDs) == 1 {
+		return &http.Response{
+			StatusCode: http.StatusBadGateway,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(bytes.NewBufferString(`{"error":{"message":"temporary upstream failure"}}`)),
+		}, nil
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}, "x-request-id": []string{"req_chat_fallback"}},
+		Body: io.NopCloser(bytes.NewBufferString(
+			`{"id":"chatcmpl_1","object":"chat.completion","model":"gpt-5.4","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2}}`,
+		)),
+	}, nil
+}
+
+func (u *organizationResponsesFailoverUpstreamStub) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, _ *tlsfingerprint.Profile) (*http.Response, error) {
+	return u.Do(req, proxyURL, accountID, accountConcurrency)
+}
+
 func enableOrganizationResponsesTestCapability(cfg *config.Config) {
 	cfg.Gateway.OrganizationSpending.Enabled = true
 	cfg.Gateway.OrganizationSpending.Capabilities = map[string]map[string]bool{
@@ -429,6 +643,302 @@ func organizationResponsesAuthorizedAPIKey() *service.APIKey {
 			AllocationStatus: domain.OrganizationAllocationStatusActive, AllocationVersion: 1, Available: "10.00000000", Reserved: "0.00000000",
 		},
 	}
+}
+
+func TestOrganizationResponsesWebSocketTurnRequiresCurrentAttribution(t *testing.T) {
+	apiKey := organizationResponsesAuthorizedAPIKey()
+	require.True(t, isCurrentOrganizationResponsesWSKey(apiKey))
+
+	apiKey.OrganizationAuthorization = nil
+	require.False(t, isCurrentOrganizationResponsesWSKey(apiKey), "member removal clears the trusted organization attribution before the next turn")
+}
+
+func TestOrganizationResponsesWebSocketPlanningPayloadUsesSessionModelOnlyWhenOmitted(t *testing.T) {
+	payload, err := organizationWSPlanningPayload([]byte(`{"type":"response.create","input":"hello"}`), "gpt-5.4")
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5.4", gjson.GetBytes(payload, "model").String())
+
+	_, err = organizationWSPlanningPayload([]byte(`{"type":"response.create","input":"hello"}`), "")
+	require.ErrorIs(t, err, service.ErrOrganizationResponsesUnsupportedRequest)
+}
+
+func TestOrganizationResponsesWebSocketCoordinatorRemovesTerminalTurn(t *testing.T) {
+	state := &organizationResponsesWSTurn{
+		readyDone: make(chan struct{}), done: make(chan struct{}),
+	}
+	close(state.done)
+	coordinator := &organizationResponsesWSTurnCoordinator{turns: map[int]*organizationResponsesWSTurn{2: state}}
+
+	coordinator.AfterTurn(2, &service.OpenAIForwardResult{UsageObserved: true}, nil)
+
+	coordinator.mu.Lock()
+	defer coordinator.mu.Unlock()
+	require.Empty(t, coordinator.turns)
+}
+
+func TestOrganizationResponsesWebSocketCoordinatorSnapshotsRequestMetadata(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/backend-api/codex/responses", nil)
+	c.Request.Header.Set("X-Request-ID", "request-before")
+
+	coordinator := newOrganizationResponsesWSTurnCoordinator(nil, c, "secret", nil, zap.NewNop())
+	c.Request.URL.Path = "/mutated"
+	c.Request.Header.Set("X-Request-ID", "request-after")
+
+	require.Equal(t, "/backend-api/codex/responses", coordinator.requestPath)
+	require.Equal(t, "request-before", coordinator.clientRequestID)
+}
+
+func TestOrganizationResponsesWebSocketTurnReadySignalIsIdempotent(t *testing.T) {
+	state := &organizationResponsesWSTurn{readyDone: make(chan struct{})}
+	state.signalReady(nil)
+	state.signalReady(errors.New("late persistence failure"))
+
+	<-state.readyDone
+	require.NoError(t, state.readyErr)
+}
+
+func TestOrganizationResponsesWebSocketRetryPreservesLogicalTurnAndWaitsForNewAccount(t *testing.T) {
+	firstAccount := &service.Account{ID: 55}
+	secondAccount := &service.Account{ID: 66}
+	state := &organizationResponsesWSTurn{
+		done:          make(chan struct{}),
+		payload:       []byte(`{"type":"response.create","model":"gpt-5.4","input":"retry me"}`),
+		originalModel: "gpt-5.4",
+		lastAccountID: firstAccount.ID,
+	}
+	coordinator := &organizationResponsesWSTurnCoordinator{
+		activeAccount:  firstAccount,
+		turns:          map[int]*organizationResponsesWSTurn{4: state},
+		accountChanged: make(chan struct{}),
+		retryRequests:  make(chan organizationResponsesWSRetryRequest, 1),
+		turnFinished:   make(chan int, 1),
+	}
+
+	coordinator.requestRetry(4, state, secondAccount.ID)
+	retry, err := coordinator.WaitRetry(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 4, retry.turn)
+	require.JSONEq(t, string(state.payload), string(retry.payload))
+	require.Equal(t, state.originalModel, retry.originalModel)
+	require.Equal(t, secondAccount.ID, retry.nextAccountID)
+
+	type activeAccountResult struct {
+		account *service.Account
+		err     error
+	}
+	accountResult := make(chan activeAccountResult, 1)
+	go func() {
+		account, waitErr := coordinator.waitForActiveAccount(context.Background(), firstAccount.ID)
+		accountResult <- activeAccountResult{account: account, err: waitErr}
+	}()
+	coordinator.SetActiveAccount(secondAccount)
+	active := <-accountResult
+	require.NoError(t, active.err)
+	require.Equal(t, secondAccount.ID, active.account.ID)
+
+	state.signalRetryReady(nil)
+	require.NoError(t, <-retry.ready)
+}
+
+func TestOrganizationResponsesWebSocketAccountHandoffReleasesSchedulerLeaseBeforeWake(t *testing.T) {
+	slot := make(chan struct{}, 1)
+	slot <- struct{}{}
+	releaseCalls := 0
+	currentRelease := func() {
+		<-slot
+		releaseCalls++
+	}
+	releaseAccountSlot := func() {
+		if currentRelease != nil {
+			currentRelease()
+			currentRelease = nil
+		}
+	}
+	firstAccount := &service.Account{ID: 55}
+	secondAccount := &service.Account{ID: 66}
+	coordinator := &organizationResponsesWSTurnCoordinator{
+		activeAccount: firstAccount, accountChanged: make(chan struct{}),
+	}
+	attemptAcquired := make(chan bool, 1)
+	go func() {
+		account, err := coordinator.waitForActiveAccount(context.Background(), firstAccount.ID)
+		if err != nil || account.ID != secondAccount.ID {
+			attemptAcquired <- false
+			return
+		}
+		select {
+		case slot <- struct{}{}:
+			attemptAcquired <- true
+		default:
+			attemptAcquired <- false
+		}
+	}()
+
+	handoffOrganizationResponsesWSAccount(releaseAccountSlot, coordinator, secondAccount)
+	require.True(t, <-attemptAcquired, "attempt must only wake after the scheduler-held account slot is released")
+	releaseAccountSlot()
+	require.Equal(t, 1, releaseCalls, "deferred cleanup must not release the scheduler lease twice")
+}
+
+func TestOrganizationResponsesWebSocketRetryRejectsSimultaneousPendingTurns(t *testing.T) {
+	coordinator := &organizationResponsesWSTurnCoordinator{
+		turns: map[int]*organizationResponsesWSTurn{
+			1: {done: make(chan struct{})},
+			2: {done: make(chan struct{})},
+		},
+		retryRequests: make(chan organizationResponsesWSRetryRequest, 1),
+		turnFinished:  make(chan int, 1),
+	}
+
+	_, err := coordinator.WaitRetry(context.Background())
+	require.ErrorIs(t, err, service.ErrOrganizationResponsesWSFailoverUnsupported)
+}
+
+func TestOrganizationResponsesWebSocketFreezesActiveAccountFirstThenRetriesInOrder(t *testing.T) {
+	cfg := &config.Config{RunMode: config.RunModeStandard, Log: config.LogConfig{Environment: "development"}}
+	cfg.Default.RateMultiplier = 1
+	groupID := int64(42)
+	newAccount := func(id int64) service.Account {
+		return service.Account{
+			ID: id, Name: "account", Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
+			Status: service.StatusActive, Schedulable: true, Concurrency: 2, GroupIDs: []int64{groupID},
+			Credentials: map[string]any{"api_key": "test-upstream-key", "base_url": "https://api.openai.com"},
+			Extra:       map[string]any{openai_compat.ExtraKeyResponsesMode: string(openai_compat.ResponsesSupportModeForceResponses)},
+		}
+	}
+	defaultFirst := newAccount(55)
+	activeFirst := newAccount(66)
+	accountRepo := &organizationResponsesAccountRepoStub{accounts: []service.Account{defaultFirst, activeFirst}}
+	billing := service.NewBillingService(cfg, nil)
+	gateway := service.NewOpenAIGatewayService(
+		accountRepo, nil, nil, nil, nil, nil, nil, cfg, nil, nil, billing,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+	)
+	apiKey := organizationResponsesAuthorizedAPIKey()
+	apiKey.GroupID = &groupID
+	apiKey.Group.ID = groupID
+	body := []byte(`{"type":"response.create","model":"gpt-5.4","input":"hello","max_output_tokens":32}`)
+	plan, err := gateway.PlanOrganizationResponsesCandidates(context.Background(), service.OrganizationResponsesCandidatePlanInput{
+		APIKey: apiKey, Body: body, RequestShape: service.OrganizationRequestShapeWebSocketResponseCreate,
+		RequestPath: "/v1/responses", GroupID: &groupID, MaximumAttempts: 2, PreferredAccountID: activeFirst.ID,
+	})
+	require.NoError(t, err)
+	require.Len(t, plan.Candidates, 2)
+	require.Equal(t, []int64{activeFirst.ID, defaultFirst.ID}, []int64{plan.Candidates[0].AccountID, plan.Candidates[1].AccountID})
+
+	handler := NewOpenAIGatewayHandler(gateway, nil, nil, nil, nil, nil, nil, cfg)
+	coordinator := &organizationResponsesWSTurnCoordinator{
+		handler: handler, activeAccount: &activeFirst, accountChanged: make(chan struct{}),
+	}
+	state := &organizationResponsesWSTurn{}
+	adapter := &organizationResponsesWSTurnAdapter{coordinator: coordinator, state: state, apiKey: apiKey, plan: plan}
+
+	first, err := adapter.currentCandidate(context.Background(), 1)
+	require.NoError(t, err)
+	require.Equal(t, activeFirst.ID, first.AccountID)
+
+	coordinator.SetActiveAccount(&defaultFirst)
+	second, err := adapter.currentCandidate(context.Background(), 2)
+	require.NoError(t, err)
+	require.Equal(t, defaultFirst.ID, second.AccountID)
+}
+
+func TestOrganizationResponsesWebSocketParentAdmissionRunsOnceAcrossTwoAttempts(t *testing.T) {
+	cfg := &config.Config{RunMode: config.RunModeStandard, Log: config.LogConfig{Environment: "development"}}
+	cfg.Default.RateMultiplier = 1
+	groupID := int64(42)
+	newAccount := func(id int64) service.Account {
+		return service.Account{
+			ID: id, Name: "account", Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
+			Status: service.StatusActive, Schedulable: true, Concurrency: 1, GroupIDs: []int64{groupID},
+			Credentials: map[string]any{"api_key": "test-upstream-key", "base_url": "https://api.openai.com"},
+			Extra:       map[string]any{openai_compat.ExtraKeyResponsesMode: string(openai_compat.ResponsesSupportModeForceResponses)},
+		}
+	}
+	firstAccount := newAccount(55)
+	secondAccount := newAccount(66)
+	accountRepo := &organizationResponsesAccountRepoStub{accounts: []service.Account{firstAccount, secondAccount}}
+	concurrencyCache := &organizationResponsesCountingConcurrencyCache{}
+	concurrency := service.NewConcurrencyService(concurrencyCache)
+	rpmCache := &organizationResponsesCountingRPMCache{}
+	rateRepo := &organizationResponsesCountingAPIKeyRateRepo{}
+	billingCache := service.NewBillingCacheService(
+		nil, nil, nil, rateRepo, rpmCache, organizationResponsesUserGroupRateRepoStub{}, cfg,
+		organizationResponsesUserPlatformQuotaRepoStub{},
+	)
+	defer billingCache.Stop()
+	billing := service.NewBillingService(cfg, nil)
+	gateway := service.NewOpenAIGatewayService(
+		accountRepo, nil, nil, nil, nil, nil, nil, cfg, nil, concurrency, billing,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+	)
+	apiKey := organizationResponsesAuthorizedAPIKey()
+	apiKey.GroupID = &groupID
+	apiKey.Group.ID = groupID
+	apiKey.User.RPMLimit = 10
+	apiKey.RateLimit5h = 100
+	groupOverride := 10
+	apiKey.User.UserGroupRPMOverride = &groupOverride
+	body := []byte(`{"type":"response.create","model":"gpt-5.4","input":"hello","max_output_tokens":32}`)
+	plan, err := gateway.PlanOrganizationResponsesCandidates(context.Background(), service.OrganizationResponsesCandidatePlanInput{
+		APIKey: apiKey, Body: body, RequestShape: service.OrganizationRequestShapeWebSocketResponseCreate,
+		RequestPath: "/v1/responses", GroupID: &groupID, MaximumAttempts: 2, PreferredAccountID: firstAccount.ID,
+	})
+	require.NoError(t, err)
+	require.Len(t, plan.Candidates, 2)
+
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+	state := &organizationResponsesWSTurn{readyDone: make(chan struct{})}
+	coordinator := &organizationResponsesWSTurnCoordinator{
+		handler: handler, activeAccount: &firstAccount, accountChanged: make(chan struct{}),
+		retryRequests: make(chan organizationResponsesWSRetryRequest, 1),
+	}
+	adapter := &organizationResponsesWSTurnAdapter{coordinator: coordinator, turn: 1, state: state, apiKey: apiKey, plan: plan}
+	defer adapter.releaseParentAdmission()
+
+	type dispatchResult struct {
+		result *service.OrganizationExecutionAttemptResult
+		err    error
+	}
+	firstResult := make(chan dispatchResult, 1)
+	go func() {
+		result, dispatchErr := adapter.Dispatch(context.Background(), service.OrganizationExecutionDispatchRequest{AttemptSequence: 1})
+		firstResult <- dispatchResult{result: result, err: dispatchErr}
+	}()
+	<-state.readyDone
+	state.completeAttempt(organizationResponsesWSTurnOutcome{err: &service.UpstreamFailoverError{StatusCode: http.StatusServiceUnavailable}})
+	first := <-firstResult
+	require.NoError(t, first.err)
+	require.True(t, first.result.Retryable)
+
+	retry := <-coordinator.retryRequests
+	coordinator.SetActiveAccount(&secondAccount)
+	secondResult := make(chan dispatchResult, 1)
+	go func() {
+		result, dispatchErr := adapter.Dispatch(context.Background(), service.OrganizationExecutionDispatchRequest{AttemptSequence: 2})
+		secondResult <- dispatchResult{result: result, err: dispatchErr}
+	}()
+	require.NoError(t, <-retry.ready)
+	state.completeAttempt(organizationResponsesWSTurnOutcome{err: &service.OpenAILocalPreDispatchError{
+		Message: "known pre-dispatch failure", ZeroProof: service.OpenAIWSUpstreamPreDispatchZeroProof,
+	}})
+	second := <-secondResult
+	require.NoError(t, second.err)
+	require.False(t, second.result.Dispatched)
+	require.False(t, second.result.PendingReconciliation)
+
+	adapter.releaseParentAdmission()
+	groupRPMCalls, userRPMCalls := rpmCache.counts()
+	userAcquires, userReleases, accountAcquires, accountReleases := concurrencyCache.counts()
+	require.Equal(t, 1, groupRPMCalls)
+	require.Equal(t, 1, userRPMCalls)
+	require.Equal(t, 1, rateRepo.count())
+	require.Equal(t, 1, userAcquires)
+	require.Equal(t, 1, userReleases)
+	require.Equal(t, 2, accountAcquires)
+	require.Equal(t, 2, accountReleases)
 }
 
 func TestOrganizationResponsesAdapterClassifiesTerminalOutcomes(t *testing.T) {
@@ -550,5 +1060,16 @@ func TestOrganizationResponsesAdapterClassifiesTerminalOutcomes(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, result.Dispatched)
 		require.Equal(t, "local_policy_rejected", result.ZeroProof)
+	})
+
+	t.Run("websocket upstream pre-dispatch failure is proven zero", func(t *testing.T) {
+		adapter, request := newAdapter()
+		result, err := adapter.resultForForward(request, candidate, nil, &service.OpenAILocalPreDispatchError{
+			Message: "handshake failed", ZeroProof: service.OpenAIWSUpstreamPreDispatchZeroProof,
+		}, -1)
+		require.NoError(t, err)
+		require.False(t, result.Dispatched)
+		require.False(t, result.PendingReconciliation)
+		require.Equal(t, service.OpenAIWSUpstreamPreDispatchZeroProof, result.ZeroProof)
 	})
 }

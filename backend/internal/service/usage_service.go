@@ -97,6 +97,7 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 		UserID:                req.UserID,
 		APIKeyID:              req.APIKeyID,
 		AccountID:             req.AccountID,
+		OrganizationID:        OrganizationReportingIDFromContext(txCtx),
 		RequestID:             req.RequestID,
 		Model:                 req.Model,
 		InputTokens:           req.InputTokens,

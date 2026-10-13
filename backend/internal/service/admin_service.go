@@ -535,7 +535,10 @@ const (
 	proxyQualityClientUserAgent       = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 )
 
-var ErrRPMStatusUnavailable = infraerrors.New(http.StatusNotImplemented, "RPM_STATUS_UNAVAILABLE", "RPM cache not available")
+var (
+	ErrRPMStatusUnavailable               = infraerrors.New(http.StatusNotImplemented, "RPM_STATUS_UNAVAILABLE", "RPM cache not available")
+	ErrUserDeletionTransactionUnavailable = infraerrors.ServiceUnavailable("USER_DELETION_TRANSACTION_UNAVAILABLE", "user deletion transaction is unavailable")
+)
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
@@ -561,6 +564,12 @@ type adminServiceImpl struct {
 
 type userGroupRateBatchReader interface {
 	GetByUserIDs(ctx context.Context, userIDs []int64) (map[int64]map[int64]float64, error)
+}
+
+// userDeletionLocker keeps the row-lock capability separate from the broad
+// UserRepository interface while remaining mandatory for destructive calls.
+type userDeletionLocker interface {
+	LockUserForDeletion(ctx context.Context, id int64) (*User, error)
 }
 
 // NewAdminService creates a new AdminService
@@ -861,38 +870,33 @@ func sameInt64Set(a, b []int64) bool {
 }
 
 func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
-	// Protect admin users: cannot delete admin accounts
-	user, err := s.userRepo.GetByID(ctx, id)
+	if s.entClient == nil {
+		return ErrUserDeletionTransactionUnavailable
+	}
+
+	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		return err
 	}
-	if user.Role == "admin" {
-		return errors.New("cannot delete admin user")
-	}
+	defer func() { _ = tx.Rollback() }()
 
-	apiKeys, err := s.listUserAPIKeysForDeletion(ctx, id)
+	opCtx := dbent.NewTxContext(ctx, tx)
+	user, err := s.lockUserForDeletion(opCtx, id)
 	if err != nil {
 		return err
 	}
-
-	if s.entClient != nil {
-		tx, err := s.entClient.Tx(ctx)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = tx.Rollback() }()
-
-		opCtx := dbent.NewTxContext(ctx, tx)
-		if err := s.deleteUserWithAPIKeys(opCtx, id, apiKeys); err != nil {
-			return err
-		}
-		if err := tx.Commit(); err != nil {
-			return err
-		}
-	} else {
-		if err := s.deleteUserWithAPIKeys(ctx, id, apiKeys); err != nil {
-			return err
-		}
+	if err := validateUserDeletion(user); err != nil {
+		return err
+	}
+	apiKeys, err := s.listUserAPIKeysForDeletion(opCtx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.deleteUserWithAPIKeys(opCtx, id, apiKeys); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
 	if s.authCacheInvalidator != nil {
@@ -902,6 +906,27 @@ func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
 			}
 		}
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, id)
+	}
+	return nil
+}
+
+func (s *adminServiceImpl) lockUserForDeletion(ctx context.Context, id int64) (*User, error) {
+	locker, ok := s.userRepo.(userDeletionLocker)
+	if !ok {
+		return nil, ErrUserDeletionTransactionUnavailable
+	}
+	return locker.LockUserForDeletion(ctx, id)
+}
+
+func validateUserDeletion(user *User) error {
+	if user == nil {
+		return ErrUserNotFound
+	}
+	if user.Role == RoleAdmin {
+		return errors.New("cannot delete admin user")
+	}
+	if user.OrganizationID != nil {
+		return ErrOrganizationMembershipMustBeRemoved
 	}
 	return nil
 }

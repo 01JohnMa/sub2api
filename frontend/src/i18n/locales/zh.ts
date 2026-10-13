@@ -2183,6 +2183,27 @@ export default {
       failedToCreate: '创建组织失败',
       failedToUpdate: '更新组织失败',
       statusManagedSeparately: '生命周期状态由独立操作管理，不能在这里修改。',
+      lifecycle: {
+        title: '生命周期',
+        description: '生命周期变更不会修改成员、Key、额度分配、预留或历史记录。',
+        disable: '停用',
+        reactivate: '恢复启用',
+        archive: '永久归档',
+        disableTitle: '停用组织',
+        reactivateTitle: '恢复启用组织',
+        archiveTitle: '永久归档组织',
+        disableConfirmation: '确定停用此组织吗？新的组织管理员访问和组织 API Key 执行将立即停止。',
+        reactivateConfirmation: '确定恢复启用此组织吗？组织管理员访问和新的组织 API Key 执行可以恢复。',
+        archiveConfirmation: '确定永久归档此组织吗？{amount} USD 未分配余额将被永久冻结，且无法恢复。',
+        frozenUnallocated: '将冻结的未分配余额',
+        balanceVersion: '确认余额版本',
+        disableSucceeded: '组织已停用',
+        reactivateSucceeded: '组织已恢复启用',
+        archiveSucceeded: '组织已永久归档',
+        failedToLoadPreview: '加载当前归档确认信息失败。',
+        versionConflict: '组织状态已变化，请检查刷新后的归档确认信息后重试。',
+        failed: '更新组织生命周期失败'
+      },
       members: {
         title: '成员',
         safeDataHint: '仅展示组织范围内的成员数据与组织额度分配快照。',
@@ -2265,6 +2286,38 @@ export default {
           actor: '操作人',
           reason: '原因'
         }
+      },
+      reconciliation: {
+        title: '待对账执行',
+        description: '仅服务端捕获的可信证据可结算或释放待处理预留。',
+        empty: '暂无待对账执行。',
+        conflict: '证据冲突',
+        awaitingEvidence: '等待证据',
+        allowedResolution: '允许结果',
+        computedAmount: '组织结算金额',
+        candidateCeiling: '候选上限',
+        attempt: '尝试',
+        attemptCount: '{count} 次尝试',
+        attemptStatuses: {
+          created: '已创建',
+          dispatched: '已发送',
+          final_usage_observed: '已观察最终用量'
+        },
+        evidenceSources: {
+          adapter_direct: '适配器直接证据',
+          provider_query: '提供商查询证据'
+        },
+        outcomes: {
+          success: '成功',
+          error: '错误',
+          unknown: '未知'
+        },
+        resolve: '确认服务端结果',
+        confirmTitle: '确认对账',
+        confirmMessage: '根据不可变证据应用服务端计算的结果？该操作不能选择证据或输入金额。',
+        resolved: '待处理执行已完成对账',
+        failedToLoad: '加载待对账执行失败',
+        failedToResolve: '待处理执行对账失败'
       },
       allocations: {
         title: '平台成员额度调整',
@@ -6904,7 +6957,7 @@ export default {
   organization: {
     overview: {
       title: '组织概览',
-      description: '管理本组织成员并分配组织额度',
+      description: '管理本组织成员并查看组织统计',
       code: '组织代码',
       status: '状态',
       currency: '币种',
@@ -6923,9 +6976,60 @@ export default {
         unavailable: '暂时无法获取组织余额。',
         failedToLoad: '加载组织余额失败'
       },
+      reconciliation: {
+        title: '待对账状态',
+        description: '组织管理员仅可看到待对账数量和状态。',
+        pending: '待处理',
+        clear: '正常',
+        unavailable: '暂时无法获取对账状态。',
+        failedToLoad: '加载对账状态失败'
+      },
+      reporting: {
+        title: '使用报表',
+        description: '按请求和错误记录的时间汇总。',
+        start: '开始日期',
+        end: '结束日期（不含）',
+        apply: '应用',
+        requests: '请求数',
+        success: '成功',
+        errors: '错误',
+        activeMembers: '活跃成员',
+        tokens: 'Token',
+        input: '输入',
+        output: '输出',
+        cacheCreation: '缓存创建',
+        cacheRead: '缓存读取',
+        cost: '已结算费用',
+        currentMembers: '当前成员数',
+        apiKeys: 'API Key 数',
+        businessLimited: '业务限流错误',
+        slaErrors: 'SLA 错误',
+        successRate: '成功率',
+        errorRate: '错误率',
+        models: '模型分布',
+        trends: '每日趋势',
+        memberUsage: '成员用量',
+        departed: '已离开成员（历史）',
+        keyMetadata: 'API Key 元数据',
+        keysEmpty: '当前组织没有 API Key。',
+        never: '从未',
+        empty: '此时间范围内没有最终执行证据。',
+        unavailable: '暂时无法获取报表数据。',
+        invalidRange: '开始日期必须早于结束日期。',
+        failedToLoad: '加载组织报表失败',
+        columns: { model: '模型', date: '日期', member: '成员', requests: '请求数', success: '成功', errors: '错误', input: '输入 Token', output: '输出 Token', cacheCreation: '缓存创建 Token', cacheRead: '缓存读取 Token', cost: '已结算费用', keyName: 'Key 名称', status: '状态', quota: '配额', quotaUsed: '已用', lastUsed: '最后使用', expires: '过期时间' }
+      },
+      ledger: {
+        title: '组织账本',
+        noReason: '无公开原因',
+        empty: '暂无公开账本记录。',
+        columns: { operation: '操作', actor: '操作人', reason: '公开原因', bucket: '资金桶', occurredAt: '发生时间', before: '变更前', delta: '变化', after: '变更后' },
+        operations: { organization_credit: '组织授信', equal_allocation: '平均分配', custom_allocation: '自定义分配', allocation_reclaim: '额度收回', member_removal_reclaim: '成员移出收回', reservation: '预留', consumption: '消费', release: '释放' },
+        buckets: { unallocated: '未分配池', allocation_available: '成员可用额度', allocation_reserved: '成员预留额度' }
+      },
       members: {
         title: '组织成员',
-        description: '查看成员及其组织额度摘要',
+        description: '查看组织成员及其状态摘要',
         addAction: '添加成员',
         addTitle: '添加组织成员',
         addDescription: '请输入一个准确的已注册邮箱或准确用户 ID。',

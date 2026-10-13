@@ -145,6 +145,14 @@ func (s *organizationFundingRepositoryStub) ListLedger(_ context.Context, organi
 	return s.ledger, s.ledgerPage, s.err
 }
 
+func (*organizationFundingRepositoryStub) GetReport(context.Context, int64, service.OrganizationReportRange) (*service.OrganizationReport, error) {
+	return nil, nil
+}
+
+func (*organizationFundingRepositoryStub) ListReportMembers(context.Context, int64, service.OrganizationReportRange, pagination.PaginationParams) ([]service.OrganizationReportMemberUsage, *service.OrganizationReportMemberUsage, *pagination.PaginationResult, error) {
+	return nil, nil, nil, nil
+}
+
 func (s *organizationMembershipManagerStub) List(_ context.Context, organizationID int64, _ pagination.PaginationParams) ([]service.OrganizationMember, *pagination.PaginationResult, error) {
 	s.listOrgID = organizationID
 	return s.items, &pagination.PaginationResult{Total: int64(len(s.items)), Page: 1, PageSize: 20, Pages: 1}, s.err
@@ -219,7 +227,78 @@ func newOrganizationHandlerRouter(handler *OrganizationHandler) *gin.Engine {
 	router.POST("/organizations/:id/allocations/custom", withSubject, handler.ExecuteCustomAllocation)
 	router.POST("/organizations/:id/allocations/reclaim/preview", withSubject, handler.PreviewReclaimAllocation)
 	router.POST("/organizations/:id/allocations/reclaim", withSubject, handler.ExecuteReclaimAllocation)
+	router.GET("/organizations/:id/pending-reconciliations", handler.ListPendingReconciliations)
+	router.GET("/organizations/:id/pending-reconciliations/:execution_id", handler.GetPendingReconciliation)
+	router.POST("/organizations/:id/pending-reconciliations/:execution_id/resolve", withSubject, handler.ResolvePendingReconciliation)
 	return router
+}
+
+func TestOrganizationHandlerPendingReconciliationReadsAreScopedAndResolutionRequiresJWT(t *testing.T) {
+	executionID := "4f0a1134-8aac-4eae-bbad-4adfcd8b7c72"
+	repository := &organizationExecutionRecoveryRepositoryStubForHandler{
+		item: service.OrganizationPendingReconciliation{
+			ExecutionID: executionID, OrganizationID: 7, AllocationID: 101, ReservationID: 91,
+			CandidateCeiling: "2.00000000", ReservedAmount: "2.00000000", AttemptCount: 1,
+			Evidence:          []service.OrganizationPendingReconciliationEvidence{{AttemptID: "8c4c436b-cc5a-451a-8c26-1a28d45cf612", EvidenceSource: service.OrganizationAttemptEvidenceProvenanceAdapterDirect, TerminalOutcome: service.OrganizationExecutionTerminalOutcomeSuccess, RawActualCost: "1.00000000"}},
+			AllowedResolution: service.OrganizationReservationStateSettled,
+		},
+	}
+	handler := NewOrganizationHandler(&organizationManagerStub{}, &organizationMembershipManagerStub{}, nil, nil)
+	handler.SetRecoveryService(service.NewOrganizationExecutionRecoveryService(repository))
+	router := newOrganizationHandlerRouter(handler)
+
+	listRecorder := httptest.NewRecorder()
+	router.ServeHTTP(listRecorder, httptest.NewRequest(http.MethodGet, "/organizations/7/pending-reconciliations?page=1&page_size=20", nil))
+	require.Equal(t, http.StatusOK, listRecorder.Code)
+	require.Equal(t, int64(7), repository.listOrganizationID)
+	require.Contains(t, listRecorder.Body.String(), `"allowed_resolution":"settled"`)
+	require.NotContains(t, listRecorder.Body.String(), "internal_reason")
+
+	adminKeyRouter := gin.New()
+	adminKeyRouter.POST("/organizations/:id/pending-reconciliations/:execution_id/resolve", func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 42})
+		c.Set(string(middleware.ContextKeyUserRole), service.RoleAdmin)
+		c.Set("auth_method", "admin_api_key")
+		c.Next()
+	}, handler.ResolvePendingReconciliation)
+	resolveRecorder := httptest.NewRecorder()
+	resolveRequest := httptest.NewRequest(http.MethodPost, "/organizations/7/pending-reconciliations/"+executionID+"/resolve", nil)
+	resolveRequest.Header.Set("Idempotency-Key", "pending-reconciliation-1")
+	adminKeyRouter.ServeHTTP(resolveRecorder, resolveRequest)
+	require.Equal(t, http.StatusForbidden, resolveRecorder.Code)
+	require.Contains(t, resolveRecorder.Body.String(), "ORGANIZATION_EXECUTION_RECONCILIATION_FORBIDDEN")
+}
+
+type organizationExecutionRecoveryRepositoryStubForHandler struct {
+	item               service.OrganizationPendingReconciliation
+	listOrganizationID int64
+}
+
+func (*organizationExecutionRecoveryRepositoryStubForHandler) RecordPendingAttempt(context.Context, service.OrganizationPendingAttemptCommand) error {
+	return nil
+}
+func (*organizationExecutionRecoveryRepositoryStubForHandler) ReconcilePendingExecution(context.Context, service.OrganizationPendingReconciliationCommand) (*service.OrganizationFinalExecutionEvidenceResult, error) {
+	return nil, service.ErrOrganizationExecutionPendingReconciliation
+}
+func (s *organizationExecutionRecoveryRepositoryStubForHandler) ListPendingReconciliations(_ context.Context, organizationID int64, _ service.OrganizationPendingReconciliationListParams) ([]service.OrganizationPendingReconciliation, *service.OrganizationPendingReconciliationPage, error) {
+	s.listOrganizationID = organizationID
+	return []service.OrganizationPendingReconciliation{s.item}, &service.OrganizationPendingReconciliationPage{Total: 1, Page: 1, PageSize: 20, Pages: 1}, nil
+}
+func (s *organizationExecutionRecoveryRepositoryStubForHandler) GetPendingReconciliation(_ context.Context, organizationID int64, executionID string) (*service.OrganizationPendingReconciliation, error) {
+	if organizationID != s.item.OrganizationID || executionID != s.item.ExecutionID {
+		return nil, service.ErrOrganizationExecutionConflict
+	}
+	item := s.item
+	return &item, nil
+}
+func (*organizationExecutionRecoveryRepositoryStubForHandler) RedriveAttemptAccountEffect(context.Context, string) (*service.OrganizationAttemptAccountEffectResult, error) {
+	return nil, nil
+}
+func (*organizationExecutionRecoveryRepositoryStubForHandler) RedrivePendingAttemptAccountEffects(context.Context, int) ([]service.OrganizationAttemptAccountEffectResult, error) {
+	return nil, nil
+}
+func (*organizationExecutionRecoveryRepositoryStubForHandler) RedriveExecutionOutbox(context.Context, int64) (*service.OrganizationExecutionOutboxApplyResult, error) {
+	return nil, nil
 }
 
 func TestOrganizationHandlerCreateUsesAuthenticatedPlatformActor(t *testing.T) {

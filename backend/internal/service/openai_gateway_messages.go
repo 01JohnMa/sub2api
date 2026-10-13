@@ -33,11 +33,45 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	promptCacheKey string,
 	defaultMappedModel string,
 ) (*OpenAIForwardResult, error) {
+	return s.forwardAsAnthropic(ctx, c, account, body, promptCacheKey, defaultMappedModel, false)
+}
+
+// ForwardAsAnthropicOrganizationAttempt performs at most one provider HTTP
+// request. The organization execution service owns every retry/failover attempt.
+func (s *OpenAIGatewayService) ForwardAsAnthropicOrganizationAttempt(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	promptCacheKey string,
+	defaultMappedModel string,
+) (*OpenAIForwardResult, error) {
+	return s.forwardAsAnthropic(ctx, c, account, body, promptCacheKey, defaultMappedModel, true)
+}
+
+func (s *OpenAIGatewayService) forwardAsAnthropic(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	promptCacheKey string,
+	defaultMappedModel string,
+	organizationAttempt bool,
+) (*OpenAIForwardResult, error) {
 	startTime := time.Now()
+	preDispatchError := func(message string, err error) error {
+		if organizationAttempt {
+			return organizationGatewayChatLocalPreDispatchError(message, err)
+		}
+		return err
+	}
 
 	// 1. Parse Anthropic request
 	var anthropicReq apicompat.AnthropicRequest
 	if err := json.Unmarshal(body, &anthropicReq); err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to parse anthropic request", err)
+		}
 		return nil, fmt.Errorf("parse anthropic request: %w", err)
 	}
 	anthropicDigestReq := cloneAnthropicRequestForDigest(&anthropicReq)
@@ -90,6 +124,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	// 3. Convert Anthropic → Responses after compatibility-only replay guard.
 	responsesReq, err := apicompat.AnthropicToResponses(&anthropicReq)
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to convert anthropic request", err)
+		}
 		return nil, fmt.Errorf("convert anthropic to responses: %w", err)
 	}
 
@@ -146,13 +183,17 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	// 4. Marshal Responses request body, then apply OAuth codex transform
 	responsesBody, err := json.Marshal(responsesReq)
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to marshal responses request", err)
+		}
 		return nil, fmt.Errorf("marshal responses request: %w", err)
 	}
 
 	if account.Type == AccountTypeOAuth {
 		var reqBody map[string]any
 		if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
-			return nil, fmt.Errorf("unmarshal for codex transform: %w", err)
+			wrapped := fmt.Errorf("unmarshal for codex transform: %w", err)
+			return nil, preDispatchError("failed to prepare OAuth organization Messages request", wrapped)
 		}
 		codexResult := applyCodexOAuthTransformWithOptions(reqBody, codexOAuthTransformOptions{
 			SkipDefaultInstructions: true,
@@ -177,7 +218,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 			BillingModel:         billingModel,
 			UpstreamModel:        templateUpstreamModel,
 		}); err != nil {
-			return nil, err
+			return nil, preDispatchError("failed to apply organization Messages instructions policy", err)
 		}
 		ensureCodexOAuthInstructionsField(reqBody)
 		if shouldAutoInjectPromptCacheKeyForCompat(upstreamModel) {
@@ -198,7 +239,8 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		isStream = true
 		responsesBody, err = json.Marshal(reqBody)
 		if err != nil {
-			return nil, fmt.Errorf("remarshal after codex transform: %w", err)
+			wrapped := fmt.Errorf("remarshal after codex transform: %w", err)
+			return nil, preDispatchError("failed to finalize OAuth organization Messages request", wrapped)
 		}
 	}
 
@@ -211,13 +253,15 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		if trimmedKey := strings.TrimSpace(promptCacheKey); trimmedKey != "" {
 			var reqBody map[string]any
 			if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
-				return nil, fmt.Errorf("unmarshal for prompt cache key injection: %w", err)
+				wrapped := fmt.Errorf("unmarshal for prompt cache key injection: %w", err)
+				return nil, preDispatchError("failed to prepare organization Messages prompt cache key", wrapped)
 			}
 			if existing, ok := reqBody["prompt_cache_key"].(string); !ok || strings.TrimSpace(existing) == "" {
 				reqBody["prompt_cache_key"] = trimmedKey
 				updated, err := json.Marshal(reqBody)
 				if err != nil {
-					return nil, fmt.Errorf("remarshal after prompt cache key injection: %w", err)
+					wrapped := fmt.Errorf("remarshal after prompt cache key injection: %w", err)
+					return nil, preDispatchError("failed to finalize organization Messages prompt cache key", wrapped)
 				}
 				responsesBody = updated
 			}
@@ -229,6 +273,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	// on the body-level service_tier field (priority/flex).
 	updatedBody, policyErr := s.applyOpenAIFastPolicyToBody(ctx, account, upstreamModel, responsesBody)
 	if policyErr != nil {
+		if organizationAttempt {
+			return nil, preDispatchError("organization Messages fast policy rejected request", policyErr)
+		}
 		var blocked *OpenAIFastBlockedError
 		if errors.As(policyErr, &blocked) {
 			MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
@@ -241,6 +288,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	// 5. Get access token
 	token, _, err := s.GetAccessToken(ctx, account)
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to acquire upstream access token", err)
+		}
 		return nil, fmt.Errorf("get access token: %w", err)
 	}
 
@@ -249,6 +299,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	upstreamReq, err := s.buildUpstreamRequest(upstreamCtx, c, account, responsesBody, token, isStream, promptCacheKey, false)
 	releaseUpstreamCtx()
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to construct upstream request", err)
+		}
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
 
@@ -293,6 +346,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 			Kind:               "request_error",
 			Message:            safeErr,
 		})
+		if organizationAttempt {
+			return nil, &UpstreamFailoverError{NoHTTPResponse: true}
+		}
 		writeAnthropicError(c, http.StatusBadGateway, "api_error", "Upstream request failed")
 		return nil, fmt.Errorf("upstream request failed: %s", safeErr)
 	}
@@ -307,6 +363,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
 		upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 		if previousResponseID != "" && (isOpenAICompatPreviousResponseNotFound(resp.StatusCode, upstreamMsg, respBody) || isOpenAICompatPreviousResponseUnsupported(resp.StatusCode, upstreamMsg, respBody)) {
+			if organizationAttempt {
+				return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
+			}
 			if isOpenAICompatPreviousResponseUnsupported(resp.StatusCode, upstreamMsg, respBody) {
 				s.disableOpenAICompatSessionContinuation(ctx, c, account, promptCacheKey)
 			} else {
@@ -317,7 +376,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 				zap.String("previous_response_id", truncateOpenAIWSLogValue(previousResponseID, openAIWSIDValueMaxLen)),
 				zap.String("upstream_model", upstreamModel),
 			)
-			return s.ForwardAsAnthropic(ctx, c, account, body, promptCacheKey, defaultMappedModel)
+			return s.forwardAsAnthropic(ctx, c, account, body, promptCacheKey, defaultMappedModel, false)
 		}
 		if s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, respBody) {
 			upstreamDetail := ""

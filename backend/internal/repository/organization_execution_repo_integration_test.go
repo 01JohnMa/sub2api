@@ -523,6 +523,11 @@ func TestOrganizationExecutionPostgresConflictingProvenanceRemainsPendingInciden
 
 	_, err = recovery.ReconcilePendingExecution(ctx, organizationExecutionIntegrationReconciliationCommand(fixture, time.Now().UTC()))
 	require.ErrorIs(t, err, service.ErrOrganizationExecutionPendingReconciliation)
+	pending, err := recovery.GetPendingReconciliation(ctx, fixture.organization.ID, fixture.command.ExecutionID)
+	require.NoError(t, err)
+	require.True(t, pending.Conflict)
+	require.Empty(t, pending.AllowedResolution)
+	require.Len(t, pending.Evidence, 2)
 	var finalCount, incidentCount int
 	var reservationStatus, effectStatus string
 	require.NoError(t, scanExecutionOne(ctx, tx.Client(), `SELECT COUNT(*) FROM organization_final_execution_evidences WHERE execution_id_snapshot = $1`, []any{fixture.command.ExecutionID}, &finalCount))
@@ -533,6 +538,78 @@ func TestOrganizationExecutionPostgresConflictingProvenanceRemainsPendingInciden
 	require.Equal(t, 1, incidentCount)
 	require.Equal(t, service.OrganizationReservationStatePendingReconciliation, reservationStatus)
 	require.Equal(t, service.OrganizationAttemptAccountEffectStateOperatorAttention, effectStatus)
+}
+
+func TestOrganizationExecutionPostgresPendingReconciliationListIsOrganizationScoped(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	first := createReservedOrganizationExecutionIntegrationFixture(t, ctx, client, "execution-reconcile-list-first")
+	second := createReservedOrganizationExecutionIntegrationFixture(t, ctx, client, "execution-reconcile-list-second")
+	prepareOrganizationPendingReconciliationIntegration(t, ctx, first, mustCreateAccount(t, client, &service.Account{Name: "pending list first account"}).ID)
+	prepareOrganizationPendingReconciliationIntegration(t, ctx, second, mustCreateAccount(t, client, &service.Account{Name: "pending list second account"}).ID)
+	recovery := NewOrganizationExecutionRepository(client)
+
+	items, page, err := recovery.ListPendingReconciliations(ctx, first.organization.ID, service.OrganizationPendingReconciliationListParams{Page: 1, PageSize: 1})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), page.Total)
+	require.Equal(t, 1, page.Pages)
+	require.Len(t, items, 1)
+	require.Equal(t, first.command.ExecutionID, items[0].ExecutionID)
+	require.Equal(t, first.organization.ID, items[0].OrganizationID)
+
+	items, page, err = recovery.ListPendingReconciliations(ctx, second.organization.ID, service.OrganizationPendingReconciliationListParams{Page: 1, PageSize: 1})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), page.Total)
+	require.Len(t, items, 1)
+	require.Equal(t, second.command.ExecutionID, items[0].ExecutionID)
+
+	_, err = recovery.GetPendingReconciliation(ctx, first.organization.ID, second.command.ExecutionID)
+	require.ErrorIs(t, err, service.ErrOrganizationExecutionConflict)
+}
+
+func TestOrganizationExecutionPostgresPendingReconciliationWaitsForLaterAttemptEvidence(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	fixture := createReservedOrganizationExecutionIntegrationFixture(t, ctx, client, "execution-reconcile-later-attempt")
+	account := mustCreateAccount(t, client, &service.Account{Name: "pending later attempt account"})
+	recovery := fixture.repository.(service.OrganizationExecutionRecoveryRepository)
+	firstAttemptID := uuid.NewString()
+	providerRequestID := "provider-later-attempt-" + firstAttemptID
+	basePending := service.OrganizationPendingAttemptCommand{
+		ExecutionID: fixture.command.ExecutionID, AttemptID: firstAttemptID, CorrelationID: fixture.command.CorrelationID,
+		ReservationID: fixture.reserved.ReservationID, OrganizationID: fixture.organization.ID, UserID: fixture.member.ID,
+		APIKeyID: fixture.key.ID, AllocationID: fixture.allocation.ID, AttemptSequence: 1, AccountID: account.ID,
+		RouteSnapshotJSON: `{}`, RouteSnapshotHash: repositoryExecutionHash(`{}`),
+		PricingSnapshotJSON: fixture.command.PricingSnapshotJSON, PricingSnapshotHash: fixture.command.PricingSnapshotHash,
+		ProviderRequestID: providerRequestID, ProviderCorrelationID: uuid.NewString(), DispatchedAt: time.Now().UTC(),
+	}
+	require.NoError(t, recovery.RecordPendingAttempt(ctx, basePending))
+	evidence := organizationExecutionIntegrationEvidenceCommand(
+		fixture, account.ID, firstAttemptID, 1, service.OrganizationAttemptEvidenceProvenanceProviderQuery,
+		service.OrganizationExecutionTerminalOutcomeError, "0.25000000", `{"usage":"retryable"}`,
+	)
+	evidence.ProviderRequestID = providerRequestID
+	evidence.ProviderCorrelationID = basePending.ProviderCorrelationID
+	_, err := fixture.repository.RecordAttemptEvidence(ctx, evidence)
+	require.NoError(t, err)
+
+	secondAttempt := basePending
+	secondAttempt.AttemptID = uuid.NewString()
+	secondAttempt.AttemptSequence = 2
+	secondAttempt.ProviderRequestID = "provider-later-attempt-2-" + secondAttempt.AttemptID
+	secondAttempt.ProviderCorrelationID = uuid.NewString()
+	require.NoError(t, recovery.RecordPendingAttempt(ctx, secondAttempt))
+
+	pending, err := recovery.GetPendingReconciliation(ctx, fixture.organization.ID, fixture.command.ExecutionID)
+	require.NoError(t, err)
+	require.Equal(t, 2, pending.AttemptCount)
+	require.Len(t, pending.Attempts, 2)
+	require.Empty(t, pending.AllowedResolution)
+	require.Empty(t, pending.ComputedOrganizationAmount)
+	command := organizationExecutionIntegrationReconciliationCommand(fixture, time.Now().UTC())
+	command.OrganizationID = fixture.organization.ID
+	_, err = recovery.ReconcilePendingExecution(ctx, command)
+	require.ErrorIs(t, err, service.ErrOrganizationExecutionPendingReconciliation)
 }
 
 func TestOrganizationExecutionPostgresReconciliationUsesEvidenceAndWritesImmutableAudit(t *testing.T) {
@@ -575,6 +652,11 @@ func TestOrganizationExecutionPostgresReconciliationUsesEvidenceAndWritesImmutab
 	require.NoError(t, err)
 	reconciledAt := time.Now().UTC()
 	command := organizationExecutionIntegrationReconciliationCommand(fixture, reconciledAt)
+	command.OrganizationID = fixture.organization.ID
+	pending, err := recovery.GetPendingReconciliation(ctx, fixture.organization.ID, fixture.command.ExecutionID)
+	require.NoError(t, err)
+	require.Equal(t, service.OrganizationReservationStateSettled, pending.AllowedResolution)
+	require.Equal(t, "0.25000000", pending.ComputedOrganizationAmount)
 	final, err := recovery.ReconcilePendingExecution(ctx, command)
 	require.NoError(t, err)
 	require.NotNil(t, final.ReconciledAt)
@@ -605,6 +687,12 @@ func TestOrganizationExecutionPostgresReconciliationUsesEvidenceAndWritesImmutab
 	require.Equal(t, service.OrganizationReservationStatePendingReconciliation, reservationBefore)
 	require.Equal(t, service.OrganizationReservationStateSettled, reservationAfter)
 	require.Equal(t, command.IdempotencyKeyHash, idempotencyKeyHash)
+	_, err = recovery.GetPendingReconciliation(ctx, fixture.organization.ID, fixture.command.ExecutionID)
+	require.ErrorIs(t, err, service.ErrOrganizationExecutionConflict)
+	foreignReplay := command
+	foreignReplay.OrganizationID = fixture.organization.ID + 1
+	_, err = recovery.ReconcilePendingExecution(ctx, foreignReplay)
+	require.ErrorIs(t, err, service.ErrOrganizationExecutionConflict)
 }
 
 func TestOrganizationExecutionPostgresConcurrentReconciliationRejectsScopedKeyReuse(t *testing.T) {

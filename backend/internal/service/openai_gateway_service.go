@@ -5956,6 +5956,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		UserID:              user.ID,
 		APIKeyID:            apiKey.ID,
 		AccountID:           account.ID,
+		OrganizationID:      OrganizationReportingIDFromContext(ctx),
 		RequestID:           requestID,
 		Model:               result.Model,
 		RequestedModel:      requestedModel,
@@ -6742,11 +6743,12 @@ type OpenAICodexClientRestrictionError struct {
 func (e *OpenAICodexClientRestrictionError) Error() string { return e.Message }
 
 // OpenAILocalPreDispatchError marks a deterministic gateway failure before an
-// upstream HTTP request was constructed. Organization billing can terminalize
-// this as proven zero instead of creating a false pending reconciliation.
+// upstream request was dispatched. Organization billing can terminalize this
+// as proven zero instead of creating a false pending reconciliation.
 type OpenAILocalPreDispatchError struct {
-	Message string
-	Cause   error
+	Message   string
+	Cause     error
+	ZeroProof string
 }
 
 func (e *OpenAILocalPreDispatchError) Error() string { return e.Message }

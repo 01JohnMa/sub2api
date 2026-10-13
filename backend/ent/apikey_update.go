@@ -14,6 +14,9 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/organization"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecution"
+	"github.com/Wei-Shaw/sub2api/ent/organizationfinalexecutionevidence"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
@@ -117,6 +120,26 @@ func (_u *APIKeyUpdate) SetNillableGroupID(v *int64) *APIKeyUpdate {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *APIKeyUpdate) ClearGroupID() *APIKeyUpdate {
 	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetOrganizationID sets the "organization_id" field.
+func (_u *APIKeyUpdate) SetOrganizationID(v int64) *APIKeyUpdate {
+	_u.mutation.SetOrganizationID(v)
+	return _u
+}
+
+// SetNillableOrganizationID sets the "organization_id" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableOrganizationID(v *int64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetOrganizationID(*v)
+	}
+	return _u
+}
+
+// ClearOrganizationID clears the value of the "organization_id" field.
+func (_u *APIKeyUpdate) ClearOrganizationID() *APIKeyUpdate {
+	_u.mutation.ClearOrganizationID()
 	return _u
 }
 
@@ -448,6 +471,11 @@ func (_u *APIKeyUpdate) SetGroup(v *Group) *APIKeyUpdate {
 	return _u.SetGroupID(v.ID)
 }
 
+// SetOrganization sets the "organization" edge to the Organization entity.
+func (_u *APIKeyUpdate) SetOrganization(v *Organization) *APIKeyUpdate {
+	return _u.SetOrganizationID(v.ID)
+}
+
 // AddUsageLogIDs adds the "usage_logs" edge to the UsageLog entity by IDs.
 func (_u *APIKeyUpdate) AddUsageLogIDs(ids ...int64) *APIKeyUpdate {
 	_u.mutation.AddUsageLogIDs(ids...)
@@ -461,6 +489,36 @@ func (_u *APIKeyUpdate) AddUsageLogs(v ...*UsageLog) *APIKeyUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.AddUsageLogIDs(ids...)
+}
+
+// AddOrganizationExecutionIDs adds the "organization_executions" edge to the OrganizationExecution entity by IDs.
+func (_u *APIKeyUpdate) AddOrganizationExecutionIDs(ids ...int64) *APIKeyUpdate {
+	_u.mutation.AddOrganizationExecutionIDs(ids...)
+	return _u
+}
+
+// AddOrganizationExecutions adds the "organization_executions" edges to the OrganizationExecution entity.
+func (_u *APIKeyUpdate) AddOrganizationExecutions(v ...*OrganizationExecution) *APIKeyUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddOrganizationExecutionIDs(ids...)
+}
+
+// AddOrganizationFinalExecutionEvidenceIDs adds the "organization_final_execution_evidences" edge to the OrganizationFinalExecutionEvidence entity by IDs.
+func (_u *APIKeyUpdate) AddOrganizationFinalExecutionEvidenceIDs(ids ...int64) *APIKeyUpdate {
+	_u.mutation.AddOrganizationFinalExecutionEvidenceIDs(ids...)
+	return _u
+}
+
+// AddOrganizationFinalExecutionEvidences adds the "organization_final_execution_evidences" edges to the OrganizationFinalExecutionEvidence entity.
+func (_u *APIKeyUpdate) AddOrganizationFinalExecutionEvidences(v ...*OrganizationFinalExecutionEvidence) *APIKeyUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddOrganizationFinalExecutionEvidenceIDs(ids...)
 }
 
 // Mutation returns the APIKeyMutation object of the builder.
@@ -477,6 +535,12 @@ func (_u *APIKeyUpdate) ClearUser() *APIKeyUpdate {
 // ClearGroup clears the "group" edge to the Group entity.
 func (_u *APIKeyUpdate) ClearGroup() *APIKeyUpdate {
 	_u.mutation.ClearGroup()
+	return _u
+}
+
+// ClearOrganization clears the "organization" edge to the Organization entity.
+func (_u *APIKeyUpdate) ClearOrganization() *APIKeyUpdate {
+	_u.mutation.ClearOrganization()
 	return _u
 }
 
@@ -499,6 +563,48 @@ func (_u *APIKeyUpdate) RemoveUsageLogs(v ...*UsageLog) *APIKeyUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveUsageLogIDs(ids...)
+}
+
+// ClearOrganizationExecutions clears all "organization_executions" edges to the OrganizationExecution entity.
+func (_u *APIKeyUpdate) ClearOrganizationExecutions() *APIKeyUpdate {
+	_u.mutation.ClearOrganizationExecutions()
+	return _u
+}
+
+// RemoveOrganizationExecutionIDs removes the "organization_executions" edge to OrganizationExecution entities by IDs.
+func (_u *APIKeyUpdate) RemoveOrganizationExecutionIDs(ids ...int64) *APIKeyUpdate {
+	_u.mutation.RemoveOrganizationExecutionIDs(ids...)
+	return _u
+}
+
+// RemoveOrganizationExecutions removes "organization_executions" edges to OrganizationExecution entities.
+func (_u *APIKeyUpdate) RemoveOrganizationExecutions(v ...*OrganizationExecution) *APIKeyUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveOrganizationExecutionIDs(ids...)
+}
+
+// ClearOrganizationFinalExecutionEvidences clears all "organization_final_execution_evidences" edges to the OrganizationFinalExecutionEvidence entity.
+func (_u *APIKeyUpdate) ClearOrganizationFinalExecutionEvidences() *APIKeyUpdate {
+	_u.mutation.ClearOrganizationFinalExecutionEvidences()
+	return _u
+}
+
+// RemoveOrganizationFinalExecutionEvidenceIDs removes the "organization_final_execution_evidences" edge to OrganizationFinalExecutionEvidence entities by IDs.
+func (_u *APIKeyUpdate) RemoveOrganizationFinalExecutionEvidenceIDs(ids ...int64) *APIKeyUpdate {
+	_u.mutation.RemoveOrganizationFinalExecutionEvidenceIDs(ids...)
+	return _u
+}
+
+// RemoveOrganizationFinalExecutionEvidences removes "organization_final_execution_evidences" edges to OrganizationFinalExecutionEvidence entities.
+func (_u *APIKeyUpdate) RemoveOrganizationFinalExecutionEvidences(v ...*OrganizationFinalExecutionEvidence) *APIKeyUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveOrganizationFinalExecutionEvidenceIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -754,6 +860,35 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.OrganizationCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   apikey.OrganizationTable,
+			Columns: []string{apikey.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   apikey.OrganizationTable,
+			Columns: []string{apikey.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _u.mutation.UsageLogsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -792,6 +927,96 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OrganizationExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationExecutionsTable,
+			Columns: []string{apikey.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedOrganizationExecutionsIDs(); len(nodes) > 0 && !_u.mutation.OrganizationExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationExecutionsTable,
+			Columns: []string{apikey.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationExecutionsTable,
+			Columns: []string{apikey.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OrganizationFinalExecutionEvidencesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{apikey.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedOrganizationFinalExecutionEvidencesIDs(); len(nodes) > 0 && !_u.mutation.OrganizationFinalExecutionEvidencesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{apikey.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationFinalExecutionEvidencesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{apikey.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -904,6 +1129,26 @@ func (_u *APIKeyUpdateOne) SetNillableGroupID(v *int64) *APIKeyUpdateOne {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *APIKeyUpdateOne) ClearGroupID() *APIKeyUpdateOne {
 	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetOrganizationID sets the "organization_id" field.
+func (_u *APIKeyUpdateOne) SetOrganizationID(v int64) *APIKeyUpdateOne {
+	_u.mutation.SetOrganizationID(v)
+	return _u
+}
+
+// SetNillableOrganizationID sets the "organization_id" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableOrganizationID(v *int64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetOrganizationID(*v)
+	}
+	return _u
+}
+
+// ClearOrganizationID clears the value of the "organization_id" field.
+func (_u *APIKeyUpdateOne) ClearOrganizationID() *APIKeyUpdateOne {
+	_u.mutation.ClearOrganizationID()
 	return _u
 }
 
@@ -1235,6 +1480,11 @@ func (_u *APIKeyUpdateOne) SetGroup(v *Group) *APIKeyUpdateOne {
 	return _u.SetGroupID(v.ID)
 }
 
+// SetOrganization sets the "organization" edge to the Organization entity.
+func (_u *APIKeyUpdateOne) SetOrganization(v *Organization) *APIKeyUpdateOne {
+	return _u.SetOrganizationID(v.ID)
+}
+
 // AddUsageLogIDs adds the "usage_logs" edge to the UsageLog entity by IDs.
 func (_u *APIKeyUpdateOne) AddUsageLogIDs(ids ...int64) *APIKeyUpdateOne {
 	_u.mutation.AddUsageLogIDs(ids...)
@@ -1248,6 +1498,36 @@ func (_u *APIKeyUpdateOne) AddUsageLogs(v ...*UsageLog) *APIKeyUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.AddUsageLogIDs(ids...)
+}
+
+// AddOrganizationExecutionIDs adds the "organization_executions" edge to the OrganizationExecution entity by IDs.
+func (_u *APIKeyUpdateOne) AddOrganizationExecutionIDs(ids ...int64) *APIKeyUpdateOne {
+	_u.mutation.AddOrganizationExecutionIDs(ids...)
+	return _u
+}
+
+// AddOrganizationExecutions adds the "organization_executions" edges to the OrganizationExecution entity.
+func (_u *APIKeyUpdateOne) AddOrganizationExecutions(v ...*OrganizationExecution) *APIKeyUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddOrganizationExecutionIDs(ids...)
+}
+
+// AddOrganizationFinalExecutionEvidenceIDs adds the "organization_final_execution_evidences" edge to the OrganizationFinalExecutionEvidence entity by IDs.
+func (_u *APIKeyUpdateOne) AddOrganizationFinalExecutionEvidenceIDs(ids ...int64) *APIKeyUpdateOne {
+	_u.mutation.AddOrganizationFinalExecutionEvidenceIDs(ids...)
+	return _u
+}
+
+// AddOrganizationFinalExecutionEvidences adds the "organization_final_execution_evidences" edges to the OrganizationFinalExecutionEvidence entity.
+func (_u *APIKeyUpdateOne) AddOrganizationFinalExecutionEvidences(v ...*OrganizationFinalExecutionEvidence) *APIKeyUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddOrganizationFinalExecutionEvidenceIDs(ids...)
 }
 
 // Mutation returns the APIKeyMutation object of the builder.
@@ -1264,6 +1544,12 @@ func (_u *APIKeyUpdateOne) ClearUser() *APIKeyUpdateOne {
 // ClearGroup clears the "group" edge to the Group entity.
 func (_u *APIKeyUpdateOne) ClearGroup() *APIKeyUpdateOne {
 	_u.mutation.ClearGroup()
+	return _u
+}
+
+// ClearOrganization clears the "organization" edge to the Organization entity.
+func (_u *APIKeyUpdateOne) ClearOrganization() *APIKeyUpdateOne {
+	_u.mutation.ClearOrganization()
 	return _u
 }
 
@@ -1286,6 +1572,48 @@ func (_u *APIKeyUpdateOne) RemoveUsageLogs(v ...*UsageLog) *APIKeyUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveUsageLogIDs(ids...)
+}
+
+// ClearOrganizationExecutions clears all "organization_executions" edges to the OrganizationExecution entity.
+func (_u *APIKeyUpdateOne) ClearOrganizationExecutions() *APIKeyUpdateOne {
+	_u.mutation.ClearOrganizationExecutions()
+	return _u
+}
+
+// RemoveOrganizationExecutionIDs removes the "organization_executions" edge to OrganizationExecution entities by IDs.
+func (_u *APIKeyUpdateOne) RemoveOrganizationExecutionIDs(ids ...int64) *APIKeyUpdateOne {
+	_u.mutation.RemoveOrganizationExecutionIDs(ids...)
+	return _u
+}
+
+// RemoveOrganizationExecutions removes "organization_executions" edges to OrganizationExecution entities.
+func (_u *APIKeyUpdateOne) RemoveOrganizationExecutions(v ...*OrganizationExecution) *APIKeyUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveOrganizationExecutionIDs(ids...)
+}
+
+// ClearOrganizationFinalExecutionEvidences clears all "organization_final_execution_evidences" edges to the OrganizationFinalExecutionEvidence entity.
+func (_u *APIKeyUpdateOne) ClearOrganizationFinalExecutionEvidences() *APIKeyUpdateOne {
+	_u.mutation.ClearOrganizationFinalExecutionEvidences()
+	return _u
+}
+
+// RemoveOrganizationFinalExecutionEvidenceIDs removes the "organization_final_execution_evidences" edge to OrganizationFinalExecutionEvidence entities by IDs.
+func (_u *APIKeyUpdateOne) RemoveOrganizationFinalExecutionEvidenceIDs(ids ...int64) *APIKeyUpdateOne {
+	_u.mutation.RemoveOrganizationFinalExecutionEvidenceIDs(ids...)
+	return _u
+}
+
+// RemoveOrganizationFinalExecutionEvidences removes "organization_final_execution_evidences" edges to OrganizationFinalExecutionEvidence entities.
+func (_u *APIKeyUpdateOne) RemoveOrganizationFinalExecutionEvidences(v ...*OrganizationFinalExecutionEvidence) *APIKeyUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveOrganizationFinalExecutionEvidenceIDs(ids...)
 }
 
 // Where appends a list predicates to the APIKeyUpdate builder.
@@ -1571,6 +1899,35 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.OrganizationCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   apikey.OrganizationTable,
+			Columns: []string{apikey.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   apikey.OrganizationTable,
+			Columns: []string{apikey.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _u.mutation.UsageLogsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -1609,6 +1966,96 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OrganizationExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationExecutionsTable,
+			Columns: []string{apikey.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedOrganizationExecutionsIDs(); len(nodes) > 0 && !_u.mutation.OrganizationExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationExecutionsTable,
+			Columns: []string{apikey.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationExecutionsTable,
+			Columns: []string{apikey.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OrganizationFinalExecutionEvidencesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{apikey.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedOrganizationFinalExecutionEvidencesIDs(); len(nodes) > 0 && !_u.mutation.OrganizationFinalExecutionEvidencesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{apikey.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationFinalExecutionEvidencesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{apikey.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

@@ -100,6 +100,16 @@ func Status(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldStatus, v))
 }
 
+// OrganizationID applies equality check predicate on the "organization_id" field. It's identical to OrganizationIDEQ.
+func OrganizationID(v int64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldOrganizationID, v))
+}
+
+// OrganizationRole applies equality check predicate on the "organization_role" field. It's identical to OrganizationRoleEQ.
+func OrganizationRole(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldOrganizationRole, v))
+}
+
 // Username applies equality check predicate on the "username" field. It's identical to UsernameEQ.
 func Username(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldUsername, v))
@@ -638,6 +648,111 @@ func StatusEqualFold(v string) predicate.User {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// OrganizationIDEQ applies the EQ predicate on the "organization_id" field.
+func OrganizationIDEQ(v int64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldOrganizationID, v))
+}
+
+// OrganizationIDNEQ applies the NEQ predicate on the "organization_id" field.
+func OrganizationIDNEQ(v int64) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldOrganizationID, v))
+}
+
+// OrganizationIDIn applies the In predicate on the "organization_id" field.
+func OrganizationIDIn(vs ...int64) predicate.User {
+	return predicate.User(sql.FieldIn(FieldOrganizationID, vs...))
+}
+
+// OrganizationIDNotIn applies the NotIn predicate on the "organization_id" field.
+func OrganizationIDNotIn(vs ...int64) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldOrganizationID, vs...))
+}
+
+// OrganizationIDIsNil applies the IsNil predicate on the "organization_id" field.
+func OrganizationIDIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldOrganizationID))
+}
+
+// OrganizationIDNotNil applies the NotNil predicate on the "organization_id" field.
+func OrganizationIDNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldOrganizationID))
+}
+
+// OrganizationRoleEQ applies the EQ predicate on the "organization_role" field.
+func OrganizationRoleEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldOrganizationRole, v))
+}
+
+// OrganizationRoleNEQ applies the NEQ predicate on the "organization_role" field.
+func OrganizationRoleNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldOrganizationRole, v))
+}
+
+// OrganizationRoleIn applies the In predicate on the "organization_role" field.
+func OrganizationRoleIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldOrganizationRole, vs...))
+}
+
+// OrganizationRoleNotIn applies the NotIn predicate on the "organization_role" field.
+func OrganizationRoleNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldOrganizationRole, vs...))
+}
+
+// OrganizationRoleGT applies the GT predicate on the "organization_role" field.
+func OrganizationRoleGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldOrganizationRole, v))
+}
+
+// OrganizationRoleGTE applies the GTE predicate on the "organization_role" field.
+func OrganizationRoleGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldOrganizationRole, v))
+}
+
+// OrganizationRoleLT applies the LT predicate on the "organization_role" field.
+func OrganizationRoleLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldOrganizationRole, v))
+}
+
+// OrganizationRoleLTE applies the LTE predicate on the "organization_role" field.
+func OrganizationRoleLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldOrganizationRole, v))
+}
+
+// OrganizationRoleContains applies the Contains predicate on the "organization_role" field.
+func OrganizationRoleContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldOrganizationRole, v))
+}
+
+// OrganizationRoleHasPrefix applies the HasPrefix predicate on the "organization_role" field.
+func OrganizationRoleHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldOrganizationRole, v))
+}
+
+// OrganizationRoleHasSuffix applies the HasSuffix predicate on the "organization_role" field.
+func OrganizationRoleHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldOrganizationRole, v))
+}
+
+// OrganizationRoleIsNil applies the IsNil predicate on the "organization_role" field.
+func OrganizationRoleIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldOrganizationRole))
+}
+
+// OrganizationRoleNotNil applies the NotNil predicate on the "organization_role" field.
+func OrganizationRoleNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldOrganizationRole))
+}
+
+// OrganizationRoleEqualFold applies the EqualFold predicate on the "organization_role" field.
+func OrganizationRoleEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldOrganizationRole, v))
+}
+
+// OrganizationRoleContainsFold applies the ContainsFold predicate on the "organization_role" field.
+func OrganizationRoleContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldOrganizationRole, v))
 }
 
 // UsernameEQ applies the EQ predicate on the "username" field.
@@ -1631,6 +1746,98 @@ func HasPlatformQuotas() predicate.User {
 func HasPlatformQuotasWith(preds ...predicate.UserPlatformQuota) predicate.User {
 	return predicate.User(func(s *sql.Selector) {
 		step := newPlatformQuotasStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasOrganization applies the HasEdge predicate on the "organization" edge.
+func HasOrganization() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, OrganizationTable, OrganizationColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasOrganizationWith applies the HasEdge predicate on the "organization" edge with a given conditions (other predicates).
+func HasOrganizationWith(preds ...predicate.Organization) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newOrganizationStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasOrganizationAllocations applies the HasEdge predicate on the "organization_allocations" edge.
+func HasOrganizationAllocations() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, OrganizationAllocationsTable, OrganizationAllocationsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasOrganizationAllocationsWith applies the HasEdge predicate on the "organization_allocations" edge with a given conditions (other predicates).
+func HasOrganizationAllocationsWith(preds ...predicate.OrganizationAllocation) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newOrganizationAllocationsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasOrganizationExecutions applies the HasEdge predicate on the "organization_executions" edge.
+func HasOrganizationExecutions() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, OrganizationExecutionsTable, OrganizationExecutionsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasOrganizationExecutionsWith applies the HasEdge predicate on the "organization_executions" edge with a given conditions (other predicates).
+func HasOrganizationExecutionsWith(preds ...predicate.OrganizationExecution) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newOrganizationExecutionsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasOrganizationFinalExecutionEvidences applies the HasEdge predicate on the "organization_final_execution_evidences" edge.
+func HasOrganizationFinalExecutionEvidences() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, OrganizationFinalExecutionEvidencesTable, OrganizationFinalExecutionEvidencesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasOrganizationFinalExecutionEvidencesWith applies the HasEdge predicate on the "organization_final_execution_evidences" edge with a given conditions (other predicates).
+func HasOrganizationFinalExecutionEvidencesWith(preds ...predicate.OrganizationFinalExecutionEvidence) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newOrganizationFinalExecutionEvidencesStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

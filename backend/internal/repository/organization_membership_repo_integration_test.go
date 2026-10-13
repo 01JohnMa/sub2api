@@ -21,6 +21,7 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
@@ -283,7 +284,7 @@ func TestOrganizationMembershipRepositoryRemoveRejectsExternalTransactionOwnersh
 	require.Equal(t, domain.OrganizationAllocationStatusActive, storedAllocation.Status)
 }
 
-func TestOrganizationMembershipRepositoryRemoveBlocksUnresolvedReservationsAndAllowsAfterRelease(t *testing.T) {
+func TestOrganizationMembershipRepositoryRemoveBlocksUnresolvedReservationsAndAllowsAfterSettlement(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
 	fixture := createReservedOrganizationExecutionIntegrationFixture(t, ctx, client, "membership-remove-reserved")
@@ -295,28 +296,67 @@ func TestOrganizationMembershipRepositoryRemoveBlocksUnresolvedReservationsAndAl
 	storedUser, err := client.User.Get(ctx, fixture.member.ID)
 	require.NoError(t, err)
 	require.Equal(t, &fixture.organization.ID, storedUser.OrganizationID)
+	account := mustCreateAccount(t, client, &service.Account{Name: "membership removal settlement account"})
+	attemptID := uuid.NewString()
+	attempt, err := fixture.repository.RecordAttemptEvidence(ctx, organizationExecutionIntegrationEvidenceCommand(
+		fixture,
+		account.ID,
+		attemptID,
+		1,
+		service.OrganizationAttemptEvidenceProvenanceAdapterDirect,
+		service.OrganizationExecutionTerminalOutcomeSuccess,
+		"0.25000000",
+		`{"usage":"member-removal"}`,
+	))
+	require.NoError(t, err)
 
 	final, err := fixture.repository.Terminalize(ctx, service.OrganizationTerminalizationCommand{
-		ExecutionID:     fixture.command.ExecutionID,
-		CorrelationID:   fixture.command.CorrelationID,
-		OrganizationID:  fixture.organization.ID,
-		UserID:          fixture.member.ID,
-		APIKeyID:        fixture.key.ID,
-		AllocationID:    fixture.allocation.ID,
-		ReservationID:   fixture.reserved.ReservationID,
-		TerminalOutcome: service.OrganizationExecutionTerminalOutcomeError,
-		ZeroProof:       "provider confirmed no billable result",
-		OccurredAt:      time.Now().UTC(),
+		ExecutionID:            fixture.command.ExecutionID,
+		CorrelationID:          fixture.command.CorrelationID,
+		OrganizationID:         fixture.organization.ID,
+		UserID:                 fixture.member.ID,
+		APIKeyID:               fixture.key.ID,
+		AllocationID:           fixture.allocation.ID,
+		ReservationID:          fixture.reserved.ReservationID,
+		FinalAttemptID:         &attemptID,
+		FinalAttemptEvidenceID: &attempt.AttemptEvidenceID,
+		TerminalOutcome:        service.OrganizationExecutionTerminalOutcomeSuccess,
+		OccurredAt:             time.Now().UTC(),
 	})
 	require.NoError(t, err)
-	require.Equal(t, service.OrganizationReservationStateReleased, final.ReservationState)
+	require.Equal(t, service.OrganizationReservationStateSettled, final.ReservationState)
+	require.Equal(t, "0.25000000", final.OrganizationSettledCost)
+	require.NotNil(t, final.ConsumptionPostingID)
+	replayedFinal, err := fixture.repository.Terminalize(ctx, service.OrganizationTerminalizationCommand{
+		ExecutionID:            fixture.command.ExecutionID,
+		CorrelationID:          fixture.command.CorrelationID,
+		OrganizationID:         fixture.organization.ID,
+		UserID:                 fixture.member.ID,
+		APIKeyID:               fixture.key.ID,
+		AllocationID:           fixture.allocation.ID,
+		ReservationID:          fixture.reserved.ReservationID,
+		FinalAttemptID:         &attemptID,
+		FinalAttemptEvidenceID: &attempt.AttemptEvidenceID,
+		TerminalOutcome:        service.OrganizationExecutionTerminalOutcomeSuccess,
+		OccurredAt:             final.OccurredAt,
+	})
+	require.NoError(t, err)
+	require.True(t, replayedFinal.Replayed)
 
 	result, err := manager.Remove(ctx, platformMemberRemovalActor(actor.ID), fixture.organization.ID, fixture.member.ID, service.OrganizationMemberRemovalInput{}, "reserved-removal")
 	require.NoError(t, err)
-	require.Equal(t, "2.00000000", result.Reclaimed)
+	require.Equal(t, "1.75000000", result.Reclaimed)
+	replayedRemoval, err := manager.Remove(ctx, platformMemberRemovalActor(actor.ID), fixture.organization.ID, fixture.member.ID, service.OrganizationMemberRemovalInput{}, "reserved-removal")
+	require.NoError(t, err)
+	require.True(t, replayedRemoval.Replayed)
 	storedAllocation, err := client.OrganizationAllocation.Get(ctx, fixture.allocation.ID)
 	require.NoError(t, err)
 	require.Equal(t, domain.OrganizationAllocationStatusClosed, storedAllocation.Status)
+	var consumptionCount, removalOperationCount int
+	require.NoError(t, scanExecutionOne(ctx, client, `SELECT COUNT(*) FROM organization_ledger_postings WHERE final_evidence_id_snapshot = $1`, []any{final.FinalEvidenceID}, &consumptionCount))
+	require.NoError(t, scanExecutionOne(ctx, client, `SELECT COUNT(*) FROM organization_ledger_operations WHERE organization_id = $1 AND operation_type = $2`, []any{fixture.organization.ID, domain.OrganizationFundingOperationMemberRemovalReclaim}, &removalOperationCount))
+	require.Equal(t, 1, consumptionCount)
+	require.Equal(t, 1, removalOperationCount)
 }
 
 func TestOrganizationMembershipRepositoryRemoveRacesWithTerminalizationWithoutDoubleReclaim(t *testing.T) {
@@ -327,26 +367,41 @@ func TestOrganizationMembershipRepositoryRemoveRacesWithTerminalizationWithoutDo
 	actor := mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("membership-remove-terminalize-race-actor-%d@example.com", suffix), Role: service.RoleAdmin})
 	manager := service.NewOrganizationMembershipService(NewOrganizationMembershipRepository(client), nil, nil)
 	idempotencyKey := fmt.Sprintf("terminalize-race-removal-%d", suffix)
+	account := mustCreateAccount(t, client, &service.Account{Name: fmt.Sprintf("membership remove settlement race account %d", suffix)})
+	attemptID := uuid.NewString()
+	attempt, err := fixture.repository.RecordAttemptEvidence(ctx, organizationExecutionIntegrationEvidenceCommand(
+		fixture,
+		account.ID,
+		attemptID,
+		1,
+		service.OrganizationAttemptEvidenceProvenanceAdapterDirect,
+		service.OrganizationExecutionTerminalOutcomeSuccess,
+		"0.25000000",
+		`{"usage":"member-removal-race"}`,
+	))
+	require.NoError(t, err)
 
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(2)
 	var terminalErr, removeErr error
+	var final *service.OrganizationFinalExecutionEvidenceResult
 	var removal *service.OrganizationMemberRemovalResult
 	go func() {
 		defer wg.Done()
 		<-start
-		_, terminalErr = fixture.repository.Terminalize(ctx, service.OrganizationTerminalizationCommand{
-			ExecutionID:     fixture.command.ExecutionID,
-			CorrelationID:   fixture.command.CorrelationID,
-			OrganizationID:  fixture.organization.ID,
-			UserID:          fixture.member.ID,
-			APIKeyID:        fixture.key.ID,
-			AllocationID:    fixture.allocation.ID,
-			ReservationID:   fixture.reserved.ReservationID,
-			TerminalOutcome: service.OrganizationExecutionTerminalOutcomeError,
-			ZeroProof:       "provider confirmed no billable result",
-			OccurredAt:      time.Now().UTC(),
+		final, terminalErr = fixture.repository.Terminalize(ctx, service.OrganizationTerminalizationCommand{
+			ExecutionID:            fixture.command.ExecutionID,
+			CorrelationID:          fixture.command.CorrelationID,
+			OrganizationID:         fixture.organization.ID,
+			UserID:                 fixture.member.ID,
+			APIKeyID:               fixture.key.ID,
+			AllocationID:           fixture.allocation.ID,
+			ReservationID:          fixture.reserved.ReservationID,
+			FinalAttemptID:         &attemptID,
+			FinalAttemptEvidenceID: &attempt.AttemptEvidenceID,
+			TerminalOutcome:        service.OrganizationExecutionTerminalOutcomeSuccess,
+			OccurredAt:             time.Now().UTC(),
 		})
 	}()
 	go func() {
@@ -377,14 +432,26 @@ func TestOrganizationMembershipRepositoryRemoveRacesWithTerminalizationWithoutDo
 		)
 	}
 	require.NoError(t, removeErr)
-	require.Equal(t, "2.00000000", removal.Reclaimed)
+	require.Equal(t, "1.75000000", removal.Reclaimed)
+	require.NotNil(t, final)
+	require.Equal(t, service.OrganizationReservationStateSettled, final.ReservationState)
+	require.Equal(t, "0.25000000", final.OrganizationSettledCost)
+	require.NotNil(t, final.ConsumptionPostingID)
 
 	storedAllocation, err := client.OrganizationAllocation.Get(ctx, fixture.allocation.ID)
 	require.NoError(t, err)
 	require.Equal(t, domain.OrganizationAllocationStatusClosed, storedAllocation.Status)
 	storedReservation, err := client.OrganizationReservation.Get(ctx, fixture.reserved.ReservationID)
 	require.NoError(t, err)
-	require.Equal(t, service.OrganizationReservationStateReleased, storedReservation.Status)
+	require.Equal(t, service.OrganizationReservationStateSettled, storedReservation.Status)
+	var finalAllocationID, consumptionAllocationID int64
+	require.NoError(t, scanExecutionOne(ctx, client, `SELECT allocation_id_snapshot FROM organization_final_execution_evidences WHERE id = $1`, []any{final.FinalEvidenceID}, &finalAllocationID))
+	require.NoError(t, scanExecutionOne(ctx, client, `SELECT allocation_id_snapshot FROM organization_ledger_postings WHERE final_evidence_id_snapshot = $1`, []any{final.FinalEvidenceID}, &consumptionAllocationID))
+	require.Equal(t, fixture.allocation.ID, finalAllocationID)
+	require.Equal(t, fixture.allocation.ID, consumptionAllocationID)
+	var consumptionCount int
+	require.NoError(t, scanExecutionOne(ctx, client, `SELECT COUNT(*) FROM organization_ledger_postings WHERE final_evidence_id_snapshot = $1`, []any{final.FinalEvidenceID}, &consumptionCount))
+	require.Equal(t, 1, consumptionCount)
 	operationCount, err := client.OrganizationLedgerOperation.Query().
 		Where(
 			organizationledgeroperation.OrganizationIDEQ(fixture.organization.ID),

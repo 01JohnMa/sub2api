@@ -86,6 +86,17 @@ func TestSettleOrganizationExecutionCostUsesHalfUpAndReservationCap(t *testing.T
 	require.Equal(t, "1.00000000", fixedExecutionMoney(settleOrganizationExecutionCost(decimal.RequireFromString("4.250000001"), ceiling)))
 }
 
+func TestOrganizationExecutionOutboxEventsSkipQuotaEffectsForZeroCost(t *testing.T) {
+	require.Equal(t,
+		[]string{"error_projection"},
+		organizationExecutionOutboxEventTypes(service.OrganizationExecutionTerminalOutcomeError, decimal.Zero),
+	)
+	require.Equal(t,
+		[]string{"usage_projection", "api_key_quota", "user_platform_quota"},
+		organizationExecutionOutboxEventTypes(service.OrganizationExecutionTerminalOutcomeSuccess, decimal.RequireFromString("0.12500000")),
+	)
+}
+
 func TestSameOrganizationExecutionCommandRejectsFingerprintAndSnapshotConflicts(t *testing.T) {
 	command := repositoryReservationCommand(time.Now().UTC())
 	record := &organizationExecutionRecord{
@@ -264,8 +275,8 @@ func repositoryReservationCommand(acceptedAt time.Time) service.OrganizationExec
 
 func executionMockRows(command service.OrganizationExecutionReservationCommand, executionID, allocationID, userID, keyID int64) *sqlmock.Rows {
 	return sqlmock.NewRows([]string{
-		"id", "execution_id", "correlation_id", "organization_id", "allocation_id_snapshot", "allocation_ref_id", "user_id_snapshot", "user_ref_id", "api_key_id_snapshot", "api_key_ref_id", "endpoint_family", "request_shape", "billing_fingerprint", "candidate_snapshot", "candidate_set_hash", "pricing_snapshot", "pricing_snapshot_hash", "candidate_ceiling", "status", "accepted_at", "terminalized_at",
-	}).AddRow(executionID, command.ExecutionID, command.CorrelationID, command.Attribution.OrganizationID, allocationID, allocationID, userID, userID, keyID, keyID, command.EndpointFamily, command.RequestShape, command.BillingFingerprint, command.CandidateSnapshotJSON, command.CandidateSetHash, command.PricingSnapshotJSON, command.PricingSnapshotHash, command.CandidateRouteMaximumCost, service.OrganizationExecutionStateAccepted, command.AcceptedAt, nil)
+		"id", "execution_id", "correlation_id", "organization_id", "allocation_id_snapshot", "allocation_ref_id", "user_id_snapshot", "user_ref_id", "api_key_id_snapshot", "api_key_ref_id", "endpoint_family", "request_shape", "model", "billing_fingerprint", "candidate_snapshot", "candidate_set_hash", "pricing_snapshot", "pricing_snapshot_hash", "candidate_ceiling", "status", "accepted_at", "terminalized_at",
+	}).AddRow(executionID, command.ExecutionID, command.CorrelationID, command.Attribution.OrganizationID, allocationID, allocationID, userID, userID, keyID, keyID, command.EndpointFamily, command.RequestShape, nil, command.BillingFingerprint, command.CandidateSnapshotJSON, command.CandidateSetHash, command.PricingSnapshotJSON, command.PricingSnapshotHash, command.CandidateRouteMaximumCost, service.OrganizationExecutionStateAccepted, command.AcceptedAt, nil)
 }
 
 func reservationMockRows(command service.OrganizationExecutionReservationCommand, reservationID, executionID int64) *sqlmock.Rows {

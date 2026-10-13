@@ -127,12 +127,12 @@ func TestOpenAIGatewayHandlerAcquireImageGenerationSlot_Returns429WhenFull(t *te
 		},
 		imageLimiter: &imageConcurrencyLimiter{},
 	}
-	release, acquired := h.acquireImageGenerationSlot(c, false)
+	release, acquired := h.acquireImageGenerationSlot(c, false, true)
 	require.True(t, acquired)
 	require.NotNil(t, release)
 	defer release()
 
-	blockedRelease, blocked := h.acquireImageGenerationSlot(c, false)
+	blockedRelease, blocked := h.acquireImageGenerationSlot(c, false, true)
 
 	require.False(t, blocked)
 	require.Nil(t, blockedRelease)
@@ -172,7 +172,7 @@ func TestOpenAIGatewayHandlerResponses_ImageIntentRejectedByImageConcurrency(t *
 		}}},
 		imageLimiter: &imageConcurrencyLimiter{},
 	}
-	release, acquired := h.acquireImageGenerationSlot(c, false)
+	release, acquired := h.acquireImageGenerationSlot(c, false, true)
 	require.True(t, acquired)
 	require.NotNil(t, release)
 	defer release()
@@ -216,7 +216,7 @@ func TestOpenAIGatewayHandlerResponses_TextOnlyNotRejectedByImageConcurrency(t *
 		}}},
 		imageLimiter: &imageConcurrencyLimiter{},
 	}
-	release, acquired := h.acquireImageGenerationSlot(c, false)
+	release, acquired := h.acquireImageGenerationSlot(c, false, true)
 	require.True(t, acquired)
 	require.NotNil(t, release)
 	defer release()

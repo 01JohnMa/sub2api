@@ -95,6 +95,7 @@ func TestForwardEmbeddings_APIKeyPassthroughRecordsUsageAndBatchInput(t *testing
 	require.Equal(t, "jina-embeddings-v5-text-small", result.UpstreamModel)
 	require.Equal(t, 13, result.Usage.InputTokens)
 	require.Equal(t, 0, result.Usage.OutputTokens)
+	require.True(t, result.UsageObserved)
 	require.Equal(t, "https://api.jina.ai/v1/embeddings", upstream.lastReq.URL.String())
 	require.Equal(t, "Bearer sk-test", upstream.lastReq.Header.Get("Authorization"))
 	require.Equal(t, "jina-embeddings-v5-text-small", gjson.GetBytes(upstream.lastBody, "model").String())
@@ -103,4 +104,48 @@ func TestForwardEmbeddings_APIKeyPassthroughRecordsUsageAndBatchInput(t *testing
 	require.Equal(t, "world", gjson.GetBytes(upstream.lastBody, "input.1").String())
 	require.Equal(t, "float", gjson.GetBytes(upstream.lastBody, "encoding_format").String())
 	require.Equal(t, int64(256), gjson.GetBytes(upstream.lastBody, "dimensions").Int())
+}
+
+func TestForwardEmbeddingsUsageObservationRequiresCompleteUsage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	reqBody := []byte(`{"model":"text-embedding-3-small","input":"hello"}`)
+
+	for _, testCase := range []struct {
+		name          string
+		responseUsage string
+		observed      bool
+	}{
+		{name: "complete usage", responseUsage: `"usage":{"prompt_tokens":3,"total_tokens":3}`, observed: true},
+		{name: "missing usage", responseUsage: "", observed: false},
+		{name: "invalid usage", responseUsage: `"usage":[]`, observed: false},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/embeddings", bytes.NewReader(reqBody))
+
+			responseBody := `{"object":"list","data":[{"object":"embedding","index":0,"embedding":[0.1]}]`
+			if testCase.responseUsage != "" {
+				responseBody += "," + testCase.responseUsage
+			}
+			responseBody += "}"
+			svc := &OpenAIGatewayService{
+				cfg: &config.Config{},
+				httpUpstream: &httpUpstreamRecorder{resp: &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(strings.NewReader(responseBody)),
+				}},
+			}
+			account := &Account{ID: 42, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Credentials: map[string]any{
+				"api_key": "test-api-key",
+			}}
+
+			result, err := svc.ForwardEmbeddings(context.Background(), c, account, reqBody, "")
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Equal(t, testCase.observed, result.UsageObserved)
+		})
+	}
 }

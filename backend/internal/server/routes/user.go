@@ -13,6 +13,7 @@ func RegisterUserRoutes(
 	v1 *gin.RouterGroup,
 	h *handler.Handlers,
 	jwtAuth middleware.JWTAuthMiddleware,
+	organizationAuth middleware.OrganizationAdminAuthMiddleware,
 	settingService *service.SettingService,
 ) {
 	authenticated := v1.Group("")
@@ -22,20 +23,21 @@ func RegisterUserRoutes(
 		// 用户接口
 		user := authenticated.Group("/user")
 		{
-			user.GET("/profile", h.User.GetProfile)
+			user.GET("/profile", organizationAuth.PersonalAccountAccess, h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
-			user.PUT("", h.User.UpdateProfile)
-			user.GET("/aff", h.User.GetAffiliate)
-			user.POST("/aff/transfer", h.User.TransferAffiliateQuota)
+			user.PUT("", organizationAuth.PersonalAccountAccess, h.User.UpdateProfile)
+			user.GET("/aff", organizationAuth.PersonalAccountAccess, h.User.GetAffiliate)
+			user.POST("/aff/transfer", organizationAuth.PersonalAccountAccess, h.User.TransferAffiliateQuota)
 			user.POST("/account-bindings/email/send-code", h.User.SendEmailBindingCode)
 			user.POST("/account-bindings/email", h.User.BindEmailIdentity)
 			user.DELETE("/account-bindings/:provider", h.User.UnbindIdentity)
 			user.POST("/auth-identities/bind/start", h.User.StartIdentityBinding)
-			user.GET("/api-keys/:id/usage/daily", h.Usage.GetMyAPIKeyDailyUsage)
-			user.GET("/platform-quotas", h.User.GetMyPlatformQuotas)
+			user.GET("/api-keys/:id/usage/daily", organizationAuth.PersonalAccountAccess, h.Usage.GetMyAPIKeyDailyUsage)
+			user.GET("/platform-quotas", organizationAuth.PersonalAccountAccess, h.User.GetMyPlatformQuotas)
 
 			// 通知邮箱管理
 			notifyEmail := user.Group("/notify-email")
+			notifyEmail.Use(organizationAuth.PersonalAccountAccess)
 			{
 				notifyEmail.POST("/send-code", h.User.SendNotifyEmailCode)
 				notifyEmail.POST("/verify", h.User.VerifyNotifyEmail)
@@ -57,6 +59,7 @@ func RegisterUserRoutes(
 
 		// API Key管理
 		keys := authenticated.Group("/keys")
+		keys.Use(organizationAuth.PersonalAccountAccess)
 		{
 			keys.GET("", h.APIKey.List)
 			keys.GET("/:id", h.APIKey.GetByID)
@@ -67,6 +70,7 @@ func RegisterUserRoutes(
 
 		// 用户可用分组（非管理员接口）
 		groups := authenticated.Group("/groups")
+		groups.Use(organizationAuth.PersonalAccountAccess)
 		{
 			groups.GET("/available", h.APIKey.GetAvailableGroups)
 			groups.GET("/rates", h.APIKey.GetUserGroupRates)
@@ -74,12 +78,14 @@ func RegisterUserRoutes(
 
 		// 用户可用渠道（非管理员接口）
 		channels := authenticated.Group("/channels")
+		channels.Use(organizationAuth.PersonalAccountAccess)
 		{
 			channels.GET("/available", h.AvailableChannel.List)
 		}
 
 		// 使用记录
 		usage := authenticated.Group("/usage")
+		usage.Use(organizationAuth.PersonalAccountAccess)
 		{
 			usage.GET("", h.Usage.List)
 			usage.GET("/errors", h.Usage.ListErrors)
@@ -102,6 +108,7 @@ func RegisterUserRoutes(
 
 		// 卡密兑换
 		redeem := authenticated.Group("/redeem")
+		redeem.Use(organizationAuth.PersonalAccountAccess)
 		{
 			redeem.POST("", h.Redeem.Redeem)
 			redeem.GET("/history", h.Redeem.GetHistory)
@@ -109,6 +116,7 @@ func RegisterUserRoutes(
 
 		// 用户订阅
 		subscriptions := authenticated.Group("/subscriptions")
+		subscriptions.Use(organizationAuth.PersonalAccountAccess)
 		{
 			subscriptions.GET("", h.Subscription.List)
 			subscriptions.GET("/active", h.Subscription.GetActive)
@@ -118,6 +126,7 @@ func RegisterUserRoutes(
 
 		// 渠道监控（用户只读）
 		monitors := authenticated.Group("/channel-monitors")
+		monitors.Use(organizationAuth.PersonalAccountAccess)
 		{
 			monitors.GET("", h.ChannelMonitor.List)
 			monitors.GET("/:id/status", h.ChannelMonitor.GetStatus)

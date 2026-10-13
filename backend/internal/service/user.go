@@ -18,11 +18,15 @@ type User struct {
 	AvatarSHA256   string
 	PasswordHash   string
 	Role           string
-	Balance        float64
-	Concurrency    int
-	Status         string
-	AllowedGroups  []int64
-	TokenVersion   int64 // Incremented on password change to invalidate existing tokens
+
+	OrganizationID   *int64
+	OrganizationRole *string
+
+	Balance       float64
+	Concurrency   int
+	Status        string
+	AllowedGroups []int64
+	TokenVersion  int64 // Incremented on password change to invalidate existing tokens
 	// TokenVersionResolved indicates TokenVersion already contains the fingerprint-derived
 	// value expected in JWT claims and refresh-token state.
 	TokenVersionResolved bool

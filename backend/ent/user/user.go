@@ -33,6 +33,10 @@ const (
 	FieldConcurrency = "concurrency"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldOrganizationID holds the string denoting the organization_id field in the database.
+	FieldOrganizationID = "organization_id"
+	// FieldOrganizationRole holds the string denoting the organization_role field in the database.
+	FieldOrganizationRole = "organization_role"
 	// FieldUsername holds the string denoting the username field in the database.
 	FieldUsername = "username"
 	// FieldNotes holds the string denoting the notes field in the database.
@@ -87,6 +91,14 @@ const (
 	EdgePendingAuthSessions = "pending_auth_sessions"
 	// EdgePlatformQuotas holds the string denoting the platform_quotas edge name in mutations.
 	EdgePlatformQuotas = "platform_quotas"
+	// EdgeOrganization holds the string denoting the organization edge name in mutations.
+	EdgeOrganization = "organization"
+	// EdgeOrganizationAllocations holds the string denoting the organization_allocations edge name in mutations.
+	EdgeOrganizationAllocations = "organization_allocations"
+	// EdgeOrganizationExecutions holds the string denoting the organization_executions edge name in mutations.
+	EdgeOrganizationExecutions = "organization_executions"
+	// EdgeOrganizationFinalExecutionEvidences holds the string denoting the organization_final_execution_evidences edge name in mutations.
+	EdgeOrganizationFinalExecutionEvidences = "organization_final_execution_evidences"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -180,6 +192,34 @@ const (
 	PlatformQuotasInverseTable = "user_platform_quotas"
 	// PlatformQuotasColumn is the table column denoting the platform_quotas relation/edge.
 	PlatformQuotasColumn = "user_id"
+	// OrganizationTable is the table that holds the organization relation/edge.
+	OrganizationTable = "users"
+	// OrganizationInverseTable is the table name for the Organization entity.
+	// It exists in this package in order to avoid circular dependency with the "organization" package.
+	OrganizationInverseTable = "organizations"
+	// OrganizationColumn is the table column denoting the organization relation/edge.
+	OrganizationColumn = "organization_id"
+	// OrganizationAllocationsTable is the table that holds the organization_allocations relation/edge.
+	OrganizationAllocationsTable = "organization_allocations"
+	// OrganizationAllocationsInverseTable is the table name for the OrganizationAllocation entity.
+	// It exists in this package in order to avoid circular dependency with the "organizationallocation" package.
+	OrganizationAllocationsInverseTable = "organization_allocations"
+	// OrganizationAllocationsColumn is the table column denoting the organization_allocations relation/edge.
+	OrganizationAllocationsColumn = "user_ref_id"
+	// OrganizationExecutionsTable is the table that holds the organization_executions relation/edge.
+	OrganizationExecutionsTable = "organization_executions"
+	// OrganizationExecutionsInverseTable is the table name for the OrganizationExecution entity.
+	// It exists in this package in order to avoid circular dependency with the "organizationexecution" package.
+	OrganizationExecutionsInverseTable = "organization_executions"
+	// OrganizationExecutionsColumn is the table column denoting the organization_executions relation/edge.
+	OrganizationExecutionsColumn = "user_ref_id"
+	// OrganizationFinalExecutionEvidencesTable is the table that holds the organization_final_execution_evidences relation/edge.
+	OrganizationFinalExecutionEvidencesTable = "organization_final_execution_evidences"
+	// OrganizationFinalExecutionEvidencesInverseTable is the table name for the OrganizationFinalExecutionEvidence entity.
+	// It exists in this package in order to avoid circular dependency with the "organizationfinalexecutionevidence" package.
+	OrganizationFinalExecutionEvidencesInverseTable = "organization_final_execution_evidences"
+	// OrganizationFinalExecutionEvidencesColumn is the table column denoting the organization_final_execution_evidences relation/edge.
+	OrganizationFinalExecutionEvidencesColumn = "user_ref_id"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -201,6 +241,8 @@ var Columns = []string{
 	FieldBalance,
 	FieldConcurrency,
 	FieldStatus,
+	FieldOrganizationID,
+	FieldOrganizationRole,
 	FieldUsername,
 	FieldNotes,
 	FieldTotpSecretEncrypted,
@@ -239,7 +281,7 @@ func ValidColumn(column string) bool {
 //
 //	import _ "github.com/Wei-Shaw/sub2api/ent/runtime"
 var (
-	Hooks        [1]ent.Hook
+	Hooks        [2]ent.Hook
 	Interceptors [1]ent.Interceptor
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
@@ -263,6 +305,8 @@ var (
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
+	// OrganizationRoleValidator is a validator for the "organization_role" field. It is called by the builders before save.
+	OrganizationRoleValidator func(string) error
 	// DefaultUsername holds the default value on creation for the "username" field.
 	DefaultUsername string
 	// UsernameValidator is a validator for the "username" field. It is called by the builders before save.
@@ -338,6 +382,16 @@ func ByConcurrency(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByOrganizationID orders the results by the organization_id field.
+func ByOrganizationID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOrganizationID, opts...).ToFunc()
+}
+
+// ByOrganizationRole orders the results by the organization_role field.
+func ByOrganizationRole(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOrganizationRole, opts...).ToFunc()
 }
 
 // ByUsername orders the results by the username field.
@@ -592,6 +646,55 @@ func ByPlatformQuotas(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByOrganizationField orders the results by organization field.
+func ByOrganizationField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOrganizationStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByOrganizationAllocationsCount orders the results by organization_allocations count.
+func ByOrganizationAllocationsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newOrganizationAllocationsStep(), opts...)
+	}
+}
+
+// ByOrganizationAllocations orders the results by organization_allocations terms.
+func ByOrganizationAllocations(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOrganizationAllocationsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByOrganizationExecutionsCount orders the results by organization_executions count.
+func ByOrganizationExecutionsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newOrganizationExecutionsStep(), opts...)
+	}
+}
+
+// ByOrganizationExecutions orders the results by organization_executions terms.
+func ByOrganizationExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOrganizationExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByOrganizationFinalExecutionEvidencesCount orders the results by organization_final_execution_evidences count.
+func ByOrganizationFinalExecutionEvidencesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newOrganizationFinalExecutionEvidencesStep(), opts...)
+	}
+}
+
+// ByOrganizationFinalExecutionEvidences orders the results by organization_final_execution_evidences terms.
+func ByOrganizationFinalExecutionEvidences(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOrganizationFinalExecutionEvidencesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
 func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -694,6 +797,34 @@ func newPlatformQuotasStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PlatformQuotasInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PlatformQuotasTable, PlatformQuotasColumn),
+	)
+}
+func newOrganizationStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OrganizationInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, OrganizationTable, OrganizationColumn),
+	)
+}
+func newOrganizationAllocationsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OrganizationAllocationsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, OrganizationAllocationsTable, OrganizationAllocationsColumn),
+	)
+}
+func newOrganizationExecutionsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OrganizationExecutionsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, OrganizationExecutionsTable, OrganizationExecutionsColumn),
+	)
+}
+func newOrganizationFinalExecutionEvidencesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OrganizationFinalExecutionEvidencesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, OrganizationFinalExecutionEvidencesTable, OrganizationFinalExecutionEvidencesColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {

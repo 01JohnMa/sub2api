@@ -461,7 +461,7 @@ func (s *APIKeyService) GetByID(ctx context.Context, id int64) (*APIKey, error) 
 	return apiKey, nil
 }
 
-// GetByKey 根据Key字符串获取API Key（用于认证）
+// GetByKey 根据Key字符串获取API Key（用于非权威缓存读取）
 func (s *APIKeyService) GetByKey(ctx context.Context, key string) (*APIKey, error) {
 	cacheKey := s.authCacheKey(key)
 
@@ -504,6 +504,14 @@ func (s *APIKeyService) GetByKey(ctx context.Context, key string) (*APIKey, erro
 		}
 	}
 
+	return s.GetByKeyAuthoritative(ctx, key)
+}
+
+// GetByKeyAuthoritative bypasses authentication caches and reloads the current
+// Key/User/Organization/allocation attribution. Every gateway execution must
+// use this path rather than treating a cached authentication snapshot as an
+// organization authorization fact.
+func (s *APIKeyService) GetByKeyAuthoritative(ctx context.Context, key string) (*APIKey, error) {
 	apiKey, err := s.apiKeyRepo.GetByKeyForAuth(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("get api key: %w", err)

@@ -20,6 +20,8 @@ import (
 
 type organizationMembershipManagerStub struct {
 	member         *service.OrganizationMember
+	members        []service.OrganizationMember
+	page           *pagination.PaginationResult
 	err            error
 	organizationID int64
 	target         service.OrganizationMemberTarget
@@ -50,6 +52,14 @@ func (s *organizationFundingReaderStub) ListLedger(_ context.Context, organizati
 	return s.ledger, s.ledgerPage, nil
 }
 
+func (*organizationFundingReaderStub) GetReport(context.Context, int64, service.OrganizationReportRange) (*service.OrganizationReport, error) {
+	return nil, nil
+}
+
+func (*organizationFundingReaderStub) ListReportMembers(context.Context, int64, service.OrganizationReportRange, pagination.PaginationParams) ([]service.OrganizationReportMemberUsage, *service.OrganizationReportMemberUsage, *pagination.PaginationResult, error) {
+	return nil, nil, nil, nil
+}
+
 type organizationAllocationManagerStub struct {
 	previewInput  service.OrganizationAllocationPreviewInput
 	previewActor  service.OrganizationAllocationActor
@@ -76,6 +86,9 @@ func (s *organizationAllocationManagerStub) Execute(_ context.Context, actor ser
 
 func (s *organizationMembershipManagerStub) List(_ context.Context, organizationID int64, params pagination.PaginationParams) ([]service.OrganizationMember, *pagination.PaginationResult, error) {
 	s.organizationID = organizationID
+	if s.members != nil {
+		return s.members, s.page, s.err
+	}
 	if s.member == nil {
 		return nil, nil, s.err
 	}
@@ -147,6 +160,34 @@ func TestOrganizationHandlerGetCurrentRequiresScope(t *testing.T) {
 	handler.GetCurrent(c)
 
 	require.Equal(t, http.StatusForbidden, recorder.Code)
+}
+
+func TestOrganizationHandlerPublicLedgerSerializesOnlySafeFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	funding := &organizationFundingReaderStub{
+		ledger: []service.OrganizationLedgerEntry{{
+			OperationID: "5cc9e26f-77a2-4eb3-a354-7d6bca2f0cb2", PostingSequence: 2, OrganizationID: 7,
+			OperationType: domain.OrganizationFundingOperationCredit, AuthorizationScope: domain.OrganizationFundingAuthorizationPlatformAdminJWT,
+			ActorIDSnapshot: 99, ActorDisplaySnapshot: "platform-admin-99", InternalReason: "private approval", IdempotencyKeyHash: "hash", CanonicalPayloadHash: "hash",
+			BucketType: "unallocated", BeforeAmount: "1.00000000", DeltaAmount: "2.00000000", AfterAmount: "3.00000000",
+		}}, ledgerPage: &pagination.PaginationResult{Total: 1, Page: 1, PageSize: 20, Pages: 1},
+	}
+	handler := NewOrganizationHandler(nil, funding, nil)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/organization/ledger", nil)
+	c.Set("auth_method", "jwt")
+	c.Set(string(middleware.ContextKeyOrganizationScope), middleware.OrganizationScope{OrganizationID: 7, OrganizationRole: service.OrganizationRoleAdmin})
+
+	handler.ListCurrentPublicLedger(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	body := recorder.Body.String()
+	require.Contains(t, body, `"actor_display":"platform administrator"`)
+	require.Contains(t, body, `"entry_key"`)
+	require.NotContains(t, body, "actor_id_snapshot")
+	require.NotContains(t, body, "private approval")
+	require.NotContains(t, body, "idempotency_key_hash")
 }
 
 func TestOrganizationHandlerAddCurrentMemberUsesServerScopeAndSafeMemberDTO(t *testing.T) {
@@ -256,6 +297,52 @@ func TestOrganizationHandlerCurrentMembersAndBalanceUseServerScope(t *testing.T)
 			require.Contains(t, recorder.Body.String(), `"unallocated":"8.00000000"`)
 		}
 	}
+}
+
+func TestOrganizationHandlerCurrentMembersPreservesScopedPaginationTotal(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	membership := &organizationMembershipManagerStub{
+		members: []service.OrganizationMember{{
+			UserID: 11, Email: "member@example.com", OrganizationRole: service.OrganizationRoleMember,
+			Allocation: service.OrganizationMemberAllocation{ID: 101, Status: "active", Available: "2.00000000", Reserved: "0.00000000"},
+		}},
+		page: &pagination.PaginationResult{Total: 2, Page: 2, PageSize: 1, Pages: 2},
+	}
+	handler := NewOrganizationHandler(membership, nil, nil)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/organization/members?organization_id=99&page=2&page_size=1", nil)
+	organizationAdminScopeContext(c)
+
+	handler.ListCurrentMembers(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, int64(7), membership.organizationID)
+	require.Contains(t, recorder.Body.String(), `"total":2`)
+	require.Contains(t, recorder.Body.String(), `"page":2`)
+	require.NotContains(t, recorder.Body.String(), "organization_id")
+}
+
+func TestOrganizationHandlerForeignMemberAndMissingAuthorityUseDistinctErrors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	membership := &organizationMembershipManagerStub{err: service.ErrOrganizationMemberNotFound}
+	handler := NewOrganizationHandler(membership, nil, nil)
+
+	foreignRecorder := httptest.NewRecorder()
+	foreign, _ := gin.CreateTestContext(foreignRecorder)
+	foreign.Request = httptest.NewRequest(http.MethodDelete, "/api/v1/organization/members/99", nil)
+	foreign.Params = gin.Params{{Key: "user_id", Value: "99"}}
+	organizationAdminScopeContext(foreign)
+	handler.RemoveCurrentMember(foreign)
+	require.Equal(t, http.StatusNotFound, foreignRecorder.Code)
+	require.Contains(t, foreignRecorder.Body.String(), "ORGANIZATION_MEMBER_NOT_FOUND")
+
+	missingAuthorityRecorder := httptest.NewRecorder()
+	missingAuthority, _ := gin.CreateTestContext(missingAuthorityRecorder)
+	missingAuthority.Request = httptest.NewRequest(http.MethodGet, "/api/v1/organization/members", nil)
+	handler.ListCurrentMembers(missingAuthority)
+	require.Equal(t, http.StatusForbidden, missingAuthorityRecorder.Code)
+	require.Contains(t, missingAuthorityRecorder.Body.String(), "ORGANIZATION_ALLOCATION_FORBIDDEN")
 }
 
 func TestOrganizationHandlerRemoveCurrentMemberUsesServerScopeAndIdempotency(t *testing.T) {

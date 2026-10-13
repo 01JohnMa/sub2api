@@ -112,6 +112,7 @@ type OrganizationExecutionReservationInput struct {
 	Attribution               OrganizationExecutionTrustedAttribution
 	EndpointFamily            string
 	RequestShape              string
+	Model                     string
 	ClientRequestID           string
 	CandidateSnapshot         json.RawMessage
 	PricingSnapshot           json.RawMessage
@@ -129,6 +130,7 @@ type OrganizationExecutionReservationCommand struct {
 	Attribution               OrganizationExecutionTrustedAttribution
 	EndpointFamily            string
 	RequestShape              string
+	Model                     string
 	ClientRequestID           string
 	CandidateSnapshotJSON     string
 	CandidateSetHash          string
@@ -337,6 +339,8 @@ type OrganizationExecutionRepository interface {
 type OrganizationExecutionRecoveryRepository interface {
 	RecordPendingAttempt(ctx context.Context, command OrganizationPendingAttemptCommand) error
 	ReconcilePendingExecution(ctx context.Context, command OrganizationPendingReconciliationCommand) (*OrganizationFinalExecutionEvidenceResult, error)
+	ListPendingReconciliations(ctx context.Context, organizationID int64, params OrganizationPendingReconciliationListParams) ([]OrganizationPendingReconciliation, *OrganizationPendingReconciliationPage, error)
+	GetPendingReconciliation(ctx context.Context, organizationID int64, executionID string) (*OrganizationPendingReconciliation, error)
 	RedriveAttemptAccountEffect(ctx context.Context, attemptID string) (*OrganizationAttemptAccountEffectResult, error)
 	RedrivePendingAttemptAccountEffects(ctx context.Context, limit int) ([]OrganizationAttemptAccountEffectResult, error)
 	RedriveExecutionOutbox(ctx context.Context, outboxID int64) (*OrganizationExecutionOutboxApplyResult, error)
@@ -351,6 +355,7 @@ type OrganizationExecutionAutomaticEffectRepository interface {
 
 type OrganizationPendingReconciliationCommand struct {
 	ExecutionID          string
+	OrganizationID       int64
 	OperationID          string
 	CorrelationID        string
 	IdempotencyKeyHash   string
@@ -365,6 +370,56 @@ type OrganizationReconciliationActor struct {
 	PlatformRole       string
 	AuthorizationScope string
 	Active             bool
+}
+
+// OrganizationPendingReconciliation is the secret-safe platform control-plane
+// view. It deliberately contains summaries and hashes only, never provider
+// evidence payloads, request bodies, credentials, or internal audit reasons.
+type OrganizationPendingReconciliation struct {
+	ExecutionID                string
+	OrganizationID             int64
+	AllocationID               int64
+	ReservationID              int64
+	CandidateCeiling           string
+	ReservedAmount             string
+	AcceptedAt                 time.Time
+	AttemptCount               int
+	Attempts                   []OrganizationPendingReconciliationAttempt
+	Evidence                   []OrganizationPendingReconciliationEvidence
+	AllowedResolution          string
+	ComputedOrganizationAmount string
+	Conflict                   bool
+}
+
+type OrganizationPendingReconciliationAttempt struct {
+	AttemptID       string
+	AttemptSequence int
+	Status          string
+}
+
+type OrganizationPendingReconciliationEvidence struct {
+	AttemptID           string
+	AttemptSequence     int
+	EvidenceSource      string
+	TerminalOutcome     string
+	RawActualCost       string
+	InputTokens         int64
+	OutputTokens        int64
+	CacheCreationTokens int64
+	CacheReadTokens     int64
+	ProviderObservedAt  time.Time
+}
+
+type OrganizationPendingReconciliationListParams struct {
+	Page     int
+	PageSize int
+}
+
+type OrganizationPendingReconciliationPage struct {
+	Total    int64
+	Page     int
+	PageSize int
+	Pages    int
 }
 
 type OrganizationAttemptAccountEffectResult struct {
@@ -727,6 +782,10 @@ func newOrganizationExecutionReservationCommand(input OrganizationExecutionReser
 	if err != nil {
 		return OrganizationExecutionReservationCommand{}, err
 	}
+	model, err := normalizeOrganizationExecutionIdentifier(input.Model, 255, true)
+	if err != nil {
+		return OrganizationExecutionReservationCommand{}, err
+	}
 	clientRequestID, err := normalizeOrganizationExecutionIdentifier(input.ClientRequestID, organizationExecutionMetadataMaxBytes, true)
 	if err != nil {
 		return OrganizationExecutionReservationCommand{}, err
@@ -747,6 +806,7 @@ func newOrganizationExecutionReservationCommand(input OrganizationExecutionReser
 		Attribution:               input.Attribution,
 		EndpointFamily:            endpointFamily,
 		RequestShape:              requestShape,
+		Model:                     model,
 		ClientRequestID:           clientRequestID,
 		CandidateSnapshotJSON:     candidateSnapshotJSON,
 		CandidateSetHash:          candidateSetHash,

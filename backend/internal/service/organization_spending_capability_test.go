@@ -10,14 +10,31 @@ import (
 
 func TestOrganizationSpendingCapabilityRegistryDefaultsEveryKnownShapeToDisabled(t *testing.T) {
 	registry := NewOrganizationSpendingCapabilityRegistry(&config.Config{})
+	verified := map[string]map[string]bool{
+		OrganizationEndpointFamilyMessages: {
+			OrganizationRequestShapeHTTP:      true,
+			OrganizationRequestShapeStreaming: true,
+		},
+		OrganizationEndpointFamilyResponses: {
+			OrganizationRequestShapeHTTP:                    true,
+			OrganizationRequestShapeStreaming:               true,
+			OrganizationRequestShapeWebSocketResponseCreate: true,
+		},
+		OrganizationEndpointFamilyChat: {
+			OrganizationRequestShapeHTTP:      true,
+			OrganizationRequestShapeStreaming: true,
+		},
+		OrganizationEndpointFamilyEmbeddings: {OrganizationRequestShapeHTTP: true},
+		OrganizationEndpointFamilyImages: {
+			OrganizationRequestShapeGenerations: true,
+			OrganizationRequestShapeEdits:       true,
+		},
+		OrganizationEndpointFamilyGemini:      {OrganizationRequestShapeModelsAction: true},
+		OrganizationEndpointFamilyAntigravity: {OrganizationRequestShapeHTTP: true, OrganizationRequestShapeStreaming: true},
+	}
 
 	for _, capability := range registry.Capabilities() {
-		if capability.Family == OrganizationEndpointFamilyResponses &&
-			(capability.Shape == OrganizationRequestShapeHTTP || capability.Shape == OrganizationRequestShapeStreaming) {
-			require.True(t, capability.CostCeilingSupported)
-		} else {
-			require.False(t, capability.CostCeilingSupported)
-		}
+		require.Equal(t, verified[capability.Family][capability.Shape], capability.CostCeilingSupported, "%s/%s", capability.Family, capability.Shape)
 		require.False(t, capability.RolloutEnabled)
 		err := registry.Require(capability.Family, capability.Shape)
 		require.Error(t, err, "%s/%s", capability.Family, capability.Shape)
@@ -26,37 +43,61 @@ func TestOrganizationSpendingCapabilityRegistryDefaultsEveryKnownShapeToDisabled
 	}
 }
 
-func TestOrganizationSpendingCapabilityRegistryCannotEnableUnverifiedCeilingFromConfig(t *testing.T) {
+func TestOrganizationSpendingCapabilityRegistryEnablesVerifiedAdapterWaveInNonProduction(t *testing.T) {
+	configured := map[string]map[string]bool{
+		OrganizationEndpointFamilyMessages:    {OrganizationRequestShapeHTTP: true, OrganizationRequestShapeStreaming: true},
+		OrganizationEndpointFamilyChat:        {OrganizationRequestShapeHTTP: true, OrganizationRequestShapeStreaming: true},
+		OrganizationEndpointFamilyEmbeddings:  {OrganizationRequestShapeHTTP: true},
+		OrganizationEndpointFamilyImages:      {OrganizationRequestShapeGenerations: true, OrganizationRequestShapeEdits: true},
+		OrganizationEndpointFamilyGemini:      {OrganizationRequestShapeModelsAction: true},
+		OrganizationEndpointFamilyAntigravity: {OrganizationRequestShapeHTTP: true, OrganizationRequestShapeStreaming: true},
+	}
+	cfg := &config.Config{Log: config.LogConfig{Environment: "test"}, Gateway: config.GatewayConfig{OrganizationSpending: config.OrganizationSpendingConfig{
+		Enabled: true, Capabilities: configured,
+	}}}
+	registry := NewOrganizationSpendingCapabilityRegistry(cfg)
+
+	for family, shapes := range configured {
+		for shape := range shapes {
+			require.NoError(t, registry.Require(family, shape), "%s/%s", family, shape)
+		}
+	}
+}
+
+func TestOrganizationSpendingCapabilityRegistryEnablesVerifiedMessagesCeilingFromConfig(t *testing.T) {
 	cfg := &config.Config{Log: config.LogConfig{Environment: "development"}, Gateway: config.GatewayConfig{OrganizationSpending: config.OrganizationSpendingConfig{
 		Enabled: true,
 		Capabilities: map[string]map[string]bool{
-			OrganizationEndpointFamilyMessages: {OrganizationRequestShapeHTTP: true},
+			OrganizationEndpointFamilyMessages: {
+				OrganizationRequestShapeHTTP:      true,
+				OrganizationRequestShapeStreaming: true,
+			},
 		},
 	}}}
 	registry := NewOrganizationSpendingCapabilityRegistry(cfg)
 
-	var configured OrganizationSpendingCapability
+	configured := map[string]OrganizationSpendingCapability{}
 	for _, capability := range registry.Capabilities() {
-		if capability.Family == OrganizationEndpointFamilyMessages && capability.Shape == OrganizationRequestShapeHTTP {
-			configured = capability
-			break
+		if capability.Family == OrganizationEndpointFamilyMessages {
+			configured[capability.Shape] = capability
 		}
 	}
-	require.True(t, configured.RolloutEnabled)
-	require.False(t, configured.CostCeilingSupported)
-
-	err := registry.Require(OrganizationEndpointFamilyMessages, OrganizationRequestShapeHTTP)
-	require.Error(t, err)
-	require.Equal(t, "ORGANIZATION_SPENDING_DISABLED", infraerrors.Reason(err))
+	for _, shape := range []string{OrganizationRequestShapeHTTP, OrganizationRequestShapeStreaming} {
+		capability := configured[shape]
+		require.True(t, capability.RolloutEnabled, shape)
+		require.True(t, capability.CostCeilingSupported, shape)
+		require.NoError(t, registry.Require(OrganizationEndpointFamilyMessages, shape), shape)
+	}
 }
 
-func TestOrganizationSpendingCapabilityRegistryEnablesOnlyVerifiedResponsesHTTPInNonProduction(t *testing.T) {
+func TestOrganizationSpendingCapabilityRegistryEnablesVerifiedResponsesShapesInNonProduction(t *testing.T) {
 	cfg := &config.Config{Log: config.LogConfig{Environment: "staging"}, Gateway: config.GatewayConfig{OrganizationSpending: config.OrganizationSpendingConfig{
 		Enabled: true,
 		Capabilities: map[string]map[string]bool{
 			OrganizationEndpointFamilyResponses: {
-				OrganizationRequestShapeHTTP:      true,
-				OrganizationRequestShapeStreaming: true,
+				OrganizationRequestShapeHTTP:                    true,
+				OrganizationRequestShapeStreaming:               true,
+				OrganizationRequestShapeWebSocketResponseCreate: true,
 			},
 		},
 	}}}
@@ -64,27 +105,30 @@ func TestOrganizationSpendingCapabilityRegistryEnablesOnlyVerifiedResponsesHTTPI
 
 	require.NoError(t, registry.Require(OrganizationEndpointFamilyResponses, OrganizationRequestShapeHTTP))
 	require.NoError(t, registry.Require(OrganizationEndpointFamilyResponses, OrganizationRequestShapeStreaming))
-	err := registry.Require(OrganizationEndpointFamilyResponses, OrganizationRequestShapeWebSocketResponseCreate)
-	require.Error(t, err)
-	require.Equal(t, "ORGANIZATION_SPENDING_DISABLED", infraerrors.Reason(err))
+	require.NoError(t, registry.Require(OrganizationEndpointFamilyResponses, OrganizationRequestShapeWebSocketResponseCreate))
 }
 
 func TestOrganizationSpendingCapabilityRegistryProductionRemainsDisabledEvenWhenConfigured(t *testing.T) {
-	cfg := &config.Config{Log: config.LogConfig{Environment: "production"}, Gateway: config.GatewayConfig{OrganizationSpending: config.OrganizationSpendingConfig{
-		Enabled: true,
-		Capabilities: map[string]map[string]bool{
-			OrganizationEndpointFamilyResponses: {
-				OrganizationRequestShapeHTTP:      true,
-				OrganizationRequestShapeStreaming: true,
-			},
+	configured := map[string]map[string]bool{
+		OrganizationEndpointFamilyResponses: {
+			OrganizationRequestShapeHTTP:      true,
+			OrganizationRequestShapeStreaming: true,
 		},
+		OrganizationEndpointFamilyChat:   {OrganizationRequestShapeHTTP: true},
+		OrganizationEndpointFamilyGemini: {OrganizationRequestShapeModelsAction: true},
+	}
+	cfg := &config.Config{Log: config.LogConfig{Environment: "production"}, Gateway: config.GatewayConfig{OrganizationSpending: config.OrganizationSpendingConfig{
+		Enabled:      true,
+		Capabilities: configured,
 	}}}
 	registry := NewOrganizationSpendingCapabilityRegistry(cfg)
 
-	for _, shape := range []string{OrganizationRequestShapeHTTP, OrganizationRequestShapeStreaming} {
-		err := registry.Require(OrganizationEndpointFamilyResponses, shape)
-		require.Error(t, err)
-		require.Equal(t, "ORGANIZATION_SPENDING_DISABLED", infraerrors.Reason(err))
+	for family, shapes := range configured {
+		for shape := range shapes {
+			err := registry.Require(family, shape)
+			require.Error(t, err)
+			require.Equal(t, "ORGANIZATION_SPENDING_DISABLED", infraerrors.Reason(err))
+		}
 	}
 }
 

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
@@ -28,11 +29,17 @@ func IsWindowExpired(windowStart *time.Time, duration time.Duration) bool {
 }
 
 type APIKey struct {
-	ID          int64
-	UserID      int64
-	Key         string
-	Name        string
-	GroupID     *int64
+	ID      int64
+	UserID  int64
+	Key     string
+	Name    string
+	GroupID *int64
+
+	OrganizationID *int64
+	// OrganizationAuthorization is populated only by the uncached authoritative
+	// authentication lookup. A nil value denotes a verified personal key.
+	OrganizationAuthorization *OrganizationKeyAuthorization
+
 	Status      string
 	IPWhitelist []string
 	IPBlacklist []string
@@ -60,6 +67,56 @@ type APIKey struct {
 	Window5hStart *time.Time // Start of current 5h window
 	Window1dStart *time.Time // Start of current 1d window
 	Window7dStart *time.Time // Start of current 7d window
+}
+
+// OrganizationKeyAuthorization is the trusted, secret-free organization
+// attribution snapshot for one API key execution. It is intentionally limited
+// to authorization and funding identity fields; callers must not derive it
+// from request data or cached API-key snapshots.
+type OrganizationKeyAuthorization struct {
+	APIKeyID                   int64
+	UserID                     int64
+	OrganizationID             int64
+	OrganizationStatus         string
+	OrganizationBalanceVersion int64
+	AllocationID               int64
+	AllocationUserID           int64
+	AllocationOrganizationID   int64
+	AllocationStatus           string
+	AllocationVersion          int64
+	Available                  string
+	Reserved                   string
+}
+
+// ReportOrganizationKeyAttributionAlert emits the minimal diagnostic payload
+// allowed on the authentication path. In particular it deliberately omits the
+// raw API key, display names, email addresses, and monetary values.
+func ReportOrganizationKeyAttributionAlert(reason string, auth *OrganizationKeyAuthorization) {
+	attrs := []any{"reason", organizationKeyAttributionAlertReason(reason)}
+	if auth != nil {
+		attrs = append(attrs,
+			"api_key_id", auth.APIKeyID,
+			"user_id", auth.UserID,
+			"organization_id", auth.OrganizationID,
+			"allocation_id", auth.AllocationID,
+			"allocation_user_id", auth.AllocationUserID,
+			"allocation_organization_id", auth.AllocationOrganizationID,
+		)
+	}
+	slog.Warn("organization API key attribution rejected", attrs...)
+}
+
+func organizationKeyAttributionAlertReason(reason string) string {
+	if len(reason) == 0 || len(reason) > 64 {
+		return "invalid_reason"
+	}
+	for _, r := range reason {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
+			continue
+		}
+		return "invalid_reason"
+	}
+	return reason
 }
 
 func (k *APIKey) IsActive() bool {

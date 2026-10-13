@@ -725,6 +725,9 @@ type GatewayConfig struct {
 	OpenAIHTTP2 GatewayOpenAIHTTP2Config `mapstructure:"openai_http2"`
 	// ImageConcurrency: 图片生成独立并发限制配置（默认关闭）
 	ImageConcurrency ImageConcurrencyConfig `mapstructure:"image_concurrency"`
+	// OrganizationSpending gates organization-key billing by endpoint family and
+	// request shape. It is intentionally disabled until each adapter is proven.
+	OrganizationSpending OrganizationSpendingConfig `mapstructure:"organization_spending"`
 
 	// HTTP 上游连接池配置（性能优化：支持高并发场景调优）
 	// MaxIdleConns: 所有主机的最大空闲连接总数
@@ -799,6 +802,13 @@ type GatewayConfig struct {
 	// UserMessageQueue: 用户消息串行队列配置
 	// 对 role:"user" 的真实用户消息实施账号级串行化 + RPM 自适应延迟
 	UserMessageQueue UserMessageQueueConfig `mapstructure:"user_message_queue"`
+}
+
+// OrganizationSpendingConfig keeps rollout decisions at startup configuration
+// scope. An absent capability map is fail-closed for every known request shape.
+type OrganizationSpendingConfig struct {
+	Enabled      bool                       `mapstructure:"enabled"`
+	Capabilities map[string]map[string]bool `mapstructure:"capabilities"`
 }
 
 // GatewayOpenAIHTTP2Config OpenAI HTTP 上游协议配置。
@@ -1821,6 +1831,8 @@ func setDefaults() {
 	viper.SetDefault("gateway.force_codex_cli", false)
 	viper.SetDefault("gateway.codex_image_generation_bridge_enabled", false)
 	viper.SetDefault("gateway.openai_passthrough_allow_timeout_headers", false)
+	viper.SetDefault("gateway.organization_spending.enabled", false)
+	viper.SetDefault("gateway.organization_spending.capabilities", map[string]map[string]bool{})
 	// OpenAI Responses WebSocket（默认开启；可通过 force_http 紧急回滚）
 	viper.SetDefault("gateway.openai_ws.enabled", true)
 	viper.SetDefault("gateway.openai_ws.mode_router_v2_enabled", false)

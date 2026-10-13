@@ -30,6 +30,20 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/organization"
+	"github.com/Wei-Shaw/sub2api/ent/organizationallocation"
+	"github.com/Wei-Shaw/sub2api/ent/organizationattemptaccounteffect"
+	"github.com/Wei-Shaw/sub2api/ent/organizationattemptaccountposting"
+	"github.com/Wei-Shaw/sub2api/ent/organizationattemptevidence"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecution"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionattempt"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionincident"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionoutbox"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionreconciliationaudit"
+	"github.com/Wei-Shaw/sub2api/ent/organizationfinalexecutionevidence"
+	"github.com/Wei-Shaw/sub2api/ent/organizationledgeroperation"
+	"github.com/Wei-Shaw/sub2api/ent/organizationledgerposting"
+	"github.com/Wei-Shaw/sub2api/ent/organizationreservation"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
@@ -89,6 +103,34 @@ type Client struct {
 	IdempotencyRecord *IdempotencyRecordClient
 	// IdentityAdoptionDecision is the client for interacting with the IdentityAdoptionDecision builders.
 	IdentityAdoptionDecision *IdentityAdoptionDecisionClient
+	// Organization is the client for interacting with the Organization builders.
+	Organization *OrganizationClient
+	// OrganizationAllocation is the client for interacting with the OrganizationAllocation builders.
+	OrganizationAllocation *OrganizationAllocationClient
+	// OrganizationAttemptAccountEffect is the client for interacting with the OrganizationAttemptAccountEffect builders.
+	OrganizationAttemptAccountEffect *OrganizationAttemptAccountEffectClient
+	// OrganizationAttemptAccountPosting is the client for interacting with the OrganizationAttemptAccountPosting builders.
+	OrganizationAttemptAccountPosting *OrganizationAttemptAccountPostingClient
+	// OrganizationAttemptEvidence is the client for interacting with the OrganizationAttemptEvidence builders.
+	OrganizationAttemptEvidence *OrganizationAttemptEvidenceClient
+	// OrganizationExecution is the client for interacting with the OrganizationExecution builders.
+	OrganizationExecution *OrganizationExecutionClient
+	// OrganizationExecutionAttempt is the client for interacting with the OrganizationExecutionAttempt builders.
+	OrganizationExecutionAttempt *OrganizationExecutionAttemptClient
+	// OrganizationExecutionIncident is the client for interacting with the OrganizationExecutionIncident builders.
+	OrganizationExecutionIncident *OrganizationExecutionIncidentClient
+	// OrganizationExecutionOutbox is the client for interacting with the OrganizationExecutionOutbox builders.
+	OrganizationExecutionOutbox *OrganizationExecutionOutboxClient
+	// OrganizationExecutionReconciliationAudit is the client for interacting with the OrganizationExecutionReconciliationAudit builders.
+	OrganizationExecutionReconciliationAudit *OrganizationExecutionReconciliationAuditClient
+	// OrganizationFinalExecutionEvidence is the client for interacting with the OrganizationFinalExecutionEvidence builders.
+	OrganizationFinalExecutionEvidence *OrganizationFinalExecutionEvidenceClient
+	// OrganizationLedgerOperation is the client for interacting with the OrganizationLedgerOperation builders.
+	OrganizationLedgerOperation *OrganizationLedgerOperationClient
+	// OrganizationLedgerPosting is the client for interacting with the OrganizationLedgerPosting builders.
+	OrganizationLedgerPosting *OrganizationLedgerPostingClient
+	// OrganizationReservation is the client for interacting with the OrganizationReservation builders.
+	OrganizationReservation *OrganizationReservationClient
 	// PaymentAuditLog is the client for interacting with the PaymentAuditLog builders.
 	PaymentAuditLog *PaymentAuditLogClient
 	// PaymentOrder is the client for interacting with the PaymentOrder builders.
@@ -155,6 +197,20 @@ func (c *Client) init() {
 	c.Group = NewGroupClient(c.config)
 	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
 	c.IdentityAdoptionDecision = NewIdentityAdoptionDecisionClient(c.config)
+	c.Organization = NewOrganizationClient(c.config)
+	c.OrganizationAllocation = NewOrganizationAllocationClient(c.config)
+	c.OrganizationAttemptAccountEffect = NewOrganizationAttemptAccountEffectClient(c.config)
+	c.OrganizationAttemptAccountPosting = NewOrganizationAttemptAccountPostingClient(c.config)
+	c.OrganizationAttemptEvidence = NewOrganizationAttemptEvidenceClient(c.config)
+	c.OrganizationExecution = NewOrganizationExecutionClient(c.config)
+	c.OrganizationExecutionAttempt = NewOrganizationExecutionAttemptClient(c.config)
+	c.OrganizationExecutionIncident = NewOrganizationExecutionIncidentClient(c.config)
+	c.OrganizationExecutionOutbox = NewOrganizationExecutionOutboxClient(c.config)
+	c.OrganizationExecutionReconciliationAudit = NewOrganizationExecutionReconciliationAuditClient(c.config)
+	c.OrganizationFinalExecutionEvidence = NewOrganizationFinalExecutionEvidenceClient(c.config)
+	c.OrganizationLedgerOperation = NewOrganizationLedgerOperationClient(c.config)
+	c.OrganizationLedgerPosting = NewOrganizationLedgerPostingClient(c.config)
+	c.OrganizationReservation = NewOrganizationReservationClient(c.config)
 	c.PaymentAuditLog = NewPaymentAuditLogClient(c.config)
 	c.PaymentOrder = NewPaymentOrderClient(c.config)
 	c.PaymentProviderInstance = NewPaymentProviderInstanceClient(c.config)
@@ -265,43 +321,57 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                           ctx,
-		config:                        cfg,
-		APIKey:                        NewAPIKeyClient(cfg),
-		Account:                       NewAccountClient(cfg),
-		AccountGroup:                  NewAccountGroupClient(cfg),
-		Announcement:                  NewAnnouncementClient(cfg),
-		AnnouncementRead:              NewAnnouncementReadClient(cfg),
-		AuthIdentity:                  NewAuthIdentityClient(cfg),
-		AuthIdentityChannel:           NewAuthIdentityChannelClient(cfg),
-		ChannelMonitor:                NewChannelMonitorClient(cfg),
-		ChannelMonitorDailyRollup:     NewChannelMonitorDailyRollupClient(cfg),
-		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
-		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
-		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
-		Group:                         NewGroupClient(cfg),
-		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
-		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
-		PaymentAuditLog:               NewPaymentAuditLogClient(cfg),
-		PaymentOrder:                  NewPaymentOrderClient(cfg),
-		PaymentProviderInstance:       NewPaymentProviderInstanceClient(cfg),
-		PendingAuthSession:            NewPendingAuthSessionClient(cfg),
-		PromoCode:                     NewPromoCodeClient(cfg),
-		PromoCodeUsage:                NewPromoCodeUsageClient(cfg),
-		Proxy:                         NewProxyClient(cfg),
-		RedeemCode:                    NewRedeemCodeClient(cfg),
-		SecuritySecret:                NewSecuritySecretClient(cfg),
-		Setting:                       NewSettingClient(cfg),
-		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
-		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
-		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
-		UsageLog:                      NewUsageLogClient(cfg),
-		User:                          NewUserClient(cfg),
-		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
-		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
-		UserAttributeValue:            NewUserAttributeValueClient(cfg),
-		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
-		UserSubscription:              NewUserSubscriptionClient(cfg),
+		ctx:                                      ctx,
+		config:                                   cfg,
+		APIKey:                                   NewAPIKeyClient(cfg),
+		Account:                                  NewAccountClient(cfg),
+		AccountGroup:                             NewAccountGroupClient(cfg),
+		Announcement:                             NewAnnouncementClient(cfg),
+		AnnouncementRead:                         NewAnnouncementReadClient(cfg),
+		AuthIdentity:                             NewAuthIdentityClient(cfg),
+		AuthIdentityChannel:                      NewAuthIdentityChannelClient(cfg),
+		ChannelMonitor:                           NewChannelMonitorClient(cfg),
+		ChannelMonitorDailyRollup:                NewChannelMonitorDailyRollupClient(cfg),
+		ChannelMonitorHistory:                    NewChannelMonitorHistoryClient(cfg),
+		ChannelMonitorRequestTemplate:            NewChannelMonitorRequestTemplateClient(cfg),
+		ErrorPassthroughRule:                     NewErrorPassthroughRuleClient(cfg),
+		Group:                                    NewGroupClient(cfg),
+		IdempotencyRecord:                        NewIdempotencyRecordClient(cfg),
+		IdentityAdoptionDecision:                 NewIdentityAdoptionDecisionClient(cfg),
+		Organization:                             NewOrganizationClient(cfg),
+		OrganizationAllocation:                   NewOrganizationAllocationClient(cfg),
+		OrganizationAttemptAccountEffect:         NewOrganizationAttemptAccountEffectClient(cfg),
+		OrganizationAttemptAccountPosting:        NewOrganizationAttemptAccountPostingClient(cfg),
+		OrganizationAttemptEvidence:              NewOrganizationAttemptEvidenceClient(cfg),
+		OrganizationExecution:                    NewOrganizationExecutionClient(cfg),
+		OrganizationExecutionAttempt:             NewOrganizationExecutionAttemptClient(cfg),
+		OrganizationExecutionIncident:            NewOrganizationExecutionIncidentClient(cfg),
+		OrganizationExecutionOutbox:              NewOrganizationExecutionOutboxClient(cfg),
+		OrganizationExecutionReconciliationAudit: NewOrganizationExecutionReconciliationAuditClient(cfg),
+		OrganizationFinalExecutionEvidence:       NewOrganizationFinalExecutionEvidenceClient(cfg),
+		OrganizationLedgerOperation:              NewOrganizationLedgerOperationClient(cfg),
+		OrganizationLedgerPosting:                NewOrganizationLedgerPostingClient(cfg),
+		OrganizationReservation:                  NewOrganizationReservationClient(cfg),
+		PaymentAuditLog:                          NewPaymentAuditLogClient(cfg),
+		PaymentOrder:                             NewPaymentOrderClient(cfg),
+		PaymentProviderInstance:                  NewPaymentProviderInstanceClient(cfg),
+		PendingAuthSession:                       NewPendingAuthSessionClient(cfg),
+		PromoCode:                                NewPromoCodeClient(cfg),
+		PromoCodeUsage:                           NewPromoCodeUsageClient(cfg),
+		Proxy:                                    NewProxyClient(cfg),
+		RedeemCode:                               NewRedeemCodeClient(cfg),
+		SecuritySecret:                           NewSecuritySecretClient(cfg),
+		Setting:                                  NewSettingClient(cfg),
+		SubscriptionPlan:                         NewSubscriptionPlanClient(cfg),
+		TLSFingerprintProfile:                    NewTLSFingerprintProfileClient(cfg),
+		UsageCleanupTask:                         NewUsageCleanupTaskClient(cfg),
+		UsageLog:                                 NewUsageLogClient(cfg),
+		User:                                     NewUserClient(cfg),
+		UserAllowedGroup:                         NewUserAllowedGroupClient(cfg),
+		UserAttributeDefinition:                  NewUserAttributeDefinitionClient(cfg),
+		UserAttributeValue:                       NewUserAttributeValueClient(cfg),
+		UserPlatformQuota:                        NewUserPlatformQuotaClient(cfg),
+		UserSubscription:                         NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -319,43 +389,57 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                           ctx,
-		config:                        cfg,
-		APIKey:                        NewAPIKeyClient(cfg),
-		Account:                       NewAccountClient(cfg),
-		AccountGroup:                  NewAccountGroupClient(cfg),
-		Announcement:                  NewAnnouncementClient(cfg),
-		AnnouncementRead:              NewAnnouncementReadClient(cfg),
-		AuthIdentity:                  NewAuthIdentityClient(cfg),
-		AuthIdentityChannel:           NewAuthIdentityChannelClient(cfg),
-		ChannelMonitor:                NewChannelMonitorClient(cfg),
-		ChannelMonitorDailyRollup:     NewChannelMonitorDailyRollupClient(cfg),
-		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
-		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
-		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
-		Group:                         NewGroupClient(cfg),
-		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
-		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
-		PaymentAuditLog:               NewPaymentAuditLogClient(cfg),
-		PaymentOrder:                  NewPaymentOrderClient(cfg),
-		PaymentProviderInstance:       NewPaymentProviderInstanceClient(cfg),
-		PendingAuthSession:            NewPendingAuthSessionClient(cfg),
-		PromoCode:                     NewPromoCodeClient(cfg),
-		PromoCodeUsage:                NewPromoCodeUsageClient(cfg),
-		Proxy:                         NewProxyClient(cfg),
-		RedeemCode:                    NewRedeemCodeClient(cfg),
-		SecuritySecret:                NewSecuritySecretClient(cfg),
-		Setting:                       NewSettingClient(cfg),
-		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
-		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
-		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
-		UsageLog:                      NewUsageLogClient(cfg),
-		User:                          NewUserClient(cfg),
-		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
-		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
-		UserAttributeValue:            NewUserAttributeValueClient(cfg),
-		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
-		UserSubscription:              NewUserSubscriptionClient(cfg),
+		ctx:                                      ctx,
+		config:                                   cfg,
+		APIKey:                                   NewAPIKeyClient(cfg),
+		Account:                                  NewAccountClient(cfg),
+		AccountGroup:                             NewAccountGroupClient(cfg),
+		Announcement:                             NewAnnouncementClient(cfg),
+		AnnouncementRead:                         NewAnnouncementReadClient(cfg),
+		AuthIdentity:                             NewAuthIdentityClient(cfg),
+		AuthIdentityChannel:                      NewAuthIdentityChannelClient(cfg),
+		ChannelMonitor:                           NewChannelMonitorClient(cfg),
+		ChannelMonitorDailyRollup:                NewChannelMonitorDailyRollupClient(cfg),
+		ChannelMonitorHistory:                    NewChannelMonitorHistoryClient(cfg),
+		ChannelMonitorRequestTemplate:            NewChannelMonitorRequestTemplateClient(cfg),
+		ErrorPassthroughRule:                     NewErrorPassthroughRuleClient(cfg),
+		Group:                                    NewGroupClient(cfg),
+		IdempotencyRecord:                        NewIdempotencyRecordClient(cfg),
+		IdentityAdoptionDecision:                 NewIdentityAdoptionDecisionClient(cfg),
+		Organization:                             NewOrganizationClient(cfg),
+		OrganizationAllocation:                   NewOrganizationAllocationClient(cfg),
+		OrganizationAttemptAccountEffect:         NewOrganizationAttemptAccountEffectClient(cfg),
+		OrganizationAttemptAccountPosting:        NewOrganizationAttemptAccountPostingClient(cfg),
+		OrganizationAttemptEvidence:              NewOrganizationAttemptEvidenceClient(cfg),
+		OrganizationExecution:                    NewOrganizationExecutionClient(cfg),
+		OrganizationExecutionAttempt:             NewOrganizationExecutionAttemptClient(cfg),
+		OrganizationExecutionIncident:            NewOrganizationExecutionIncidentClient(cfg),
+		OrganizationExecutionOutbox:              NewOrganizationExecutionOutboxClient(cfg),
+		OrganizationExecutionReconciliationAudit: NewOrganizationExecutionReconciliationAuditClient(cfg),
+		OrganizationFinalExecutionEvidence:       NewOrganizationFinalExecutionEvidenceClient(cfg),
+		OrganizationLedgerOperation:              NewOrganizationLedgerOperationClient(cfg),
+		OrganizationLedgerPosting:                NewOrganizationLedgerPostingClient(cfg),
+		OrganizationReservation:                  NewOrganizationReservationClient(cfg),
+		PaymentAuditLog:                          NewPaymentAuditLogClient(cfg),
+		PaymentOrder:                             NewPaymentOrderClient(cfg),
+		PaymentProviderInstance:                  NewPaymentProviderInstanceClient(cfg),
+		PendingAuthSession:                       NewPendingAuthSessionClient(cfg),
+		PromoCode:                                NewPromoCodeClient(cfg),
+		PromoCodeUsage:                           NewPromoCodeUsageClient(cfg),
+		Proxy:                                    NewProxyClient(cfg),
+		RedeemCode:                               NewRedeemCodeClient(cfg),
+		SecuritySecret:                           NewSecuritySecretClient(cfg),
+		Setting:                                  NewSettingClient(cfg),
+		SubscriptionPlan:                         NewSubscriptionPlanClient(cfg),
+		TLSFingerprintProfile:                    NewTLSFingerprintProfileClient(cfg),
+		UsageCleanupTask:                         NewUsageCleanupTaskClient(cfg),
+		UsageLog:                                 NewUsageLogClient(cfg),
+		User:                                     NewUserClient(cfg),
+		UserAllowedGroup:                         NewUserAllowedGroupClient(cfg),
+		UserAttributeDefinition:                  NewUserAttributeDefinitionClient(cfg),
+		UserAttributeValue:                       NewUserAttributeValueClient(cfg),
+		UserPlatformQuota:                        NewUserPlatformQuotaClient(cfg),
+		UserSubscription:                         NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -389,7 +473,14 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
 		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
+		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.Organization,
+		c.OrganizationAllocation, c.OrganizationAttemptAccountEffect,
+		c.OrganizationAttemptAccountPosting, c.OrganizationAttemptEvidence,
+		c.OrganizationExecution, c.OrganizationExecutionAttempt,
+		c.OrganizationExecutionIncident, c.OrganizationExecutionOutbox,
+		c.OrganizationExecutionReconciliationAudit,
+		c.OrganizationFinalExecutionEvidence, c.OrganizationLedgerOperation,
+		c.OrganizationLedgerPosting, c.OrganizationReservation, c.PaymentAuditLog,
 		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
 		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
@@ -408,7 +499,14 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
 		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
+		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.Organization,
+		c.OrganizationAllocation, c.OrganizationAttemptAccountEffect,
+		c.OrganizationAttemptAccountPosting, c.OrganizationAttemptEvidence,
+		c.OrganizationExecution, c.OrganizationExecutionAttempt,
+		c.OrganizationExecutionIncident, c.OrganizationExecutionOutbox,
+		c.OrganizationExecutionReconciliationAudit,
+		c.OrganizationFinalExecutionEvidence, c.OrganizationLedgerOperation,
+		c.OrganizationLedgerPosting, c.OrganizationReservation, c.PaymentAuditLog,
 		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
 		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
@@ -452,6 +550,34 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IdempotencyRecord.mutate(ctx, m)
 	case *IdentityAdoptionDecisionMutation:
 		return c.IdentityAdoptionDecision.mutate(ctx, m)
+	case *OrganizationMutation:
+		return c.Organization.mutate(ctx, m)
+	case *OrganizationAllocationMutation:
+		return c.OrganizationAllocation.mutate(ctx, m)
+	case *OrganizationAttemptAccountEffectMutation:
+		return c.OrganizationAttemptAccountEffect.mutate(ctx, m)
+	case *OrganizationAttemptAccountPostingMutation:
+		return c.OrganizationAttemptAccountPosting.mutate(ctx, m)
+	case *OrganizationAttemptEvidenceMutation:
+		return c.OrganizationAttemptEvidence.mutate(ctx, m)
+	case *OrganizationExecutionMutation:
+		return c.OrganizationExecution.mutate(ctx, m)
+	case *OrganizationExecutionAttemptMutation:
+		return c.OrganizationExecutionAttempt.mutate(ctx, m)
+	case *OrganizationExecutionIncidentMutation:
+		return c.OrganizationExecutionIncident.mutate(ctx, m)
+	case *OrganizationExecutionOutboxMutation:
+		return c.OrganizationExecutionOutbox.mutate(ctx, m)
+	case *OrganizationExecutionReconciliationAuditMutation:
+		return c.OrganizationExecutionReconciliationAudit.mutate(ctx, m)
+	case *OrganizationFinalExecutionEvidenceMutation:
+		return c.OrganizationFinalExecutionEvidence.mutate(ctx, m)
+	case *OrganizationLedgerOperationMutation:
+		return c.OrganizationLedgerOperation.mutate(ctx, m)
+	case *OrganizationLedgerPostingMutation:
+		return c.OrganizationLedgerPosting.mutate(ctx, m)
+	case *OrganizationReservationMutation:
+		return c.OrganizationReservation.mutate(ctx, m)
 	case *PaymentAuditLogMutation:
 		return c.PaymentAuditLog.mutate(ctx, m)
 	case *PaymentOrderMutation:
@@ -637,6 +763,22 @@ func (c *APIKeyClient) QueryGroup(_m *APIKey) *GroupQuery {
 	return query
 }
 
+// QueryOrganization queries the organization edge of a APIKey.
+func (c *APIKeyClient) QueryOrganization(_m *APIKey) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(apikey.Table, apikey.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, apikey.OrganizationTable, apikey.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryUsageLogs queries the usage_logs edge of a APIKey.
 func (c *APIKeyClient) QueryUsageLogs(_m *APIKey) *UsageLogQuery {
 	query := (&UsageLogClient{config: c.config}).Query()
@@ -646,6 +788,38 @@ func (c *APIKeyClient) QueryUsageLogs(_m *APIKey) *UsageLogQuery {
 			sqlgraph.From(apikey.Table, apikey.FieldID, id),
 			sqlgraph.To(usagelog.Table, usagelog.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, apikey.UsageLogsTable, apikey.UsageLogsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrganizationExecutions queries the organization_executions edge of a APIKey.
+func (c *APIKeyClient) QueryOrganizationExecutions(_m *APIKey) *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(apikey.Table, apikey.FieldID, id),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, apikey.OrganizationExecutionsTable, apikey.OrganizationExecutionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrganizationFinalExecutionEvidences queries the organization_final_execution_evidences edge of a APIKey.
+func (c *APIKeyClient) QueryOrganizationFinalExecutionEvidences(_m *APIKey) *OrganizationFinalExecutionEvidenceQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(apikey.Table, apikey.FieldID, id),
+			sqlgraph.To(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, apikey.OrganizationFinalExecutionEvidencesTable, apikey.OrganizationFinalExecutionEvidencesColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -2958,6 +3132,2828 @@ func (c *IdentityAdoptionDecisionClient) mutate(ctx context.Context, m *Identity
 		return (&IdentityAdoptionDecisionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown IdentityAdoptionDecision mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationClient is a client for the Organization schema.
+type OrganizationClient struct {
+	config
+}
+
+// NewOrganizationClient returns a client for the Organization from the given config.
+func NewOrganizationClient(c config) *OrganizationClient {
+	return &OrganizationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organization.Hooks(f(g(h())))`.
+func (c *OrganizationClient) Use(hooks ...Hook) {
+	c.hooks.Organization = append(c.hooks.Organization, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organization.Intercept(f(g(h())))`.
+func (c *OrganizationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Organization = append(c.inters.Organization, interceptors...)
+}
+
+// Create returns a builder for creating a Organization entity.
+func (c *OrganizationClient) Create() *OrganizationCreate {
+	mutation := newOrganizationMutation(c.config, OpCreate)
+	return &OrganizationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Organization entities.
+func (c *OrganizationClient) CreateBulk(builders ...*OrganizationCreate) *OrganizationCreateBulk {
+	return &OrganizationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationClient) MapCreateBulk(slice any, setFunc func(*OrganizationCreate, int)) *OrganizationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationCreateBulk{err: fmt.Errorf("calling to OrganizationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Organization.
+func (c *OrganizationClient) Update() *OrganizationUpdate {
+	mutation := newOrganizationMutation(c.config, OpUpdate)
+	return &OrganizationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationClient) UpdateOne(_m *Organization) *OrganizationUpdateOne {
+	mutation := newOrganizationMutation(c.config, OpUpdateOne, withOrganization(_m))
+	return &OrganizationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationClient) UpdateOneID(id int64) *OrganizationUpdateOne {
+	mutation := newOrganizationMutation(c.config, OpUpdateOne, withOrganizationID(id))
+	return &OrganizationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Organization.
+func (c *OrganizationClient) Delete() *OrganizationDelete {
+	mutation := newOrganizationMutation(c.config, OpDelete)
+	return &OrganizationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationClient) DeleteOne(_m *Organization) *OrganizationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationClient) DeleteOneID(id int64) *OrganizationDeleteOne {
+	builder := c.Delete().Where(organization.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationDeleteOne{builder}
+}
+
+// Query returns a query builder for Organization.
+func (c *OrganizationClient) Query() *OrganizationQuery {
+	return &OrganizationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganization},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Organization entity by its id.
+func (c *OrganizationClient) Get(ctx context.Context, id int64) (*Organization, error) {
+	return c.Query().Where(organization.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationClient) GetX(ctx context.Context, id int64) *Organization {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryMembers queries the members edge of a Organization.
+func (c *OrganizationClient) QueryMembers(_m *Organization) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.MembersTable, organization.MembersColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAPIKeys queries the api_keys edge of a Organization.
+func (c *OrganizationClient) QueryAPIKeys(_m *Organization) *APIKeyQuery {
+	query := (&APIKeyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(apikey.Table, apikey.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.APIKeysTable, organization.APIKeysColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAllocations queries the allocations edge of a Organization.
+func (c *OrganizationClient) QueryAllocations(_m *Organization) *OrganizationAllocationQuery {
+	query := (&OrganizationAllocationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(organizationallocation.Table, organizationallocation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.AllocationsTable, organization.AllocationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryLedgerOperations queries the ledger_operations edge of a Organization.
+func (c *OrganizationClient) QueryLedgerOperations(_m *Organization) *OrganizationLedgerOperationQuery {
+	query := (&OrganizationLedgerOperationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(organizationledgeroperation.Table, organizationledgeroperation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.LedgerOperationsTable, organization.LedgerOperationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryLedgerPostings queries the ledger_postings edge of a Organization.
+func (c *OrganizationClient) QueryLedgerPostings(_m *Organization) *OrganizationLedgerPostingQuery {
+	query := (&OrganizationLedgerPostingClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(organizationledgerposting.Table, organizationledgerposting.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.LedgerPostingsTable, organization.LedgerPostingsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryExecutions queries the executions edge of a Organization.
+func (c *OrganizationClient) QueryExecutions(_m *Organization) *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.ExecutionsTable, organization.ExecutionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryReservations queries the reservations edge of a Organization.
+func (c *OrganizationClient) QueryReservations(_m *Organization) *OrganizationReservationQuery {
+	query := (&OrganizationReservationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(organizationreservation.Table, organizationreservation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.ReservationsTable, organization.ReservationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryExecutionAttempts queries the execution_attempts edge of a Organization.
+func (c *OrganizationClient) QueryExecutionAttempts(_m *Organization) *OrganizationExecutionAttemptQuery {
+	query := (&OrganizationExecutionAttemptClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(organizationexecutionattempt.Table, organizationexecutionattempt.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.ExecutionAttemptsTable, organization.ExecutionAttemptsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAttemptEvidences queries the attempt_evidences edge of a Organization.
+func (c *OrganizationClient) QueryAttemptEvidences(_m *Organization) *OrganizationAttemptEvidenceQuery {
+	query := (&OrganizationAttemptEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(organizationattemptevidence.Table, organizationattemptevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.AttemptEvidencesTable, organization.AttemptEvidencesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryFinalExecutionEvidences queries the final_execution_evidences edge of a Organization.
+func (c *OrganizationClient) QueryFinalExecutionEvidences(_m *Organization) *OrganizationFinalExecutionEvidenceQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.FinalExecutionEvidencesTable, organization.FinalExecutionEvidencesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryExecutionOutboxes queries the execution_outboxes edge of a Organization.
+func (c *OrganizationClient) QueryExecutionOutboxes(_m *Organization) *OrganizationExecutionOutboxQuery {
+	query := (&OrganizationExecutionOutboxClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(organizationexecutionoutbox.Table, organizationexecutionoutbox.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.ExecutionOutboxesTable, organization.ExecutionOutboxesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationClient) Hooks() []Hook {
+	return c.hooks.Organization
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationClient) Interceptors() []Interceptor {
+	return c.inters.Organization
+}
+
+func (c *OrganizationClient) mutate(ctx context.Context, m *OrganizationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Organization mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationAllocationClient is a client for the OrganizationAllocation schema.
+type OrganizationAllocationClient struct {
+	config
+}
+
+// NewOrganizationAllocationClient returns a client for the OrganizationAllocation from the given config.
+func NewOrganizationAllocationClient(c config) *OrganizationAllocationClient {
+	return &OrganizationAllocationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationallocation.Hooks(f(g(h())))`.
+func (c *OrganizationAllocationClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationAllocation = append(c.hooks.OrganizationAllocation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationallocation.Intercept(f(g(h())))`.
+func (c *OrganizationAllocationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationAllocation = append(c.inters.OrganizationAllocation, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationAllocation entity.
+func (c *OrganizationAllocationClient) Create() *OrganizationAllocationCreate {
+	mutation := newOrganizationAllocationMutation(c.config, OpCreate)
+	return &OrganizationAllocationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationAllocation entities.
+func (c *OrganizationAllocationClient) CreateBulk(builders ...*OrganizationAllocationCreate) *OrganizationAllocationCreateBulk {
+	return &OrganizationAllocationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationAllocationClient) MapCreateBulk(slice any, setFunc func(*OrganizationAllocationCreate, int)) *OrganizationAllocationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationAllocationCreateBulk{err: fmt.Errorf("calling to OrganizationAllocationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationAllocationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationAllocationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationAllocation.
+func (c *OrganizationAllocationClient) Update() *OrganizationAllocationUpdate {
+	mutation := newOrganizationAllocationMutation(c.config, OpUpdate)
+	return &OrganizationAllocationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationAllocationClient) UpdateOne(_m *OrganizationAllocation) *OrganizationAllocationUpdateOne {
+	mutation := newOrganizationAllocationMutation(c.config, OpUpdateOne, withOrganizationAllocation(_m))
+	return &OrganizationAllocationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationAllocationClient) UpdateOneID(id int64) *OrganizationAllocationUpdateOne {
+	mutation := newOrganizationAllocationMutation(c.config, OpUpdateOne, withOrganizationAllocationID(id))
+	return &OrganizationAllocationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationAllocation.
+func (c *OrganizationAllocationClient) Delete() *OrganizationAllocationDelete {
+	mutation := newOrganizationAllocationMutation(c.config, OpDelete)
+	return &OrganizationAllocationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationAllocationClient) DeleteOne(_m *OrganizationAllocation) *OrganizationAllocationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationAllocationClient) DeleteOneID(id int64) *OrganizationAllocationDeleteOne {
+	builder := c.Delete().Where(organizationallocation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationAllocationDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationAllocation.
+func (c *OrganizationAllocationClient) Query() *OrganizationAllocationQuery {
+	return &OrganizationAllocationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationAllocation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationAllocation entity by its id.
+func (c *OrganizationAllocationClient) Get(ctx context.Context, id int64) (*OrganizationAllocation, error) {
+	return c.Query().Where(organizationallocation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationAllocationClient) GetX(ctx context.Context, id int64) *OrganizationAllocation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryOrganization queries the organization edge of a OrganizationAllocation.
+func (c *OrganizationAllocationClient) QueryOrganization(_m *OrganizationAllocation) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationallocation.Table, organizationallocation.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationallocation.OrganizationTable, organizationallocation.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUserRef queries the user_ref edge of a OrganizationAllocation.
+func (c *OrganizationAllocationClient) QueryUserRef(_m *OrganizationAllocation) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationallocation.Table, organizationallocation.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationallocation.UserRefTable, organizationallocation.UserRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryExecutions queries the executions edge of a OrganizationAllocation.
+func (c *OrganizationAllocationClient) QueryExecutions(_m *OrganizationAllocation) *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationallocation.Table, organizationallocation.FieldID, id),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organizationallocation.ExecutionsTable, organizationallocation.ExecutionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryReservations queries the reservations edge of a OrganizationAllocation.
+func (c *OrganizationAllocationClient) QueryReservations(_m *OrganizationAllocation) *OrganizationReservationQuery {
+	query := (&OrganizationReservationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationallocation.Table, organizationallocation.FieldID, id),
+			sqlgraph.To(organizationreservation.Table, organizationreservation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organizationallocation.ReservationsTable, organizationallocation.ReservationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryFinalExecutionEvidences queries the final_execution_evidences edge of a OrganizationAllocation.
+func (c *OrganizationAllocationClient) QueryFinalExecutionEvidences(_m *OrganizationAllocation) *OrganizationFinalExecutionEvidenceQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationallocation.Table, organizationallocation.FieldID, id),
+			sqlgraph.To(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organizationallocation.FinalExecutionEvidencesTable, organizationallocation.FinalExecutionEvidencesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationAllocationClient) Hooks() []Hook {
+	return c.hooks.OrganizationAllocation
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationAllocationClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationAllocation
+}
+
+func (c *OrganizationAllocationClient) mutate(ctx context.Context, m *OrganizationAllocationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationAllocationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationAllocationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationAllocationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationAllocationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationAllocation mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationAttemptAccountEffectClient is a client for the OrganizationAttemptAccountEffect schema.
+type OrganizationAttemptAccountEffectClient struct {
+	config
+}
+
+// NewOrganizationAttemptAccountEffectClient returns a client for the OrganizationAttemptAccountEffect from the given config.
+func NewOrganizationAttemptAccountEffectClient(c config) *OrganizationAttemptAccountEffectClient {
+	return &OrganizationAttemptAccountEffectClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationattemptaccounteffect.Hooks(f(g(h())))`.
+func (c *OrganizationAttemptAccountEffectClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationAttemptAccountEffect = append(c.hooks.OrganizationAttemptAccountEffect, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationattemptaccounteffect.Intercept(f(g(h())))`.
+func (c *OrganizationAttemptAccountEffectClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationAttemptAccountEffect = append(c.inters.OrganizationAttemptAccountEffect, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationAttemptAccountEffect entity.
+func (c *OrganizationAttemptAccountEffectClient) Create() *OrganizationAttemptAccountEffectCreate {
+	mutation := newOrganizationAttemptAccountEffectMutation(c.config, OpCreate)
+	return &OrganizationAttemptAccountEffectCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationAttemptAccountEffect entities.
+func (c *OrganizationAttemptAccountEffectClient) CreateBulk(builders ...*OrganizationAttemptAccountEffectCreate) *OrganizationAttemptAccountEffectCreateBulk {
+	return &OrganizationAttemptAccountEffectCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationAttemptAccountEffectClient) MapCreateBulk(slice any, setFunc func(*OrganizationAttemptAccountEffectCreate, int)) *OrganizationAttemptAccountEffectCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationAttemptAccountEffectCreateBulk{err: fmt.Errorf("calling to OrganizationAttemptAccountEffectClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationAttemptAccountEffectCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationAttemptAccountEffectCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationAttemptAccountEffect.
+func (c *OrganizationAttemptAccountEffectClient) Update() *OrganizationAttemptAccountEffectUpdate {
+	mutation := newOrganizationAttemptAccountEffectMutation(c.config, OpUpdate)
+	return &OrganizationAttemptAccountEffectUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationAttemptAccountEffectClient) UpdateOne(_m *OrganizationAttemptAccountEffect) *OrganizationAttemptAccountEffectUpdateOne {
+	mutation := newOrganizationAttemptAccountEffectMutation(c.config, OpUpdateOne, withOrganizationAttemptAccountEffect(_m))
+	return &OrganizationAttemptAccountEffectUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationAttemptAccountEffectClient) UpdateOneID(id int64) *OrganizationAttemptAccountEffectUpdateOne {
+	mutation := newOrganizationAttemptAccountEffectMutation(c.config, OpUpdateOne, withOrganizationAttemptAccountEffectID(id))
+	return &OrganizationAttemptAccountEffectUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationAttemptAccountEffect.
+func (c *OrganizationAttemptAccountEffectClient) Delete() *OrganizationAttemptAccountEffectDelete {
+	mutation := newOrganizationAttemptAccountEffectMutation(c.config, OpDelete)
+	return &OrganizationAttemptAccountEffectDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationAttemptAccountEffectClient) DeleteOne(_m *OrganizationAttemptAccountEffect) *OrganizationAttemptAccountEffectDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationAttemptAccountEffectClient) DeleteOneID(id int64) *OrganizationAttemptAccountEffectDeleteOne {
+	builder := c.Delete().Where(organizationattemptaccounteffect.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationAttemptAccountEffectDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationAttemptAccountEffect.
+func (c *OrganizationAttemptAccountEffectClient) Query() *OrganizationAttemptAccountEffectQuery {
+	return &OrganizationAttemptAccountEffectQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationAttemptAccountEffect},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationAttemptAccountEffect entity by its id.
+func (c *OrganizationAttemptAccountEffectClient) Get(ctx context.Context, id int64) (*OrganizationAttemptAccountEffect, error) {
+	return c.Query().Where(organizationattemptaccounteffect.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationAttemptAccountEffectClient) GetX(ctx context.Context, id int64) *OrganizationAttemptAccountEffect {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationAttemptAccountEffectClient) Hooks() []Hook {
+	return c.hooks.OrganizationAttemptAccountEffect
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationAttemptAccountEffectClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationAttemptAccountEffect
+}
+
+func (c *OrganizationAttemptAccountEffectClient) mutate(ctx context.Context, m *OrganizationAttemptAccountEffectMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationAttemptAccountEffectCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationAttemptAccountEffectUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationAttemptAccountEffectUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationAttemptAccountEffectDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationAttemptAccountEffect mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationAttemptAccountPostingClient is a client for the OrganizationAttemptAccountPosting schema.
+type OrganizationAttemptAccountPostingClient struct {
+	config
+}
+
+// NewOrganizationAttemptAccountPostingClient returns a client for the OrganizationAttemptAccountPosting from the given config.
+func NewOrganizationAttemptAccountPostingClient(c config) *OrganizationAttemptAccountPostingClient {
+	return &OrganizationAttemptAccountPostingClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationattemptaccountposting.Hooks(f(g(h())))`.
+func (c *OrganizationAttemptAccountPostingClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationAttemptAccountPosting = append(c.hooks.OrganizationAttemptAccountPosting, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationattemptaccountposting.Intercept(f(g(h())))`.
+func (c *OrganizationAttemptAccountPostingClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationAttemptAccountPosting = append(c.inters.OrganizationAttemptAccountPosting, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationAttemptAccountPosting entity.
+func (c *OrganizationAttemptAccountPostingClient) Create() *OrganizationAttemptAccountPostingCreate {
+	mutation := newOrganizationAttemptAccountPostingMutation(c.config, OpCreate)
+	return &OrganizationAttemptAccountPostingCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationAttemptAccountPosting entities.
+func (c *OrganizationAttemptAccountPostingClient) CreateBulk(builders ...*OrganizationAttemptAccountPostingCreate) *OrganizationAttemptAccountPostingCreateBulk {
+	return &OrganizationAttemptAccountPostingCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationAttemptAccountPostingClient) MapCreateBulk(slice any, setFunc func(*OrganizationAttemptAccountPostingCreate, int)) *OrganizationAttemptAccountPostingCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationAttemptAccountPostingCreateBulk{err: fmt.Errorf("calling to OrganizationAttemptAccountPostingClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationAttemptAccountPostingCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationAttemptAccountPostingCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationAttemptAccountPosting.
+func (c *OrganizationAttemptAccountPostingClient) Update() *OrganizationAttemptAccountPostingUpdate {
+	mutation := newOrganizationAttemptAccountPostingMutation(c.config, OpUpdate)
+	return &OrganizationAttemptAccountPostingUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationAttemptAccountPostingClient) UpdateOne(_m *OrganizationAttemptAccountPosting) *OrganizationAttemptAccountPostingUpdateOne {
+	mutation := newOrganizationAttemptAccountPostingMutation(c.config, OpUpdateOne, withOrganizationAttemptAccountPosting(_m))
+	return &OrganizationAttemptAccountPostingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationAttemptAccountPostingClient) UpdateOneID(id int64) *OrganizationAttemptAccountPostingUpdateOne {
+	mutation := newOrganizationAttemptAccountPostingMutation(c.config, OpUpdateOne, withOrganizationAttemptAccountPostingID(id))
+	return &OrganizationAttemptAccountPostingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationAttemptAccountPosting.
+func (c *OrganizationAttemptAccountPostingClient) Delete() *OrganizationAttemptAccountPostingDelete {
+	mutation := newOrganizationAttemptAccountPostingMutation(c.config, OpDelete)
+	return &OrganizationAttemptAccountPostingDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationAttemptAccountPostingClient) DeleteOne(_m *OrganizationAttemptAccountPosting) *OrganizationAttemptAccountPostingDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationAttemptAccountPostingClient) DeleteOneID(id int64) *OrganizationAttemptAccountPostingDeleteOne {
+	builder := c.Delete().Where(organizationattemptaccountposting.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationAttemptAccountPostingDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationAttemptAccountPosting.
+func (c *OrganizationAttemptAccountPostingClient) Query() *OrganizationAttemptAccountPostingQuery {
+	return &OrganizationAttemptAccountPostingQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationAttemptAccountPosting},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationAttemptAccountPosting entity by its id.
+func (c *OrganizationAttemptAccountPostingClient) Get(ctx context.Context, id int64) (*OrganizationAttemptAccountPosting, error) {
+	return c.Query().Where(organizationattemptaccountposting.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationAttemptAccountPostingClient) GetX(ctx context.Context, id int64) *OrganizationAttemptAccountPosting {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationAttemptAccountPostingClient) Hooks() []Hook {
+	return c.hooks.OrganizationAttemptAccountPosting
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationAttemptAccountPostingClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationAttemptAccountPosting
+}
+
+func (c *OrganizationAttemptAccountPostingClient) mutate(ctx context.Context, m *OrganizationAttemptAccountPostingMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationAttemptAccountPostingCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationAttemptAccountPostingUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationAttemptAccountPostingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationAttemptAccountPostingDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationAttemptAccountPosting mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationAttemptEvidenceClient is a client for the OrganizationAttemptEvidence schema.
+type OrganizationAttemptEvidenceClient struct {
+	config
+}
+
+// NewOrganizationAttemptEvidenceClient returns a client for the OrganizationAttemptEvidence from the given config.
+func NewOrganizationAttemptEvidenceClient(c config) *OrganizationAttemptEvidenceClient {
+	return &OrganizationAttemptEvidenceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationattemptevidence.Hooks(f(g(h())))`.
+func (c *OrganizationAttemptEvidenceClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationAttemptEvidence = append(c.hooks.OrganizationAttemptEvidence, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationattemptevidence.Intercept(f(g(h())))`.
+func (c *OrganizationAttemptEvidenceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationAttemptEvidence = append(c.inters.OrganizationAttemptEvidence, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationAttemptEvidence entity.
+func (c *OrganizationAttemptEvidenceClient) Create() *OrganizationAttemptEvidenceCreate {
+	mutation := newOrganizationAttemptEvidenceMutation(c.config, OpCreate)
+	return &OrganizationAttemptEvidenceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationAttemptEvidence entities.
+func (c *OrganizationAttemptEvidenceClient) CreateBulk(builders ...*OrganizationAttemptEvidenceCreate) *OrganizationAttemptEvidenceCreateBulk {
+	return &OrganizationAttemptEvidenceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationAttemptEvidenceClient) MapCreateBulk(slice any, setFunc func(*OrganizationAttemptEvidenceCreate, int)) *OrganizationAttemptEvidenceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationAttemptEvidenceCreateBulk{err: fmt.Errorf("calling to OrganizationAttemptEvidenceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationAttemptEvidenceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationAttemptEvidenceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationAttemptEvidence.
+func (c *OrganizationAttemptEvidenceClient) Update() *OrganizationAttemptEvidenceUpdate {
+	mutation := newOrganizationAttemptEvidenceMutation(c.config, OpUpdate)
+	return &OrganizationAttemptEvidenceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationAttemptEvidenceClient) UpdateOne(_m *OrganizationAttemptEvidence) *OrganizationAttemptEvidenceUpdateOne {
+	mutation := newOrganizationAttemptEvidenceMutation(c.config, OpUpdateOne, withOrganizationAttemptEvidence(_m))
+	return &OrganizationAttemptEvidenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationAttemptEvidenceClient) UpdateOneID(id int64) *OrganizationAttemptEvidenceUpdateOne {
+	mutation := newOrganizationAttemptEvidenceMutation(c.config, OpUpdateOne, withOrganizationAttemptEvidenceID(id))
+	return &OrganizationAttemptEvidenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationAttemptEvidence.
+func (c *OrganizationAttemptEvidenceClient) Delete() *OrganizationAttemptEvidenceDelete {
+	mutation := newOrganizationAttemptEvidenceMutation(c.config, OpDelete)
+	return &OrganizationAttemptEvidenceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationAttemptEvidenceClient) DeleteOne(_m *OrganizationAttemptEvidence) *OrganizationAttemptEvidenceDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationAttemptEvidenceClient) DeleteOneID(id int64) *OrganizationAttemptEvidenceDeleteOne {
+	builder := c.Delete().Where(organizationattemptevidence.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationAttemptEvidenceDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationAttemptEvidence.
+func (c *OrganizationAttemptEvidenceClient) Query() *OrganizationAttemptEvidenceQuery {
+	return &OrganizationAttemptEvidenceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationAttemptEvidence},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationAttemptEvidence entity by its id.
+func (c *OrganizationAttemptEvidenceClient) Get(ctx context.Context, id int64) (*OrganizationAttemptEvidence, error) {
+	return c.Query().Where(organizationattemptevidence.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationAttemptEvidenceClient) GetX(ctx context.Context, id int64) *OrganizationAttemptEvidence {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryAttemptRef queries the attempt_ref edge of a OrganizationAttemptEvidence.
+func (c *OrganizationAttemptEvidenceClient) QueryAttemptRef(_m *OrganizationAttemptEvidence) *OrganizationExecutionAttemptQuery {
+	query := (&OrganizationExecutionAttemptClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationattemptevidence.Table, organizationattemptevidence.FieldID, id),
+			sqlgraph.To(organizationexecutionattempt.Table, organizationexecutionattempt.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationattemptevidence.AttemptRefTable, organizationattemptevidence.AttemptRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryExecutionRef queries the execution_ref edge of a OrganizationAttemptEvidence.
+func (c *OrganizationAttemptEvidenceClient) QueryExecutionRef(_m *OrganizationAttemptEvidence) *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationattemptevidence.Table, organizationattemptevidence.FieldID, id),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationattemptevidence.ExecutionRefTable, organizationattemptevidence.ExecutionRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrganization queries the organization edge of a OrganizationAttemptEvidence.
+func (c *OrganizationAttemptEvidenceClient) QueryOrganization(_m *OrganizationAttemptEvidence) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationattemptevidence.Table, organizationattemptevidence.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationattemptevidence.OrganizationTable, organizationattemptevidence.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAccountRef queries the account_ref edge of a OrganizationAttemptEvidence.
+func (c *OrganizationAttemptEvidenceClient) QueryAccountRef(_m *OrganizationAttemptEvidence) *AccountQuery {
+	query := (&AccountClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationattemptevidence.Table, organizationattemptevidence.FieldID, id),
+			sqlgraph.To(account.Table, account.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, organizationattemptevidence.AccountRefTable, organizationattemptevidence.AccountRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryFinalExecutionEvidence queries the final_execution_evidence edge of a OrganizationAttemptEvidence.
+func (c *OrganizationAttemptEvidenceClient) QueryFinalExecutionEvidence(_m *OrganizationAttemptEvidence) *OrganizationFinalExecutionEvidenceQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationattemptevidence.Table, organizationattemptevidence.FieldID, id),
+			sqlgraph.To(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, organizationattemptevidence.FinalExecutionEvidenceTable, organizationattemptevidence.FinalExecutionEvidenceColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationAttemptEvidenceClient) Hooks() []Hook {
+	return c.hooks.OrganizationAttemptEvidence
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationAttemptEvidenceClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationAttemptEvidence
+}
+
+func (c *OrganizationAttemptEvidenceClient) mutate(ctx context.Context, m *OrganizationAttemptEvidenceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationAttemptEvidenceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationAttemptEvidenceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationAttemptEvidenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationAttemptEvidenceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationAttemptEvidence mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationExecutionClient is a client for the OrganizationExecution schema.
+type OrganizationExecutionClient struct {
+	config
+}
+
+// NewOrganizationExecutionClient returns a client for the OrganizationExecution from the given config.
+func NewOrganizationExecutionClient(c config) *OrganizationExecutionClient {
+	return &OrganizationExecutionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationexecution.Hooks(f(g(h())))`.
+func (c *OrganizationExecutionClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationExecution = append(c.hooks.OrganizationExecution, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationexecution.Intercept(f(g(h())))`.
+func (c *OrganizationExecutionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationExecution = append(c.inters.OrganizationExecution, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationExecution entity.
+func (c *OrganizationExecutionClient) Create() *OrganizationExecutionCreate {
+	mutation := newOrganizationExecutionMutation(c.config, OpCreate)
+	return &OrganizationExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationExecution entities.
+func (c *OrganizationExecutionClient) CreateBulk(builders ...*OrganizationExecutionCreate) *OrganizationExecutionCreateBulk {
+	return &OrganizationExecutionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationExecutionClient) MapCreateBulk(slice any, setFunc func(*OrganizationExecutionCreate, int)) *OrganizationExecutionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationExecutionCreateBulk{err: fmt.Errorf("calling to OrganizationExecutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationExecutionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationExecutionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationExecution.
+func (c *OrganizationExecutionClient) Update() *OrganizationExecutionUpdate {
+	mutation := newOrganizationExecutionMutation(c.config, OpUpdate)
+	return &OrganizationExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationExecutionClient) UpdateOne(_m *OrganizationExecution) *OrganizationExecutionUpdateOne {
+	mutation := newOrganizationExecutionMutation(c.config, OpUpdateOne, withOrganizationExecution(_m))
+	return &OrganizationExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationExecutionClient) UpdateOneID(id int64) *OrganizationExecutionUpdateOne {
+	mutation := newOrganizationExecutionMutation(c.config, OpUpdateOne, withOrganizationExecutionID(id))
+	return &OrganizationExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationExecution.
+func (c *OrganizationExecutionClient) Delete() *OrganizationExecutionDelete {
+	mutation := newOrganizationExecutionMutation(c.config, OpDelete)
+	return &OrganizationExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationExecutionClient) DeleteOne(_m *OrganizationExecution) *OrganizationExecutionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationExecutionClient) DeleteOneID(id int64) *OrganizationExecutionDeleteOne {
+	builder := c.Delete().Where(organizationexecution.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationExecutionDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationExecution.
+func (c *OrganizationExecutionClient) Query() *OrganizationExecutionQuery {
+	return &OrganizationExecutionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationExecution},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationExecution entity by its id.
+func (c *OrganizationExecutionClient) Get(ctx context.Context, id int64) (*OrganizationExecution, error) {
+	return c.Query().Where(organizationexecution.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationExecutionClient) GetX(ctx context.Context, id int64) *OrganizationExecution {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryOrganization queries the organization edge of a OrganizationExecution.
+func (c *OrganizationExecutionClient) QueryOrganization(_m *OrganizationExecution) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecution.Table, organizationexecution.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationexecution.OrganizationTable, organizationexecution.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAllocationRef queries the allocation_ref edge of a OrganizationExecution.
+func (c *OrganizationExecutionClient) QueryAllocationRef(_m *OrganizationExecution) *OrganizationAllocationQuery {
+	query := (&OrganizationAllocationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecution.Table, organizationexecution.FieldID, id),
+			sqlgraph.To(organizationallocation.Table, organizationallocation.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationexecution.AllocationRefTable, organizationexecution.AllocationRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUserRef queries the user_ref edge of a OrganizationExecution.
+func (c *OrganizationExecutionClient) QueryUserRef(_m *OrganizationExecution) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecution.Table, organizationexecution.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationexecution.UserRefTable, organizationexecution.UserRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAPIKeyRef queries the api_key_ref edge of a OrganizationExecution.
+func (c *OrganizationExecutionClient) QueryAPIKeyRef(_m *OrganizationExecution) *APIKeyQuery {
+	query := (&APIKeyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecution.Table, organizationexecution.FieldID, id),
+			sqlgraph.To(apikey.Table, apikey.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationexecution.APIKeyRefTable, organizationexecution.APIKeyRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryReservation queries the reservation edge of a OrganizationExecution.
+func (c *OrganizationExecutionClient) QueryReservation(_m *OrganizationExecution) *OrganizationReservationQuery {
+	query := (&OrganizationReservationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecution.Table, organizationexecution.FieldID, id),
+			sqlgraph.To(organizationreservation.Table, organizationreservation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, organizationexecution.ReservationTable, organizationexecution.ReservationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAttempts queries the attempts edge of a OrganizationExecution.
+func (c *OrganizationExecutionClient) QueryAttempts(_m *OrganizationExecution) *OrganizationExecutionAttemptQuery {
+	query := (&OrganizationExecutionAttemptClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecution.Table, organizationexecution.FieldID, id),
+			sqlgraph.To(organizationexecutionattempt.Table, organizationexecutionattempt.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organizationexecution.AttemptsTable, organizationexecution.AttemptsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAttemptEvidences queries the attempt_evidences edge of a OrganizationExecution.
+func (c *OrganizationExecutionClient) QueryAttemptEvidences(_m *OrganizationExecution) *OrganizationAttemptEvidenceQuery {
+	query := (&OrganizationAttemptEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecution.Table, organizationexecution.FieldID, id),
+			sqlgraph.To(organizationattemptevidence.Table, organizationattemptevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organizationexecution.AttemptEvidencesTable, organizationexecution.AttemptEvidencesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryFinalEvidence queries the final_evidence edge of a OrganizationExecution.
+func (c *OrganizationExecutionClient) QueryFinalEvidence(_m *OrganizationExecution) *OrganizationFinalExecutionEvidenceQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecution.Table, organizationexecution.FieldID, id),
+			sqlgraph.To(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, organizationexecution.FinalEvidenceTable, organizationexecution.FinalEvidenceColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOutboxes queries the outboxes edge of a OrganizationExecution.
+func (c *OrganizationExecutionClient) QueryOutboxes(_m *OrganizationExecution) *OrganizationExecutionOutboxQuery {
+	query := (&OrganizationExecutionOutboxClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecution.Table, organizationexecution.FieldID, id),
+			sqlgraph.To(organizationexecutionoutbox.Table, organizationexecutionoutbox.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organizationexecution.OutboxesTable, organizationexecution.OutboxesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationExecutionClient) Hooks() []Hook {
+	return c.hooks.OrganizationExecution
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationExecutionClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationExecution
+}
+
+func (c *OrganizationExecutionClient) mutate(ctx context.Context, m *OrganizationExecutionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationExecution mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationExecutionAttemptClient is a client for the OrganizationExecutionAttempt schema.
+type OrganizationExecutionAttemptClient struct {
+	config
+}
+
+// NewOrganizationExecutionAttemptClient returns a client for the OrganizationExecutionAttempt from the given config.
+func NewOrganizationExecutionAttemptClient(c config) *OrganizationExecutionAttemptClient {
+	return &OrganizationExecutionAttemptClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationexecutionattempt.Hooks(f(g(h())))`.
+func (c *OrganizationExecutionAttemptClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationExecutionAttempt = append(c.hooks.OrganizationExecutionAttempt, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationexecutionattempt.Intercept(f(g(h())))`.
+func (c *OrganizationExecutionAttemptClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationExecutionAttempt = append(c.inters.OrganizationExecutionAttempt, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationExecutionAttempt entity.
+func (c *OrganizationExecutionAttemptClient) Create() *OrganizationExecutionAttemptCreate {
+	mutation := newOrganizationExecutionAttemptMutation(c.config, OpCreate)
+	return &OrganizationExecutionAttemptCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationExecutionAttempt entities.
+func (c *OrganizationExecutionAttemptClient) CreateBulk(builders ...*OrganizationExecutionAttemptCreate) *OrganizationExecutionAttemptCreateBulk {
+	return &OrganizationExecutionAttemptCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationExecutionAttemptClient) MapCreateBulk(slice any, setFunc func(*OrganizationExecutionAttemptCreate, int)) *OrganizationExecutionAttemptCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationExecutionAttemptCreateBulk{err: fmt.Errorf("calling to OrganizationExecutionAttemptClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationExecutionAttemptCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationExecutionAttemptCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationExecutionAttempt.
+func (c *OrganizationExecutionAttemptClient) Update() *OrganizationExecutionAttemptUpdate {
+	mutation := newOrganizationExecutionAttemptMutation(c.config, OpUpdate)
+	return &OrganizationExecutionAttemptUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationExecutionAttemptClient) UpdateOne(_m *OrganizationExecutionAttempt) *OrganizationExecutionAttemptUpdateOne {
+	mutation := newOrganizationExecutionAttemptMutation(c.config, OpUpdateOne, withOrganizationExecutionAttempt(_m))
+	return &OrganizationExecutionAttemptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationExecutionAttemptClient) UpdateOneID(id int64) *OrganizationExecutionAttemptUpdateOne {
+	mutation := newOrganizationExecutionAttemptMutation(c.config, OpUpdateOne, withOrganizationExecutionAttemptID(id))
+	return &OrganizationExecutionAttemptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationExecutionAttempt.
+func (c *OrganizationExecutionAttemptClient) Delete() *OrganizationExecutionAttemptDelete {
+	mutation := newOrganizationExecutionAttemptMutation(c.config, OpDelete)
+	return &OrganizationExecutionAttemptDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationExecutionAttemptClient) DeleteOne(_m *OrganizationExecutionAttempt) *OrganizationExecutionAttemptDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationExecutionAttemptClient) DeleteOneID(id int64) *OrganizationExecutionAttemptDeleteOne {
+	builder := c.Delete().Where(organizationexecutionattempt.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationExecutionAttemptDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationExecutionAttempt.
+func (c *OrganizationExecutionAttemptClient) Query() *OrganizationExecutionAttemptQuery {
+	return &OrganizationExecutionAttemptQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationExecutionAttempt},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationExecutionAttempt entity by its id.
+func (c *OrganizationExecutionAttemptClient) Get(ctx context.Context, id int64) (*OrganizationExecutionAttempt, error) {
+	return c.Query().Where(organizationexecutionattempt.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationExecutionAttemptClient) GetX(ctx context.Context, id int64) *OrganizationExecutionAttempt {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryExecutionRef queries the execution_ref edge of a OrganizationExecutionAttempt.
+func (c *OrganizationExecutionAttemptClient) QueryExecutionRef(_m *OrganizationExecutionAttempt) *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecutionattempt.Table, organizationexecutionattempt.FieldID, id),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationexecutionattempt.ExecutionRefTable, organizationexecutionattempt.ExecutionRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrganization queries the organization edge of a OrganizationExecutionAttempt.
+func (c *OrganizationExecutionAttemptClient) QueryOrganization(_m *OrganizationExecutionAttempt) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecutionattempt.Table, organizationexecutionattempt.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationexecutionattempt.OrganizationTable, organizationexecutionattempt.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAccountRef queries the account_ref edge of a OrganizationExecutionAttempt.
+func (c *OrganizationExecutionAttemptClient) QueryAccountRef(_m *OrganizationExecutionAttempt) *AccountQuery {
+	query := (&AccountClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecutionattempt.Table, organizationexecutionattempt.FieldID, id),
+			sqlgraph.To(account.Table, account.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, organizationexecutionattempt.AccountRefTable, organizationexecutionattempt.AccountRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryEvidence queries the evidence edge of a OrganizationExecutionAttempt.
+func (c *OrganizationExecutionAttemptClient) QueryEvidence(_m *OrganizationExecutionAttempt) *OrganizationAttemptEvidenceQuery {
+	query := (&OrganizationAttemptEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecutionattempt.Table, organizationexecutionattempt.FieldID, id),
+			sqlgraph.To(organizationattemptevidence.Table, organizationattemptevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organizationexecutionattempt.EvidenceTable, organizationexecutionattempt.EvidenceColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryFinalExecutionEvidence queries the final_execution_evidence edge of a OrganizationExecutionAttempt.
+func (c *OrganizationExecutionAttemptClient) QueryFinalExecutionEvidence(_m *OrganizationExecutionAttempt) *OrganizationFinalExecutionEvidenceQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecutionattempt.Table, organizationexecutionattempt.FieldID, id),
+			sqlgraph.To(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, organizationexecutionattempt.FinalExecutionEvidenceTable, organizationexecutionattempt.FinalExecutionEvidenceColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationExecutionAttemptClient) Hooks() []Hook {
+	return c.hooks.OrganizationExecutionAttempt
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationExecutionAttemptClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationExecutionAttempt
+}
+
+func (c *OrganizationExecutionAttemptClient) mutate(ctx context.Context, m *OrganizationExecutionAttemptMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationExecutionAttemptCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationExecutionAttemptUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationExecutionAttemptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationExecutionAttemptDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationExecutionAttempt mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationExecutionIncidentClient is a client for the OrganizationExecutionIncident schema.
+type OrganizationExecutionIncidentClient struct {
+	config
+}
+
+// NewOrganizationExecutionIncidentClient returns a client for the OrganizationExecutionIncident from the given config.
+func NewOrganizationExecutionIncidentClient(c config) *OrganizationExecutionIncidentClient {
+	return &OrganizationExecutionIncidentClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationexecutionincident.Hooks(f(g(h())))`.
+func (c *OrganizationExecutionIncidentClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationExecutionIncident = append(c.hooks.OrganizationExecutionIncident, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationexecutionincident.Intercept(f(g(h())))`.
+func (c *OrganizationExecutionIncidentClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationExecutionIncident = append(c.inters.OrganizationExecutionIncident, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationExecutionIncident entity.
+func (c *OrganizationExecutionIncidentClient) Create() *OrganizationExecutionIncidentCreate {
+	mutation := newOrganizationExecutionIncidentMutation(c.config, OpCreate)
+	return &OrganizationExecutionIncidentCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationExecutionIncident entities.
+func (c *OrganizationExecutionIncidentClient) CreateBulk(builders ...*OrganizationExecutionIncidentCreate) *OrganizationExecutionIncidentCreateBulk {
+	return &OrganizationExecutionIncidentCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationExecutionIncidentClient) MapCreateBulk(slice any, setFunc func(*OrganizationExecutionIncidentCreate, int)) *OrganizationExecutionIncidentCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationExecutionIncidentCreateBulk{err: fmt.Errorf("calling to OrganizationExecutionIncidentClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationExecutionIncidentCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationExecutionIncidentCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationExecutionIncident.
+func (c *OrganizationExecutionIncidentClient) Update() *OrganizationExecutionIncidentUpdate {
+	mutation := newOrganizationExecutionIncidentMutation(c.config, OpUpdate)
+	return &OrganizationExecutionIncidentUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationExecutionIncidentClient) UpdateOne(_m *OrganizationExecutionIncident) *OrganizationExecutionIncidentUpdateOne {
+	mutation := newOrganizationExecutionIncidentMutation(c.config, OpUpdateOne, withOrganizationExecutionIncident(_m))
+	return &OrganizationExecutionIncidentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationExecutionIncidentClient) UpdateOneID(id int64) *OrganizationExecutionIncidentUpdateOne {
+	mutation := newOrganizationExecutionIncidentMutation(c.config, OpUpdateOne, withOrganizationExecutionIncidentID(id))
+	return &OrganizationExecutionIncidentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationExecutionIncident.
+func (c *OrganizationExecutionIncidentClient) Delete() *OrganizationExecutionIncidentDelete {
+	mutation := newOrganizationExecutionIncidentMutation(c.config, OpDelete)
+	return &OrganizationExecutionIncidentDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationExecutionIncidentClient) DeleteOne(_m *OrganizationExecutionIncident) *OrganizationExecutionIncidentDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationExecutionIncidentClient) DeleteOneID(id int64) *OrganizationExecutionIncidentDeleteOne {
+	builder := c.Delete().Where(organizationexecutionincident.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationExecutionIncidentDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationExecutionIncident.
+func (c *OrganizationExecutionIncidentClient) Query() *OrganizationExecutionIncidentQuery {
+	return &OrganizationExecutionIncidentQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationExecutionIncident},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationExecutionIncident entity by its id.
+func (c *OrganizationExecutionIncidentClient) Get(ctx context.Context, id int64) (*OrganizationExecutionIncident, error) {
+	return c.Query().Where(organizationexecutionincident.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationExecutionIncidentClient) GetX(ctx context.Context, id int64) *OrganizationExecutionIncident {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationExecutionIncidentClient) Hooks() []Hook {
+	return c.hooks.OrganizationExecutionIncident
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationExecutionIncidentClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationExecutionIncident
+}
+
+func (c *OrganizationExecutionIncidentClient) mutate(ctx context.Context, m *OrganizationExecutionIncidentMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationExecutionIncidentCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationExecutionIncidentUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationExecutionIncidentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationExecutionIncidentDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationExecutionIncident mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationExecutionOutboxClient is a client for the OrganizationExecutionOutbox schema.
+type OrganizationExecutionOutboxClient struct {
+	config
+}
+
+// NewOrganizationExecutionOutboxClient returns a client for the OrganizationExecutionOutbox from the given config.
+func NewOrganizationExecutionOutboxClient(c config) *OrganizationExecutionOutboxClient {
+	return &OrganizationExecutionOutboxClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationexecutionoutbox.Hooks(f(g(h())))`.
+func (c *OrganizationExecutionOutboxClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationExecutionOutbox = append(c.hooks.OrganizationExecutionOutbox, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationexecutionoutbox.Intercept(f(g(h())))`.
+func (c *OrganizationExecutionOutboxClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationExecutionOutbox = append(c.inters.OrganizationExecutionOutbox, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationExecutionOutbox entity.
+func (c *OrganizationExecutionOutboxClient) Create() *OrganizationExecutionOutboxCreate {
+	mutation := newOrganizationExecutionOutboxMutation(c.config, OpCreate)
+	return &OrganizationExecutionOutboxCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationExecutionOutbox entities.
+func (c *OrganizationExecutionOutboxClient) CreateBulk(builders ...*OrganizationExecutionOutboxCreate) *OrganizationExecutionOutboxCreateBulk {
+	return &OrganizationExecutionOutboxCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationExecutionOutboxClient) MapCreateBulk(slice any, setFunc func(*OrganizationExecutionOutboxCreate, int)) *OrganizationExecutionOutboxCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationExecutionOutboxCreateBulk{err: fmt.Errorf("calling to OrganizationExecutionOutboxClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationExecutionOutboxCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationExecutionOutboxCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationExecutionOutbox.
+func (c *OrganizationExecutionOutboxClient) Update() *OrganizationExecutionOutboxUpdate {
+	mutation := newOrganizationExecutionOutboxMutation(c.config, OpUpdate)
+	return &OrganizationExecutionOutboxUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationExecutionOutboxClient) UpdateOne(_m *OrganizationExecutionOutbox) *OrganizationExecutionOutboxUpdateOne {
+	mutation := newOrganizationExecutionOutboxMutation(c.config, OpUpdateOne, withOrganizationExecutionOutbox(_m))
+	return &OrganizationExecutionOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationExecutionOutboxClient) UpdateOneID(id int64) *OrganizationExecutionOutboxUpdateOne {
+	mutation := newOrganizationExecutionOutboxMutation(c.config, OpUpdateOne, withOrganizationExecutionOutboxID(id))
+	return &OrganizationExecutionOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationExecutionOutbox.
+func (c *OrganizationExecutionOutboxClient) Delete() *OrganizationExecutionOutboxDelete {
+	mutation := newOrganizationExecutionOutboxMutation(c.config, OpDelete)
+	return &OrganizationExecutionOutboxDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationExecutionOutboxClient) DeleteOne(_m *OrganizationExecutionOutbox) *OrganizationExecutionOutboxDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationExecutionOutboxClient) DeleteOneID(id int64) *OrganizationExecutionOutboxDeleteOne {
+	builder := c.Delete().Where(organizationexecutionoutbox.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationExecutionOutboxDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationExecutionOutbox.
+func (c *OrganizationExecutionOutboxClient) Query() *OrganizationExecutionOutboxQuery {
+	return &OrganizationExecutionOutboxQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationExecutionOutbox},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationExecutionOutbox entity by its id.
+func (c *OrganizationExecutionOutboxClient) Get(ctx context.Context, id int64) (*OrganizationExecutionOutbox, error) {
+	return c.Query().Where(organizationexecutionoutbox.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationExecutionOutboxClient) GetX(ctx context.Context, id int64) *OrganizationExecutionOutbox {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryExecutionRef queries the execution_ref edge of a OrganizationExecutionOutbox.
+func (c *OrganizationExecutionOutboxClient) QueryExecutionRef(_m *OrganizationExecutionOutbox) *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecutionoutbox.Table, organizationexecutionoutbox.FieldID, id),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationexecutionoutbox.ExecutionRefTable, organizationexecutionoutbox.ExecutionRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryFinalEvidenceRef queries the final_evidence_ref edge of a OrganizationExecutionOutbox.
+func (c *OrganizationExecutionOutboxClient) QueryFinalEvidenceRef(_m *OrganizationExecutionOutbox) *OrganizationFinalExecutionEvidenceQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecutionoutbox.Table, organizationexecutionoutbox.FieldID, id),
+			sqlgraph.To(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationexecutionoutbox.FinalEvidenceRefTable, organizationexecutionoutbox.FinalEvidenceRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrganization queries the organization edge of a OrganizationExecutionOutbox.
+func (c *OrganizationExecutionOutboxClient) QueryOrganization(_m *OrganizationExecutionOutbox) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationexecutionoutbox.Table, organizationexecutionoutbox.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationexecutionoutbox.OrganizationTable, organizationexecutionoutbox.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationExecutionOutboxClient) Hooks() []Hook {
+	return c.hooks.OrganizationExecutionOutbox
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationExecutionOutboxClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationExecutionOutbox
+}
+
+func (c *OrganizationExecutionOutboxClient) mutate(ctx context.Context, m *OrganizationExecutionOutboxMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationExecutionOutboxCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationExecutionOutboxUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationExecutionOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationExecutionOutboxDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationExecutionOutbox mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationExecutionReconciliationAuditClient is a client for the OrganizationExecutionReconciliationAudit schema.
+type OrganizationExecutionReconciliationAuditClient struct {
+	config
+}
+
+// NewOrganizationExecutionReconciliationAuditClient returns a client for the OrganizationExecutionReconciliationAudit from the given config.
+func NewOrganizationExecutionReconciliationAuditClient(c config) *OrganizationExecutionReconciliationAuditClient {
+	return &OrganizationExecutionReconciliationAuditClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationexecutionreconciliationaudit.Hooks(f(g(h())))`.
+func (c *OrganizationExecutionReconciliationAuditClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationExecutionReconciliationAudit = append(c.hooks.OrganizationExecutionReconciliationAudit, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationexecutionreconciliationaudit.Intercept(f(g(h())))`.
+func (c *OrganizationExecutionReconciliationAuditClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationExecutionReconciliationAudit = append(c.inters.OrganizationExecutionReconciliationAudit, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationExecutionReconciliationAudit entity.
+func (c *OrganizationExecutionReconciliationAuditClient) Create() *OrganizationExecutionReconciliationAuditCreate {
+	mutation := newOrganizationExecutionReconciliationAuditMutation(c.config, OpCreate)
+	return &OrganizationExecutionReconciliationAuditCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationExecutionReconciliationAudit entities.
+func (c *OrganizationExecutionReconciliationAuditClient) CreateBulk(builders ...*OrganizationExecutionReconciliationAuditCreate) *OrganizationExecutionReconciliationAuditCreateBulk {
+	return &OrganizationExecutionReconciliationAuditCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationExecutionReconciliationAuditClient) MapCreateBulk(slice any, setFunc func(*OrganizationExecutionReconciliationAuditCreate, int)) *OrganizationExecutionReconciliationAuditCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationExecutionReconciliationAuditCreateBulk{err: fmt.Errorf("calling to OrganizationExecutionReconciliationAuditClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationExecutionReconciliationAuditCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationExecutionReconciliationAuditCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationExecutionReconciliationAudit.
+func (c *OrganizationExecutionReconciliationAuditClient) Update() *OrganizationExecutionReconciliationAuditUpdate {
+	mutation := newOrganizationExecutionReconciliationAuditMutation(c.config, OpUpdate)
+	return &OrganizationExecutionReconciliationAuditUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationExecutionReconciliationAuditClient) UpdateOne(_m *OrganizationExecutionReconciliationAudit) *OrganizationExecutionReconciliationAuditUpdateOne {
+	mutation := newOrganizationExecutionReconciliationAuditMutation(c.config, OpUpdateOne, withOrganizationExecutionReconciliationAudit(_m))
+	return &OrganizationExecutionReconciliationAuditUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationExecutionReconciliationAuditClient) UpdateOneID(id int64) *OrganizationExecutionReconciliationAuditUpdateOne {
+	mutation := newOrganizationExecutionReconciliationAuditMutation(c.config, OpUpdateOne, withOrganizationExecutionReconciliationAuditID(id))
+	return &OrganizationExecutionReconciliationAuditUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationExecutionReconciliationAudit.
+func (c *OrganizationExecutionReconciliationAuditClient) Delete() *OrganizationExecutionReconciliationAuditDelete {
+	mutation := newOrganizationExecutionReconciliationAuditMutation(c.config, OpDelete)
+	return &OrganizationExecutionReconciliationAuditDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationExecutionReconciliationAuditClient) DeleteOne(_m *OrganizationExecutionReconciliationAudit) *OrganizationExecutionReconciliationAuditDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationExecutionReconciliationAuditClient) DeleteOneID(id int64) *OrganizationExecutionReconciliationAuditDeleteOne {
+	builder := c.Delete().Where(organizationexecutionreconciliationaudit.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationExecutionReconciliationAuditDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationExecutionReconciliationAudit.
+func (c *OrganizationExecutionReconciliationAuditClient) Query() *OrganizationExecutionReconciliationAuditQuery {
+	return &OrganizationExecutionReconciliationAuditQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationExecutionReconciliationAudit},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationExecutionReconciliationAudit entity by its id.
+func (c *OrganizationExecutionReconciliationAuditClient) Get(ctx context.Context, id int64) (*OrganizationExecutionReconciliationAudit, error) {
+	return c.Query().Where(organizationexecutionreconciliationaudit.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationExecutionReconciliationAuditClient) GetX(ctx context.Context, id int64) *OrganizationExecutionReconciliationAudit {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationExecutionReconciliationAuditClient) Hooks() []Hook {
+	return c.hooks.OrganizationExecutionReconciliationAudit
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationExecutionReconciliationAuditClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationExecutionReconciliationAudit
+}
+
+func (c *OrganizationExecutionReconciliationAuditClient) mutate(ctx context.Context, m *OrganizationExecutionReconciliationAuditMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationExecutionReconciliationAuditCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationExecutionReconciliationAuditUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationExecutionReconciliationAuditUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationExecutionReconciliationAuditDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationExecutionReconciliationAudit mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationFinalExecutionEvidenceClient is a client for the OrganizationFinalExecutionEvidence schema.
+type OrganizationFinalExecutionEvidenceClient struct {
+	config
+}
+
+// NewOrganizationFinalExecutionEvidenceClient returns a client for the OrganizationFinalExecutionEvidence from the given config.
+func NewOrganizationFinalExecutionEvidenceClient(c config) *OrganizationFinalExecutionEvidenceClient {
+	return &OrganizationFinalExecutionEvidenceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationfinalexecutionevidence.Hooks(f(g(h())))`.
+func (c *OrganizationFinalExecutionEvidenceClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationFinalExecutionEvidence = append(c.hooks.OrganizationFinalExecutionEvidence, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationfinalexecutionevidence.Intercept(f(g(h())))`.
+func (c *OrganizationFinalExecutionEvidenceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationFinalExecutionEvidence = append(c.inters.OrganizationFinalExecutionEvidence, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationFinalExecutionEvidence entity.
+func (c *OrganizationFinalExecutionEvidenceClient) Create() *OrganizationFinalExecutionEvidenceCreate {
+	mutation := newOrganizationFinalExecutionEvidenceMutation(c.config, OpCreate)
+	return &OrganizationFinalExecutionEvidenceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationFinalExecutionEvidence entities.
+func (c *OrganizationFinalExecutionEvidenceClient) CreateBulk(builders ...*OrganizationFinalExecutionEvidenceCreate) *OrganizationFinalExecutionEvidenceCreateBulk {
+	return &OrganizationFinalExecutionEvidenceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationFinalExecutionEvidenceClient) MapCreateBulk(slice any, setFunc func(*OrganizationFinalExecutionEvidenceCreate, int)) *OrganizationFinalExecutionEvidenceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationFinalExecutionEvidenceCreateBulk{err: fmt.Errorf("calling to OrganizationFinalExecutionEvidenceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationFinalExecutionEvidenceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationFinalExecutionEvidenceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationFinalExecutionEvidence.
+func (c *OrganizationFinalExecutionEvidenceClient) Update() *OrganizationFinalExecutionEvidenceUpdate {
+	mutation := newOrganizationFinalExecutionEvidenceMutation(c.config, OpUpdate)
+	return &OrganizationFinalExecutionEvidenceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationFinalExecutionEvidenceClient) UpdateOne(_m *OrganizationFinalExecutionEvidence) *OrganizationFinalExecutionEvidenceUpdateOne {
+	mutation := newOrganizationFinalExecutionEvidenceMutation(c.config, OpUpdateOne, withOrganizationFinalExecutionEvidence(_m))
+	return &OrganizationFinalExecutionEvidenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationFinalExecutionEvidenceClient) UpdateOneID(id int64) *OrganizationFinalExecutionEvidenceUpdateOne {
+	mutation := newOrganizationFinalExecutionEvidenceMutation(c.config, OpUpdateOne, withOrganizationFinalExecutionEvidenceID(id))
+	return &OrganizationFinalExecutionEvidenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationFinalExecutionEvidence.
+func (c *OrganizationFinalExecutionEvidenceClient) Delete() *OrganizationFinalExecutionEvidenceDelete {
+	mutation := newOrganizationFinalExecutionEvidenceMutation(c.config, OpDelete)
+	return &OrganizationFinalExecutionEvidenceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationFinalExecutionEvidenceClient) DeleteOne(_m *OrganizationFinalExecutionEvidence) *OrganizationFinalExecutionEvidenceDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationFinalExecutionEvidenceClient) DeleteOneID(id int64) *OrganizationFinalExecutionEvidenceDeleteOne {
+	builder := c.Delete().Where(organizationfinalexecutionevidence.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationFinalExecutionEvidenceDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationFinalExecutionEvidence.
+func (c *OrganizationFinalExecutionEvidenceClient) Query() *OrganizationFinalExecutionEvidenceQuery {
+	return &OrganizationFinalExecutionEvidenceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationFinalExecutionEvidence},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationFinalExecutionEvidence entity by its id.
+func (c *OrganizationFinalExecutionEvidenceClient) Get(ctx context.Context, id int64) (*OrganizationFinalExecutionEvidence, error) {
+	return c.Query().Where(organizationfinalexecutionevidence.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationFinalExecutionEvidenceClient) GetX(ctx context.Context, id int64) *OrganizationFinalExecutionEvidence {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryExecutionRef queries the execution_ref edge of a OrganizationFinalExecutionEvidence.
+func (c *OrganizationFinalExecutionEvidenceClient) QueryExecutionRef(_m *OrganizationFinalExecutionEvidence) *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID, id),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, organizationfinalexecutionevidence.ExecutionRefTable, organizationfinalexecutionevidence.ExecutionRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrganization queries the organization edge of a OrganizationFinalExecutionEvidence.
+func (c *OrganizationFinalExecutionEvidenceClient) QueryOrganization(_m *OrganizationFinalExecutionEvidence) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationfinalexecutionevidence.OrganizationTable, organizationfinalexecutionevidence.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAllocationRef queries the allocation_ref edge of a OrganizationFinalExecutionEvidence.
+func (c *OrganizationFinalExecutionEvidenceClient) QueryAllocationRef(_m *OrganizationFinalExecutionEvidence) *OrganizationAllocationQuery {
+	query := (&OrganizationAllocationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID, id),
+			sqlgraph.To(organizationallocation.Table, organizationallocation.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationfinalexecutionevidence.AllocationRefTable, organizationfinalexecutionevidence.AllocationRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUserRef queries the user_ref edge of a OrganizationFinalExecutionEvidence.
+func (c *OrganizationFinalExecutionEvidenceClient) QueryUserRef(_m *OrganizationFinalExecutionEvidence) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationfinalexecutionevidence.UserRefTable, organizationfinalexecutionevidence.UserRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAPIKeyRef queries the api_key_ref edge of a OrganizationFinalExecutionEvidence.
+func (c *OrganizationFinalExecutionEvidenceClient) QueryAPIKeyRef(_m *OrganizationFinalExecutionEvidence) *APIKeyQuery {
+	query := (&APIKeyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID, id),
+			sqlgraph.To(apikey.Table, apikey.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationfinalexecutionevidence.APIKeyRefTable, organizationfinalexecutionevidence.APIKeyRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryFinalAttemptRef queries the final_attempt_ref edge of a OrganizationFinalExecutionEvidence.
+func (c *OrganizationFinalExecutionEvidenceClient) QueryFinalAttemptRef(_m *OrganizationFinalExecutionEvidence) *OrganizationExecutionAttemptQuery {
+	query := (&OrganizationExecutionAttemptClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID, id),
+			sqlgraph.To(organizationexecutionattempt.Table, organizationexecutionattempt.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, organizationfinalexecutionevidence.FinalAttemptRefTable, organizationfinalexecutionevidence.FinalAttemptRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryFinalAttemptEvidenceRef queries the final_attempt_evidence_ref edge of a OrganizationFinalExecutionEvidence.
+func (c *OrganizationFinalExecutionEvidenceClient) QueryFinalAttemptEvidenceRef(_m *OrganizationFinalExecutionEvidence) *OrganizationAttemptEvidenceQuery {
+	query := (&OrganizationAttemptEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID, id),
+			sqlgraph.To(organizationattemptevidence.Table, organizationattemptevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, organizationfinalexecutionevidence.FinalAttemptEvidenceRefTable, organizationfinalexecutionevidence.FinalAttemptEvidenceRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAccountRef queries the account_ref edge of a OrganizationFinalExecutionEvidence.
+func (c *OrganizationFinalExecutionEvidenceClient) QueryAccountRef(_m *OrganizationFinalExecutionEvidence) *AccountQuery {
+	query := (&AccountClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID, id),
+			sqlgraph.To(account.Table, account.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, organizationfinalexecutionevidence.AccountRefTable, organizationfinalexecutionevidence.AccountRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOutboxes queries the outboxes edge of a OrganizationFinalExecutionEvidence.
+func (c *OrganizationFinalExecutionEvidenceClient) QueryOutboxes(_m *OrganizationFinalExecutionEvidence) *OrganizationExecutionOutboxQuery {
+	query := (&OrganizationExecutionOutboxClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID, id),
+			sqlgraph.To(organizationexecutionoutbox.Table, organizationexecutionoutbox.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organizationfinalexecutionevidence.OutboxesTable, organizationfinalexecutionevidence.OutboxesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationFinalExecutionEvidenceClient) Hooks() []Hook {
+	return c.hooks.OrganizationFinalExecutionEvidence
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationFinalExecutionEvidenceClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationFinalExecutionEvidence
+}
+
+func (c *OrganizationFinalExecutionEvidenceClient) mutate(ctx context.Context, m *OrganizationFinalExecutionEvidenceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationFinalExecutionEvidenceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationFinalExecutionEvidenceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationFinalExecutionEvidenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationFinalExecutionEvidenceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationFinalExecutionEvidence mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationLedgerOperationClient is a client for the OrganizationLedgerOperation schema.
+type OrganizationLedgerOperationClient struct {
+	config
+}
+
+// NewOrganizationLedgerOperationClient returns a client for the OrganizationLedgerOperation from the given config.
+func NewOrganizationLedgerOperationClient(c config) *OrganizationLedgerOperationClient {
+	return &OrganizationLedgerOperationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationledgeroperation.Hooks(f(g(h())))`.
+func (c *OrganizationLedgerOperationClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationLedgerOperation = append(c.hooks.OrganizationLedgerOperation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationledgeroperation.Intercept(f(g(h())))`.
+func (c *OrganizationLedgerOperationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationLedgerOperation = append(c.inters.OrganizationLedgerOperation, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationLedgerOperation entity.
+func (c *OrganizationLedgerOperationClient) Create() *OrganizationLedgerOperationCreate {
+	mutation := newOrganizationLedgerOperationMutation(c.config, OpCreate)
+	return &OrganizationLedgerOperationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationLedgerOperation entities.
+func (c *OrganizationLedgerOperationClient) CreateBulk(builders ...*OrganizationLedgerOperationCreate) *OrganizationLedgerOperationCreateBulk {
+	return &OrganizationLedgerOperationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationLedgerOperationClient) MapCreateBulk(slice any, setFunc func(*OrganizationLedgerOperationCreate, int)) *OrganizationLedgerOperationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationLedgerOperationCreateBulk{err: fmt.Errorf("calling to OrganizationLedgerOperationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationLedgerOperationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationLedgerOperationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationLedgerOperation.
+func (c *OrganizationLedgerOperationClient) Update() *OrganizationLedgerOperationUpdate {
+	mutation := newOrganizationLedgerOperationMutation(c.config, OpUpdate)
+	return &OrganizationLedgerOperationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationLedgerOperationClient) UpdateOne(_m *OrganizationLedgerOperation) *OrganizationLedgerOperationUpdateOne {
+	mutation := newOrganizationLedgerOperationMutation(c.config, OpUpdateOne, withOrganizationLedgerOperation(_m))
+	return &OrganizationLedgerOperationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationLedgerOperationClient) UpdateOneID(id int64) *OrganizationLedgerOperationUpdateOne {
+	mutation := newOrganizationLedgerOperationMutation(c.config, OpUpdateOne, withOrganizationLedgerOperationID(id))
+	return &OrganizationLedgerOperationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationLedgerOperation.
+func (c *OrganizationLedgerOperationClient) Delete() *OrganizationLedgerOperationDelete {
+	mutation := newOrganizationLedgerOperationMutation(c.config, OpDelete)
+	return &OrganizationLedgerOperationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationLedgerOperationClient) DeleteOne(_m *OrganizationLedgerOperation) *OrganizationLedgerOperationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationLedgerOperationClient) DeleteOneID(id int64) *OrganizationLedgerOperationDeleteOne {
+	builder := c.Delete().Where(organizationledgeroperation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationLedgerOperationDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationLedgerOperation.
+func (c *OrganizationLedgerOperationClient) Query() *OrganizationLedgerOperationQuery {
+	return &OrganizationLedgerOperationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationLedgerOperation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationLedgerOperation entity by its id.
+func (c *OrganizationLedgerOperationClient) Get(ctx context.Context, id int64) (*OrganizationLedgerOperation, error) {
+	return c.Query().Where(organizationledgeroperation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationLedgerOperationClient) GetX(ctx context.Context, id int64) *OrganizationLedgerOperation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryOrganization queries the organization edge of a OrganizationLedgerOperation.
+func (c *OrganizationLedgerOperationClient) QueryOrganization(_m *OrganizationLedgerOperation) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationledgeroperation.Table, organizationledgeroperation.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationledgeroperation.OrganizationTable, organizationledgeroperation.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryActorRef queries the actor_ref edge of a OrganizationLedgerOperation.
+func (c *OrganizationLedgerOperationClient) QueryActorRef(_m *OrganizationLedgerOperation) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationledgeroperation.Table, organizationledgeroperation.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, organizationledgeroperation.ActorRefTable, organizationledgeroperation.ActorRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryActorExecutionRef queries the actor_execution_ref edge of a OrganizationLedgerOperation.
+func (c *OrganizationLedgerOperationClient) QueryActorExecutionRef(_m *OrganizationLedgerOperation) *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationledgeroperation.Table, organizationledgeroperation.FieldID, id),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, organizationledgeroperation.ActorExecutionRefTable, organizationledgeroperation.ActorExecutionRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryPostings queries the postings edge of a OrganizationLedgerOperation.
+func (c *OrganizationLedgerOperationClient) QueryPostings(_m *OrganizationLedgerOperation) *OrganizationLedgerPostingQuery {
+	query := (&OrganizationLedgerPostingClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationledgeroperation.Table, organizationledgeroperation.FieldID, id),
+			sqlgraph.To(organizationledgerposting.Table, organizationledgerposting.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organizationledgeroperation.PostingsTable, organizationledgeroperation.PostingsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationLedgerOperationClient) Hooks() []Hook {
+	return c.hooks.OrganizationLedgerOperation
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationLedgerOperationClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationLedgerOperation
+}
+
+func (c *OrganizationLedgerOperationClient) mutate(ctx context.Context, m *OrganizationLedgerOperationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationLedgerOperationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationLedgerOperationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationLedgerOperationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationLedgerOperationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationLedgerOperation mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationLedgerPostingClient is a client for the OrganizationLedgerPosting schema.
+type OrganizationLedgerPostingClient struct {
+	config
+}
+
+// NewOrganizationLedgerPostingClient returns a client for the OrganizationLedgerPosting from the given config.
+func NewOrganizationLedgerPostingClient(c config) *OrganizationLedgerPostingClient {
+	return &OrganizationLedgerPostingClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationledgerposting.Hooks(f(g(h())))`.
+func (c *OrganizationLedgerPostingClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationLedgerPosting = append(c.hooks.OrganizationLedgerPosting, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationledgerposting.Intercept(f(g(h())))`.
+func (c *OrganizationLedgerPostingClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationLedgerPosting = append(c.inters.OrganizationLedgerPosting, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationLedgerPosting entity.
+func (c *OrganizationLedgerPostingClient) Create() *OrganizationLedgerPostingCreate {
+	mutation := newOrganizationLedgerPostingMutation(c.config, OpCreate)
+	return &OrganizationLedgerPostingCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationLedgerPosting entities.
+func (c *OrganizationLedgerPostingClient) CreateBulk(builders ...*OrganizationLedgerPostingCreate) *OrganizationLedgerPostingCreateBulk {
+	return &OrganizationLedgerPostingCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationLedgerPostingClient) MapCreateBulk(slice any, setFunc func(*OrganizationLedgerPostingCreate, int)) *OrganizationLedgerPostingCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationLedgerPostingCreateBulk{err: fmt.Errorf("calling to OrganizationLedgerPostingClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationLedgerPostingCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationLedgerPostingCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationLedgerPosting.
+func (c *OrganizationLedgerPostingClient) Update() *OrganizationLedgerPostingUpdate {
+	mutation := newOrganizationLedgerPostingMutation(c.config, OpUpdate)
+	return &OrganizationLedgerPostingUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationLedgerPostingClient) UpdateOne(_m *OrganizationLedgerPosting) *OrganizationLedgerPostingUpdateOne {
+	mutation := newOrganizationLedgerPostingMutation(c.config, OpUpdateOne, withOrganizationLedgerPosting(_m))
+	return &OrganizationLedgerPostingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationLedgerPostingClient) UpdateOneID(id int64) *OrganizationLedgerPostingUpdateOne {
+	mutation := newOrganizationLedgerPostingMutation(c.config, OpUpdateOne, withOrganizationLedgerPostingID(id))
+	return &OrganizationLedgerPostingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationLedgerPosting.
+func (c *OrganizationLedgerPostingClient) Delete() *OrganizationLedgerPostingDelete {
+	mutation := newOrganizationLedgerPostingMutation(c.config, OpDelete)
+	return &OrganizationLedgerPostingDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationLedgerPostingClient) DeleteOne(_m *OrganizationLedgerPosting) *OrganizationLedgerPostingDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationLedgerPostingClient) DeleteOneID(id int64) *OrganizationLedgerPostingDeleteOne {
+	builder := c.Delete().Where(organizationledgerposting.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationLedgerPostingDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationLedgerPosting.
+func (c *OrganizationLedgerPostingClient) Query() *OrganizationLedgerPostingQuery {
+	return &OrganizationLedgerPostingQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationLedgerPosting},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationLedgerPosting entity by its id.
+func (c *OrganizationLedgerPostingClient) Get(ctx context.Context, id int64) (*OrganizationLedgerPosting, error) {
+	return c.Query().Where(organizationledgerposting.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationLedgerPostingClient) GetX(ctx context.Context, id int64) *OrganizationLedgerPosting {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryOperation queries the operation edge of a OrganizationLedgerPosting.
+func (c *OrganizationLedgerPostingClient) QueryOperation(_m *OrganizationLedgerPosting) *OrganizationLedgerOperationQuery {
+	query := (&OrganizationLedgerOperationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationledgerposting.Table, organizationledgerposting.FieldID, id),
+			sqlgraph.To(organizationledgeroperation.Table, organizationledgeroperation.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationledgerposting.OperationTable, organizationledgerposting.OperationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrganization queries the organization edge of a OrganizationLedgerPosting.
+func (c *OrganizationLedgerPostingClient) QueryOrganization(_m *OrganizationLedgerPosting) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationledgerposting.Table, organizationledgerposting.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationledgerposting.OrganizationTable, organizationledgerposting.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAllocationRef queries the allocation_ref edge of a OrganizationLedgerPosting.
+func (c *OrganizationLedgerPostingClient) QueryAllocationRef(_m *OrganizationLedgerPosting) *OrganizationAllocationQuery {
+	query := (&OrganizationAllocationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationledgerposting.Table, organizationledgerposting.FieldID, id),
+			sqlgraph.To(organizationallocation.Table, organizationallocation.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, organizationledgerposting.AllocationRefTable, organizationledgerposting.AllocationRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryTargetUserRef queries the target_user_ref edge of a OrganizationLedgerPosting.
+func (c *OrganizationLedgerPostingClient) QueryTargetUserRef(_m *OrganizationLedgerPosting) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationledgerposting.Table, organizationledgerposting.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, organizationledgerposting.TargetUserRefTable, organizationledgerposting.TargetUserRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryExecutionRef queries the execution_ref edge of a OrganizationLedgerPosting.
+func (c *OrganizationLedgerPostingClient) QueryExecutionRef(_m *OrganizationLedgerPosting) *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationledgerposting.Table, organizationledgerposting.FieldID, id),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, organizationledgerposting.ExecutionRefTable, organizationledgerposting.ExecutionRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryFinalEvidenceRef queries the final_evidence_ref edge of a OrganizationLedgerPosting.
+func (c *OrganizationLedgerPostingClient) QueryFinalEvidenceRef(_m *OrganizationLedgerPosting) *OrganizationFinalExecutionEvidenceQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationledgerposting.Table, organizationledgerposting.FieldID, id),
+			sqlgraph.To(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, organizationledgerposting.FinalEvidenceRefTable, organizationledgerposting.FinalEvidenceRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationLedgerPostingClient) Hooks() []Hook {
+	return c.hooks.OrganizationLedgerPosting
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationLedgerPostingClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationLedgerPosting
+}
+
+func (c *OrganizationLedgerPostingClient) mutate(ctx context.Context, m *OrganizationLedgerPostingMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationLedgerPostingCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationLedgerPostingUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationLedgerPostingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationLedgerPostingDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationLedgerPosting mutation op: %q", m.Op())
+	}
+}
+
+// OrganizationReservationClient is a client for the OrganizationReservation schema.
+type OrganizationReservationClient struct {
+	config
+}
+
+// NewOrganizationReservationClient returns a client for the OrganizationReservation from the given config.
+func NewOrganizationReservationClient(c config) *OrganizationReservationClient {
+	return &OrganizationReservationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organizationreservation.Hooks(f(g(h())))`.
+func (c *OrganizationReservationClient) Use(hooks ...Hook) {
+	c.hooks.OrganizationReservation = append(c.hooks.OrganizationReservation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organizationreservation.Intercept(f(g(h())))`.
+func (c *OrganizationReservationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OrganizationReservation = append(c.inters.OrganizationReservation, interceptors...)
+}
+
+// Create returns a builder for creating a OrganizationReservation entity.
+func (c *OrganizationReservationClient) Create() *OrganizationReservationCreate {
+	mutation := newOrganizationReservationMutation(c.config, OpCreate)
+	return &OrganizationReservationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OrganizationReservation entities.
+func (c *OrganizationReservationClient) CreateBulk(builders ...*OrganizationReservationCreate) *OrganizationReservationCreateBulk {
+	return &OrganizationReservationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationReservationClient) MapCreateBulk(slice any, setFunc func(*OrganizationReservationCreate, int)) *OrganizationReservationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationReservationCreateBulk{err: fmt.Errorf("calling to OrganizationReservationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationReservationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationReservationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OrganizationReservation.
+func (c *OrganizationReservationClient) Update() *OrganizationReservationUpdate {
+	mutation := newOrganizationReservationMutation(c.config, OpUpdate)
+	return &OrganizationReservationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationReservationClient) UpdateOne(_m *OrganizationReservation) *OrganizationReservationUpdateOne {
+	mutation := newOrganizationReservationMutation(c.config, OpUpdateOne, withOrganizationReservation(_m))
+	return &OrganizationReservationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationReservationClient) UpdateOneID(id int64) *OrganizationReservationUpdateOne {
+	mutation := newOrganizationReservationMutation(c.config, OpUpdateOne, withOrganizationReservationID(id))
+	return &OrganizationReservationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OrganizationReservation.
+func (c *OrganizationReservationClient) Delete() *OrganizationReservationDelete {
+	mutation := newOrganizationReservationMutation(c.config, OpDelete)
+	return &OrganizationReservationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationReservationClient) DeleteOne(_m *OrganizationReservation) *OrganizationReservationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationReservationClient) DeleteOneID(id int64) *OrganizationReservationDeleteOne {
+	builder := c.Delete().Where(organizationreservation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationReservationDeleteOne{builder}
+}
+
+// Query returns a query builder for OrganizationReservation.
+func (c *OrganizationReservationClient) Query() *OrganizationReservationQuery {
+	return &OrganizationReservationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganizationReservation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OrganizationReservation entity by its id.
+func (c *OrganizationReservationClient) Get(ctx context.Context, id int64) (*OrganizationReservation, error) {
+	return c.Query().Where(organizationreservation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationReservationClient) GetX(ctx context.Context, id int64) *OrganizationReservation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryExecutionRef queries the execution_ref edge of a OrganizationReservation.
+func (c *OrganizationReservationClient) QueryExecutionRef(_m *OrganizationReservation) *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationreservation.Table, organizationreservation.FieldID, id),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, organizationreservation.ExecutionRefTable, organizationreservation.ExecutionRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrganization queries the organization edge of a OrganizationReservation.
+func (c *OrganizationReservationClient) QueryOrganization(_m *OrganizationReservation) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationreservation.Table, organizationreservation.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationreservation.OrganizationTable, organizationreservation.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAllocationRef queries the allocation_ref edge of a OrganizationReservation.
+func (c *OrganizationReservationClient) QueryAllocationRef(_m *OrganizationReservation) *OrganizationAllocationQuery {
+	query := (&OrganizationAllocationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organizationreservation.Table, organizationreservation.FieldID, id),
+			sqlgraph.To(organizationallocation.Table, organizationallocation.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, organizationreservation.AllocationRefTable, organizationreservation.AllocationRefColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationReservationClient) Hooks() []Hook {
+	return c.hooks.OrganizationReservation
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationReservationClient) Interceptors() []Interceptor {
+	return c.inters.OrganizationReservation
+}
+
+func (c *OrganizationReservationClient) mutate(ctx context.Context, m *OrganizationReservationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationReservationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationReservationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationReservationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationReservationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OrganizationReservation mutation op: %q", m.Op())
 	}
 }
 
@@ -5381,6 +8377,70 @@ func (c *UserClient) QueryPlatformQuotas(_m *User) *UserPlatformQuotaQuery {
 	return query
 }
 
+// QueryOrganization queries the organization edge of a User.
+func (c *UserClient) QueryOrganization(_m *User) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, user.OrganizationTable, user.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrganizationAllocations queries the organization_allocations edge of a User.
+func (c *UserClient) QueryOrganizationAllocations(_m *User) *OrganizationAllocationQuery {
+	query := (&OrganizationAllocationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(organizationallocation.Table, organizationallocation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.OrganizationAllocationsTable, user.OrganizationAllocationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrganizationExecutions queries the organization_executions edge of a User.
+func (c *UserClient) QueryOrganizationExecutions(_m *User) *OrganizationExecutionQuery {
+	query := (&OrganizationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(organizationexecution.Table, organizationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.OrganizationExecutionsTable, user.OrganizationExecutionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrganizationFinalExecutionEvidences queries the organization_final_execution_evidences edge of a User.
+func (c *UserClient) QueryOrganizationFinalExecutionEvidences(_m *User) *OrganizationFinalExecutionEvidenceQuery {
+	query := (&OrganizationFinalExecutionEvidenceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(organizationfinalexecutionevidence.Table, organizationfinalexecutionevidence.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.OrganizationFinalExecutionEvidencesTable, user.OrganizationFinalExecutionEvidencesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups queries the user_allowed_groups edge of a User.
 func (c *UserClient) QueryUserAllowedGroups(_m *User) *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: c.config}).Query()
@@ -6212,23 +9272,35 @@ type (
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
-		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Hook
+		Group, IdempotencyRecord, IdentityAdoptionDecision, Organization,
+		OrganizationAllocation, OrganizationAttemptAccountEffect,
+		OrganizationAttemptAccountPosting, OrganizationAttemptEvidence,
+		OrganizationExecution, OrganizationExecutionAttempt,
+		OrganizationExecutionIncident, OrganizationExecutionOutbox,
+		OrganizationExecutionReconciliationAudit, OrganizationFinalExecutionEvidence,
+		OrganizationLedgerOperation, OrganizationLedgerPosting,
+		OrganizationReservation, PaymentAuditLog, PaymentOrder,
+		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
+		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
-		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Interceptor
+		Group, IdempotencyRecord, IdentityAdoptionDecision, Organization,
+		OrganizationAllocation, OrganizationAttemptAccountEffect,
+		OrganizationAttemptAccountPosting, OrganizationAttemptEvidence,
+		OrganizationExecution, OrganizationExecutionAttempt,
+		OrganizationExecutionIncident, OrganizationExecutionOutbox,
+		OrganizationExecutionReconciliationAudit, OrganizationFinalExecutionEvidence,
+		OrganizationLedgerOperation, OrganizationLedgerPosting,
+		OrganizationReservation, PaymentAuditLog, PaymentOrder,
+		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
+		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 

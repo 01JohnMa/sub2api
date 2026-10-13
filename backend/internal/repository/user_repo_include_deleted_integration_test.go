@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
@@ -19,7 +20,7 @@ func TestUserRepo_ListWithFilters_IncludeDeleted(t *testing.T) {
 
 	active := mustCreateUser(t, client, &service.User{Email: "shared-keyword-active@test.com"})
 	deleted := mustCreateUser(t, client, &service.User{Email: "shared-keyword-deleted@test.com"})
-	require.NoError(t, client.User.DeleteOneID(deleted.ID).Exec(ctx))
+	require.NoError(t, client.User.DeleteOneID(deleted.ID).Exec(mixins.AuthorizeUserDeletion(ctx)))
 
 	params := pagination.PaginationParams{Page: 1, PageSize: 50, SortBy: "email", SortOrder: "asc"}
 
@@ -55,7 +56,7 @@ func TestUserRepo_GetByIDIncludeDeleted(t *testing.T) {
 	repo := NewUserRepository(client, integrationDB)
 
 	u := mustCreateUser(t, client, &service.User{Email: "getbyid-deleted@test.com"})
-	require.NoError(t, client.User.DeleteOneID(u.ID).Exec(ctx))
+	require.NoError(t, client.User.DeleteOneID(u.ID).Exec(mixins.AuthorizeUserDeletion(ctx)))
 
 	// 默认 GetByID：找不到（被软删过滤）。
 	_, err := repo.GetByID(ctx, u.ID)

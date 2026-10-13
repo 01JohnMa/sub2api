@@ -84,7 +84,7 @@ type UpdateProfileRequest struct {
 }
 
 type userProfileResponse struct {
-	dto.User
+	dto.AuthenticatedUser
 	AvatarURL         string                                 `json:"avatar_url,omitempty"`
 	AvatarSource      *userProfileSourceContext              `json:"avatar_source,omitempty"`
 	UsernameSource    *userProfileSourceContext              `json:"username_source,omitempty"`
@@ -535,18 +535,18 @@ func (h *UserHandler) buildUserProfileResponse(ctx context.Context, userID int64
 	if err != nil {
 		return userProfileResponse{}, err
 	}
-	return userProfileResponseFromService(user, identities), nil
+	return userProfileResponseFromService(user, identities, true), nil
 }
 
-func userProfileResponseFromService(user *service.User, identities service.UserIdentitySummarySet) userProfileResponse {
-	base := dto.UserFromService(user)
+func userProfileResponseFromService(user *service.User, identities service.UserIdentitySummarySet, includePersonal bool) userProfileResponse {
+	base := dto.AuthenticatedUserFromService(user, includePersonal)
 	if base == nil {
 		return userProfileResponse{}
 	}
 	bindings := userProfileBindingMap(identities)
 	profileSources, avatarSource, usernameSource := inferUserProfileSources(user, identities)
 	return userProfileResponse{
-		User:              *base,
+		AuthenticatedUser: *base,
 		AvatarURL:         user.AvatarURL,
 		AvatarSource:      avatarSource,
 		UsernameSource:    usernameSource,

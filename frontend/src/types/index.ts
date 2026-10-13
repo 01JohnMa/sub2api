@@ -572,6 +572,169 @@ export interface OrganizationBalanceSummary {
   balance_version: number
 }
 
+export interface OrganizationArchivePreview {
+  organization_id: number
+  status: OrganizationStatus
+  unallocated: string
+  balance_version: number
+  updated_at: string
+}
+
+export interface ArchiveOrganizationRequest {
+  balance_version: number
+  updated_at: string
+  confirm_archive: boolean
+}
+
+export type OrganizationPendingReconciliationResolution = 'settled' | 'released'
+
+export interface OrganizationPendingReconciliationEvidence {
+  attempt_id: string
+  attempt_sequence: number
+  evidence_source: string
+  terminal_outcome: 'success' | 'error' | 'unknown'
+  raw_actual_cost: string
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  provider_observed_at: string
+}
+
+export interface OrganizationPendingReconciliationAttempt {
+  attempt_id: string
+  attempt_sequence: number
+  status: string
+}
+
+export interface OrganizationPendingReconciliation {
+  execution_id: string
+  organization_id: number
+  allocation_id: number
+  reservation_id: number
+  candidate_ceiling: string
+  reserved_amount: string
+  accepted_at: string
+  attempt_count: number
+  attempts: OrganizationPendingReconciliationAttempt[]
+  evidence: OrganizationPendingReconciliationEvidence[]
+  allowed_resolution?: OrganizationPendingReconciliationResolution
+  computed_organization_amount?: string
+  conflict: boolean
+}
+
+export interface OrganizationPendingReconciliationResult {
+  execution_id: string
+  organization_id: number
+  reservation_id: number
+  reservation_state: OrganizationPendingReconciliationResolution
+  terminal_outcome: 'success' | 'error'
+  organization_settled_cost: string
+  occurred_at: string
+  reconciled_at?: string
+  replayed: boolean
+}
+
+export interface OrganizationPendingReconciliationSummary {
+  count: number
+  status: 'clear' | 'pending'
+}
+
+export interface OrganizationReportModel {
+  model: string
+  request_count: number
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  cost: string
+}
+
+export interface OrganizationReportTrend {
+  occurred_on: string
+  request_count: number
+  success_count: number
+  error_count_total: number
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  cost: string
+}
+
+export interface OrganizationReport {
+  organization_id: number
+  start: string
+  end: string
+  current_member_count: number
+  active_member_count: number
+  api_key_count: number
+  request_count_total: number
+  success_count: number
+  error_count_total: number
+  business_limited_count: number
+  error_count_sla: number
+  success_rate: number
+  error_rate: number
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  cost: string
+  models: OrganizationReportModel[]
+  trends: OrganizationReportTrend[]
+}
+
+export interface OrganizationPublicLedgerEntry {
+	entry_key: string
+	operation_type: string
+  public_reason: string | null
+  actor_display: string
+  bucket_type: string
+  before_amount: string
+  delta_amount: string
+  after_amount: string
+  occurred_at: string
+}
+
+export interface OrganizationReportMemberUsage {
+  user_id?: number
+  display_name: string
+  request_count: number
+  success_count: number
+  error_count_total: number
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  cost: string
+}
+
+export interface OrganizationReportMembersResponse {
+  items: OrganizationReportMemberUsage[]
+  departed: OrganizationReportMemberUsage
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
+// Current-organization key metadata intentionally excludes the raw key, ACLs,
+// credentials, rate windows, and all mutation controls.
+export interface OrganizationAPIKeyMetadata {
+  id: number
+  name: string
+  status: string
+  user_id: number
+  member_name: string
+  organization_id: number
+  created_at: string
+  last_used_at?: string | null
+  expires_at?: string | null
+  quota: number
+  quota_used: number
+}
+
 export interface OrganizationLedgerEntry {
   posting_id: number
   posting_sequence: number

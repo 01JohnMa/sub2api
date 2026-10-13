@@ -578,6 +578,7 @@ type UpstreamFailoverError struct {
 	ResponseBody           []byte      // 上游响应体，用于错误透传规则匹配
 	ResponseHeaders        http.Header // 上游响应头，用于透传 cf-ray/cf-mitigated/content-type 等诊断信息
 	NoHTTPResponse         bool        // transport-level failure; no provider HTTP response or usage proof exists
+	ZeroCostProven         bool        // provider response proves no billable usage occurred
 	ForceCacheBilling      bool        // Antigravity 粘性会话切换时设为 true
 	RetryableOnSameAccount bool        // 临时性错误（如 Google 间歇性 400、空响应），应在同一账号上重试 N 次再切换
 }
@@ -4484,17 +4485,43 @@ func (s *GatewayService) shouldInjectAnthropicCacheTTL1h(ctx context.Context, ac
 
 // Forward 转发请求到Claude API
 func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (*ForwardResult, error) {
+	return s.forward(ctx, c, account, parsed, false)
+}
+
+// ForwardOrganizationMessagesAttempt performs at most one provider HTTP
+// request. Organization billing deliberately excludes routes with their own
+// multi-request pipelines before reaching this method.
+func (s *GatewayService) ForwardOrganizationMessagesAttempt(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (*ForwardResult, error) {
+	return s.forward(ctx, c, account, parsed, true)
+}
+
+func (s *GatewayService) forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest, organizationAttempt bool) (*ForwardResult, error) {
 	startTime := time.Now()
+	preDispatchError := func(message string, err error) error {
+		if organizationAttempt {
+			return organizationGatewayChatLocalPreDispatchError(message, err)
+		}
+		return err
+	}
 	if parsed == nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("parse request: empty request", nil)
+		}
 		return nil, fmt.Errorf("parse request: empty request")
 	}
 
 	// Web Search 模拟：纯 web_search 请求时，直接调用搜索 API 构造响应
 	if account != nil && s.shouldEmulateWebSearch(ctx, account, parsed.GroupID, parsed.Body.Bytes()) {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("web search emulation is not supported for organization Messages", nil)
+		}
 		return s.handleWebSearchEmulation(ctx, c, account, parsed)
 	}
 
 	if account != nil && account.IsAnthropicAPIKeyPassthroughEnabled() {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("anthropic API key passthrough is not supported for organization Messages", nil)
+		}
 		passthroughBody := parsed.Body.Bytes()
 		passthroughModel := parsed.Model
 		if passthroughModel != "" {
@@ -4515,6 +4542,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	}
 
 	if account != nil && account.IsBedrock() {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("Bedrock is not supported for organization Messages", nil)
+		}
 		return s.forwardBedrock(ctx, c, account, parsed, startTime)
 	}
 
@@ -4523,6 +4553,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	if account.Platform == PlatformAnthropic && c != nil {
 		policy := s.evaluateBetaPolicy(ctx, c.GetHeader("anthropic-beta"), account, parsed.Model)
 		if policy.blockErr != nil {
+			if organizationAttempt {
+				return nil, organizationGatewayChatLocalPreDispatchError(policy.blockErr.Error(), policy.blockErr)
+			}
 			return nil, policy.blockErr
 		}
 		filterSet := policy.filterSet
@@ -4574,7 +4607,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		if !strings.Contains(strings.ToLower(reqModel), "haiku") {
 			systemRaw, _ := parsed.SystemValue()
 			if err := replaceBody(rewriteSystemForNonClaudeCode(body, systemRaw)); err != nil {
-				return nil, err
+				return nil, preDispatchError("failed to rewrite organization Messages system body", err)
 			}
 			systemRewritten = true
 		}
@@ -4600,30 +4633,30 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		var normalizedBody []byte
 		normalizedBody, reqModel = normalizeClaudeOAuthRequestBody(body, reqModel, normalizeOpts)
 		if err := replaceBody(normalizedBody); err != nil {
-			return nil, err
+			return nil, preDispatchError("failed to normalize organization Messages body", err)
 		}
 
 		// D/E/F: 可选 messages cache 策略 + 工具名混淆 + tools[-1] 断点
 		// 与 forward_as_chat_completions / forward_as_responses 路径对齐，
 		// 原生 /v1/messages 路径也走同一套可配置字段级改写。
 		if err := replaceBody(s.rewriteMessageCacheControlIfEnabled(ctx, body)); err != nil {
-			return nil, err
+			return nil, preDispatchError("failed to rewrite organization Messages cache control", err)
 		}
 		if rw := buildToolNameRewriteFromBody(body); rw != nil {
 			if err := replaceBody(applyToolNameRewriteToBody(body, rw)); err != nil {
-				return nil, err
+				return nil, preDispatchError("failed to rewrite organization Messages tool names", err)
 			}
 			c.Set(toolNameRewriteKey, rw)
 		} else {
 			if err := replaceBody(applyToolsLastCacheBreakpoint(body)); err != nil {
-				return nil, err
+				return nil, preDispatchError("failed to apply organization Messages cache breakpoint", err)
 			}
 		}
 	}
 
 	// 强制执行 cache_control 块数量限制（最多 4 个）
 	if err := replaceBody(enforceCacheControlLimit(body)); err != nil {
-		return nil, err
+		return nil, preDispatchError("failed to enforce organization Messages cache control limit", err)
 	}
 
 	// 应用模型映射：
@@ -4659,7 +4692,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	if mappedModel != reqModel {
 		// 替换请求体中的模型名
 		if err := replaceBody(s.replaceModelInBody(body, mappedModel)); err != nil {
-			return nil, err
+			return nil, preDispatchError("failed to map organization Messages model", err)
 		}
 		reqModel = mappedModel
 		parsed.Model = mappedModel
@@ -4668,13 +4701,16 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 	if s.shouldInjectAnthropicCacheTTL1h(ctx, account) {
 		if err := replaceBody(injectAnthropicCacheControlTTL1h(body)); err != nil {
-			return nil, err
+			return nil, preDispatchError("failed to inject organization Messages cache TTL", err)
 		}
 	}
 
 	// 获取凭证
 	token, tokenType, err := s.GetAccessToken(ctx, account)
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to acquire upstream access token", err)
+		}
 		return nil, err
 	}
 
@@ -4694,19 +4730,26 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		account.ID, account.Name, account.Platform, account.Type, tlsProfile, proxyURL)
 	// Pre-filter: strip empty text blocks (including nested in tool_result) to prevent upstream 400.
 	if err := replaceBody(StripEmptyTextBlocks(body)); err != nil {
-		return nil, err
+		return nil, preDispatchError("failed to strip empty organization Messages text blocks", err)
 	}
 
 	// 重试循环
 	var resp *http.Response
 	lastWireBody := body
 	retryStart := time.Now()
-	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
+	retryLimit := maxRetryAttempts
+	if organizationAttempt {
+		retryLimit = 1
+	}
+	for attempt := 1; attempt <= retryLimit; attempt++ {
 		// 构建上游请求（每次重试需要重新构建，因为请求体需要重新读取）
 		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
 		upstreamReq, wireBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, body, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 		releaseUpstreamCtx()
 		if err != nil {
+			if organizationAttempt {
+				return nil, organizationGatewayChatLocalPreDispatchError("failed to construct upstream request", err)
+			}
 			return nil, err
 		}
 		// 记录本次实际发送的 wire body；只有请求成功后才写回 ParsedRequest，避免 400 retry 基于已签名 CCH 再改写。
@@ -4718,7 +4761,6 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
 			}
-			// Ensure the client receives an error response (handlers assume Forward writes on non-failover errors).
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
 			setOpsUpstreamError(c, 0, safeErr, "")
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -4730,6 +4772,10 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 				Kind:               "request_error",
 				Message:            safeErr,
 			})
+			if organizationAttempt {
+				return nil, &UpstreamFailoverError{NoHTTPResponse: true}
+			}
+			// Ensure the client receives an error response (handlers assume Forward writes on non-failover errors).
 			c.JSON(http.StatusBadGateway, gin.H{
 				"type": "error",
 				"error": gin.H{
@@ -4741,7 +4787,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 
 		// 优先检测thinking block签名错误（400）并重试一次
-		if resp.StatusCode == 400 {
+		if resp.StatusCode == 400 && !organizationAttempt {
 			respBody, readErr := s.readUpstreamErrorBody(resp)
 			if readErr == nil {
 				_ = resp.Body.Close()
@@ -4940,7 +4986,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 		// 检查是否需要通用重试（排除400，因为400已经在上面特殊处理过了）
 		if resp.StatusCode >= 400 && resp.StatusCode != 400 && s.shouldRetryUpstreamError(account, resp.StatusCode) {
-			if attempt < maxRetryAttempts {
+			if attempt < retryLimit {
 				elapsed := time.Since(retryStart)
 				if elapsed >= maxRetryElapsed {
 					break
@@ -4974,7 +5020,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					}(),
 				})
 				logger.LegacyPrintf("service.gateway", "Account %d: upstream error %d, retry %d/%d after %v (elapsed=%v/%v)",
-					account.ID, resp.StatusCode, attempt, maxRetryAttempts, delay, elapsed, maxRetryElapsed)
+					account.ID, resp.StatusCode, attempt, retryLimit, delay, elapsed, maxRetryElapsed)
 				if err := sleepWithContext(ctx, delay); err != nil {
 					return nil, err
 				}
@@ -9167,6 +9213,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		UserID:                user.ID,
 		APIKeyID:              apiKey.ID,
 		AccountID:             account.ID,
+		OrganizationID:        OrganizationReportingIDFromContext(ctx),
 		RequestID:             requestID,
 		Model:                 result.Model,
 		RequestedModel:        requestedModel,
@@ -9355,7 +9402,7 @@ func (s *GatewayService) isStickyAccountUpstreamRestricted(ctx context.Context, 
 func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) error {
 	if parsed == nil {
 		s.countTokensError(c, http.StatusBadRequest, "invalid_request_error", "Request body is empty")
-		return fmt.Errorf("parse request: empty request")
+		return organizationCountTokensPreDispatchError(ctx, fmt.Errorf("parse request: empty request"))
 	}
 
 	if account != nil && account.IsAnthropicAPIKeyPassthroughEnabled() {
@@ -9378,7 +9425,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 	body := parsed.Body.Bytes()
 	replaceBody := func(next []byte) error {
 		if err := parsed.ReplaceBody(next); err != nil {
-			return fmt.Errorf("rewrite count_tokens body: %w", err)
+			return organizationCountTokensPreDispatchError(ctx, fmt.Errorf("rewrite count_tokens body: %w", err))
 		}
 		body = parsed.Body.Bytes()
 		return nil
@@ -9456,14 +9503,17 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 	token, tokenType, err := s.GetAccessToken(ctx, account)
 	if err != nil {
 		s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Failed to get access token")
-		return err
+		return organizationCountTokensPreDispatchError(ctx, err)
 	}
 
 	// 构建上游请求
 	upstreamReq, wireBody, err := s.buildCountTokensRequest(ctx, c, account, body, token, tokenType, reqModel, shouldMimicClaudeCode)
 	if err != nil {
 		s.countTokensError(c, http.StatusInternalServerError, "api_error", "Failed to build request")
-		return err
+		return organizationCountTokensPreDispatchError(ctx, err)
+	}
+	if providerRequestID := organizationNonBillableProviderRequestID(ctx); providerRequestID != "" {
+		upstreamReq.Header.Set("X-Client-Request-ID", providerRequestID)
 	}
 	// 先记录首发 wire body；如果后面进入 400 retry，retry 会基于未签名的逻辑 body 重新构建。
 	acceptedWireBody := wireBody
@@ -9483,6 +9533,9 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 		s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Request failed")
 		return fmt.Errorf("upstream request failed: %w", err)
 	}
+	if requestID := strings.TrimSpace(resp.Header.Get("x-request-id")); requestID != "" {
+		c.Header("x-request-id", requestID)
+	}
 
 	// 读取响应体
 	countTokensTooLarge := func(c *gin.Context) {
@@ -9494,16 +9547,19 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 		if !errors.Is(err, ErrUpstreamResponseBodyTooLarge) {
 			s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Failed to read response")
 		}
-		return err
+		return organizationCountTokensOutcomeUnknownError(ctx, err)
 	}
 
 	// 检测 thinking block 签名错误（400）并重试一次（过滤 thinking blocks）
-	if resp.StatusCode == 400 && s.shouldRectifySignatureError(ctx, account, respBody) {
+	if resp.StatusCode == 400 && s.shouldRectifySignatureError(ctx, account, respBody) && !isOrganizationNonBillableCountTokens(ctx) {
 		logger.LegacyPrintf("service.gateway", "Account %d: detected thinking block signature error on count_tokens, retrying with filtered thinking blocks", account.ID)
 
 		filteredBody := FilterThinkingBlocksForRetry(body)
 		retryReq, retryWireBody, buildErr := s.buildCountTokensRequest(ctx, c, account, filteredBody, token, tokenType, reqModel, shouldMimicClaudeCode)
 		if buildErr == nil {
+			if providerRequestID := organizationNonBillableProviderRequestID(ctx); providerRequestID != "" {
+				retryReq.Header.Set("X-Client-Request-ID", providerRequestID)
+			}
 			retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
 			if retryErr == nil {
 				if retryResp.StatusCode < 400 {
@@ -9517,7 +9573,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 					if !errors.Is(err, ErrUpstreamResponseBodyTooLarge) {
 						s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Failed to read response")
 					}
-					return err
+					return organizationCountTokensOutcomeUnknownError(ctx, err)
 				}
 			}
 		}
@@ -9583,17 +9639,20 @@ func (s *GatewayService) forwardCountTokensAnthropicAPIKeyPassthrough(ctx contex
 	token, tokenType, err := s.GetAccessToken(ctx, account)
 	if err != nil {
 		s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Failed to get access token")
-		return err
+		return organizationCountTokensPreDispatchError(ctx, err)
 	}
 	if tokenType != "apikey" {
 		s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Invalid account token type")
-		return fmt.Errorf("anthropic api key passthrough requires apikey token, got: %s", tokenType)
+		return organizationCountTokensPreDispatchError(ctx, fmt.Errorf("anthropic api key passthrough requires apikey token, got: %s", tokenType))
 	}
 
 	upstreamReq, err := s.buildCountTokensRequestAnthropicAPIKeyPassthrough(ctx, c, account, body, token)
 	if err != nil {
 		s.countTokensError(c, http.StatusInternalServerError, "api_error", "Failed to build request")
-		return err
+		return organizationCountTokensPreDispatchError(ctx, err)
+	}
+	if providerRequestID := organizationNonBillableProviderRequestID(ctx); providerRequestID != "" {
+		upstreamReq.Header.Set("X-Client-Request-ID", providerRequestID)
 	}
 
 	proxyURL := ""
@@ -9617,6 +9676,9 @@ func (s *GatewayService) forwardCountTokensAnthropicAPIKeyPassthrough(ctx contex
 		s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Request failed")
 		return fmt.Errorf("upstream request failed: %w", err)
 	}
+	if requestID := strings.TrimSpace(resp.Header.Get("x-request-id")); requestID != "" {
+		c.Header("x-request-id", requestID)
+	}
 
 	countTokensTooLarge := func(c *gin.Context) {
 		s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Upstream response too large")
@@ -9627,7 +9689,7 @@ func (s *GatewayService) forwardCountTokensAnthropicAPIKeyPassthrough(ctx contex
 		if !errors.Is(err, ErrUpstreamResponseBodyTooLarge) {
 			s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Failed to read response")
 		}
-		return err
+		return organizationCountTokensOutcomeUnknownError(ctx, err)
 	}
 
 	if resp.StatusCode >= 400 {

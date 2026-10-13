@@ -9,6 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Wei-Shaw/sub2api/ent/organization"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
@@ -35,6 +36,10 @@ type User struct {
 	Concurrency int `json:"concurrency,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
+	// OrganizationID holds the value of the "organization_id" field.
+	OrganizationID *int64 `json:"organization_id,omitempty"`
+	// OrganizationRole holds the value of the "organization_role" field.
+	OrganizationRole *string `json:"organization_role,omitempty"`
 	// Username holds the value of the "username" field.
 	Username string `json:"username,omitempty"`
 	// Notes holds the value of the "notes" field.
@@ -97,11 +102,19 @@ type UserEdges struct {
 	PendingAuthSessions []*PendingAuthSession `json:"pending_auth_sessions,omitempty"`
 	// PlatformQuotas holds the value of the platform_quotas edge.
 	PlatformQuotas []*UserPlatformQuota `json:"platform_quotas,omitempty"`
+	// Organization holds the value of the organization edge.
+	Organization *Organization `json:"organization,omitempty"`
+	// OrganizationAllocations holds the value of the organization_allocations edge.
+	OrganizationAllocations []*OrganizationAllocation `json:"organization_allocations,omitempty"`
+	// OrganizationExecutions holds the value of the organization_executions edge.
+	OrganizationExecutions []*OrganizationExecution `json:"organization_executions,omitempty"`
+	// OrganizationFinalExecutionEvidences holds the value of the organization_final_execution_evidences edge.
+	OrganizationFinalExecutionEvidences []*OrganizationFinalExecutionEvidence `json:"organization_final_execution_evidences,omitempty"`
 	// UserAllowedGroups holds the value of the user_allowed_groups edge.
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [14]bool
+	loadedTypes [18]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -221,10 +234,48 @@ func (e UserEdges) PlatformQuotasOrErr() ([]*UserPlatformQuota, error) {
 	return nil, &NotLoadedError{edge: "platform_quotas"}
 }
 
+// OrganizationOrErr returns the Organization value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e UserEdges) OrganizationOrErr() (*Organization, error) {
+	if e.Organization != nil {
+		return e.Organization, nil
+	} else if e.loadedTypes[13] {
+		return nil, &NotFoundError{label: organization.Label}
+	}
+	return nil, &NotLoadedError{edge: "organization"}
+}
+
+// OrganizationAllocationsOrErr returns the OrganizationAllocations value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) OrganizationAllocationsOrErr() ([]*OrganizationAllocation, error) {
+	if e.loadedTypes[14] {
+		return e.OrganizationAllocations, nil
+	}
+	return nil, &NotLoadedError{edge: "organization_allocations"}
+}
+
+// OrganizationExecutionsOrErr returns the OrganizationExecutions value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) OrganizationExecutionsOrErr() ([]*OrganizationExecution, error) {
+	if e.loadedTypes[15] {
+		return e.OrganizationExecutions, nil
+	}
+	return nil, &NotLoadedError{edge: "organization_executions"}
+}
+
+// OrganizationFinalExecutionEvidencesOrErr returns the OrganizationFinalExecutionEvidences value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) OrganizationFinalExecutionEvidencesOrErr() ([]*OrganizationFinalExecutionEvidence, error) {
+	if e.loadedTypes[16] {
+		return e.OrganizationFinalExecutionEvidences, nil
+	}
+	return nil, &NotLoadedError{edge: "organization_final_execution_evidences"}
+}
+
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[13] {
+	if e.loadedTypes[17] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -239,9 +290,9 @@ func (*User) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case user.FieldBalance, user.FieldBalanceNotifyThreshold, user.FieldTotalRecharged:
 			values[i] = new(sql.NullFloat64)
-		case user.FieldID, user.FieldConcurrency, user.FieldRpmLimit:
+		case user.FieldID, user.FieldConcurrency, user.FieldOrganizationID, user.FieldRpmLimit:
 			values[i] = new(sql.NullInt64)
-		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldSignupSource, user.FieldBalanceNotifyThresholdType, user.FieldBalanceNotifyExtraEmails:
+		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldOrganizationRole, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldSignupSource, user.FieldBalanceNotifyThresholdType, user.FieldBalanceNotifyExtraEmails:
 			values[i] = new(sql.NullString)
 		case user.FieldCreatedAt, user.FieldUpdatedAt, user.FieldDeletedAt, user.FieldTotpEnabledAt, user.FieldLastLoginAt, user.FieldLastActiveAt:
 			values[i] = new(sql.NullTime)
@@ -320,6 +371,20 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
+			}
+		case user.FieldOrganizationID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field organization_id", values[i])
+			} else if value.Valid {
+				_m.OrganizationID = new(int64)
+				*_m.OrganizationID = value.Int64
+			}
+		case user.FieldOrganizationRole:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field organization_role", values[i])
+			} else if value.Valid {
+				_m.OrganizationRole = new(string)
+				*_m.OrganizationRole = value.String
 			}
 		case user.FieldUsername:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -488,6 +553,26 @@ func (_m *User) QueryPlatformQuotas() *UserPlatformQuotaQuery {
 	return NewUserClient(_m.config).QueryPlatformQuotas(_m)
 }
 
+// QueryOrganization queries the "organization" edge of the User entity.
+func (_m *User) QueryOrganization() *OrganizationQuery {
+	return NewUserClient(_m.config).QueryOrganization(_m)
+}
+
+// QueryOrganizationAllocations queries the "organization_allocations" edge of the User entity.
+func (_m *User) QueryOrganizationAllocations() *OrganizationAllocationQuery {
+	return NewUserClient(_m.config).QueryOrganizationAllocations(_m)
+}
+
+// QueryOrganizationExecutions queries the "organization_executions" edge of the User entity.
+func (_m *User) QueryOrganizationExecutions() *OrganizationExecutionQuery {
+	return NewUserClient(_m.config).QueryOrganizationExecutions(_m)
+}
+
+// QueryOrganizationFinalExecutionEvidences queries the "organization_final_execution_evidences" edge of the User entity.
+func (_m *User) QueryOrganizationFinalExecutionEvidences() *OrganizationFinalExecutionEvidenceQuery {
+	return NewUserClient(_m.config).QueryOrganizationFinalExecutionEvidences(_m)
+}
+
 // QueryUserAllowedGroups queries the "user_allowed_groups" edge of the User entity.
 func (_m *User) QueryUserAllowedGroups() *UserAllowedGroupQuery {
 	return NewUserClient(_m.config).QueryUserAllowedGroups(_m)
@@ -544,6 +629,16 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
+	builder.WriteString(", ")
+	if v := _m.OrganizationID; v != nil {
+		builder.WriteString("organization_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.OrganizationRole; v != nil {
+		builder.WriteString("organization_role=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("username=")
 	builder.WriteString(_m.Username)

@@ -44,6 +44,34 @@ type Tx struct {
 	IdempotencyRecord *IdempotencyRecordClient
 	// IdentityAdoptionDecision is the client for interacting with the IdentityAdoptionDecision builders.
 	IdentityAdoptionDecision *IdentityAdoptionDecisionClient
+	// Organization is the client for interacting with the Organization builders.
+	Organization *OrganizationClient
+	// OrganizationAllocation is the client for interacting with the OrganizationAllocation builders.
+	OrganizationAllocation *OrganizationAllocationClient
+	// OrganizationAttemptAccountEffect is the client for interacting with the OrganizationAttemptAccountEffect builders.
+	OrganizationAttemptAccountEffect *OrganizationAttemptAccountEffectClient
+	// OrganizationAttemptAccountPosting is the client for interacting with the OrganizationAttemptAccountPosting builders.
+	OrganizationAttemptAccountPosting *OrganizationAttemptAccountPostingClient
+	// OrganizationAttemptEvidence is the client for interacting with the OrganizationAttemptEvidence builders.
+	OrganizationAttemptEvidence *OrganizationAttemptEvidenceClient
+	// OrganizationExecution is the client for interacting with the OrganizationExecution builders.
+	OrganizationExecution *OrganizationExecutionClient
+	// OrganizationExecutionAttempt is the client for interacting with the OrganizationExecutionAttempt builders.
+	OrganizationExecutionAttempt *OrganizationExecutionAttemptClient
+	// OrganizationExecutionIncident is the client for interacting with the OrganizationExecutionIncident builders.
+	OrganizationExecutionIncident *OrganizationExecutionIncidentClient
+	// OrganizationExecutionOutbox is the client for interacting with the OrganizationExecutionOutbox builders.
+	OrganizationExecutionOutbox *OrganizationExecutionOutboxClient
+	// OrganizationExecutionReconciliationAudit is the client for interacting with the OrganizationExecutionReconciliationAudit builders.
+	OrganizationExecutionReconciliationAudit *OrganizationExecutionReconciliationAuditClient
+	// OrganizationFinalExecutionEvidence is the client for interacting with the OrganizationFinalExecutionEvidence builders.
+	OrganizationFinalExecutionEvidence *OrganizationFinalExecutionEvidenceClient
+	// OrganizationLedgerOperation is the client for interacting with the OrganizationLedgerOperation builders.
+	OrganizationLedgerOperation *OrganizationLedgerOperationClient
+	// OrganizationLedgerPosting is the client for interacting with the OrganizationLedgerPosting builders.
+	OrganizationLedgerPosting *OrganizationLedgerPostingClient
+	// OrganizationReservation is the client for interacting with the OrganizationReservation builders.
+	OrganizationReservation *OrganizationReservationClient
 	// PaymentAuditLog is the client for interacting with the PaymentAuditLog builders.
 	PaymentAuditLog *PaymentAuditLogClient
 	// PaymentOrder is the client for interacting with the PaymentOrder builders.
@@ -230,6 +258,20 @@ func (tx *Tx) init() {
 	tx.Group = NewGroupClient(tx.config)
 	tx.IdempotencyRecord = NewIdempotencyRecordClient(tx.config)
 	tx.IdentityAdoptionDecision = NewIdentityAdoptionDecisionClient(tx.config)
+	tx.Organization = NewOrganizationClient(tx.config)
+	tx.OrganizationAllocation = NewOrganizationAllocationClient(tx.config)
+	tx.OrganizationAttemptAccountEffect = NewOrganizationAttemptAccountEffectClient(tx.config)
+	tx.OrganizationAttemptAccountPosting = NewOrganizationAttemptAccountPostingClient(tx.config)
+	tx.OrganizationAttemptEvidence = NewOrganizationAttemptEvidenceClient(tx.config)
+	tx.OrganizationExecution = NewOrganizationExecutionClient(tx.config)
+	tx.OrganizationExecutionAttempt = NewOrganizationExecutionAttemptClient(tx.config)
+	tx.OrganizationExecutionIncident = NewOrganizationExecutionIncidentClient(tx.config)
+	tx.OrganizationExecutionOutbox = NewOrganizationExecutionOutboxClient(tx.config)
+	tx.OrganizationExecutionReconciliationAudit = NewOrganizationExecutionReconciliationAuditClient(tx.config)
+	tx.OrganizationFinalExecutionEvidence = NewOrganizationFinalExecutionEvidenceClient(tx.config)
+	tx.OrganizationLedgerOperation = NewOrganizationLedgerOperationClient(tx.config)
+	tx.OrganizationLedgerPosting = NewOrganizationLedgerPostingClient(tx.config)
+	tx.OrganizationReservation = NewOrganizationReservationClient(tx.config)
 	tx.PaymentAuditLog = NewPaymentAuditLogClient(tx.config)
 	tx.PaymentOrder = NewPaymentOrderClient(tx.config)
 	tx.PaymentProviderInstance = NewPaymentProviderInstanceClient(tx.config)

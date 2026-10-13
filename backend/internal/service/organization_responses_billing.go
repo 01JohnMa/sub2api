@@ -30,12 +30,17 @@ var (
 		"ORGANIZATION_RESPONSES_CANDIDATE_CONFLICT",
 		"a frozen organization Responses candidate is no longer dispatchable",
 	)
+	ErrOrganizationResponsesWSFailoverUnsupported = infraerrors.ServiceUnavailable(
+		"ORGANIZATION_RESPONSES_WS_FAILOVER_UNSUPPORTED",
+		"organization Responses WebSocket cannot safely retry simultaneous or unreserved candidates",
+	)
 )
 
 const (
 	organizationResponsesMaximumInputBodyMultiplier = 2
 	organizationResponsesInputProtocolOverhead      = 1024
 	organizationResponsesDefaultMaximumAttempts     = 4
+	OrganizationResponsesRouteChatFallback          = "responses_to_chat"
 )
 
 type OrganizationResponsesRequestPolicy struct {
@@ -86,12 +91,13 @@ type OrganizationResponsesCandidateSnapshot struct {
 }
 
 type OrganizationResponsesCandidatePlanInput struct {
-	APIKey          *APIKey
-	Body            []byte
-	RequestShape    string
-	RequestPath     string
-	GroupID         *int64
-	MaximumAttempts int
+	APIKey             *APIKey
+	Body               []byte
+	RequestShape       string
+	RequestPath        string
+	GroupID            *int64
+	MaximumAttempts    int
+	PreferredAccountID int64
 }
 
 type OrganizationResponsesCandidatePlan struct {
@@ -106,7 +112,9 @@ type OrganizationResponsesCandidatePlan struct {
 
 func BuildOrganizationResponsesRequestPolicy(body []byte, requestShape, requestPath string) (OrganizationResponsesRequestPolicy, error) {
 	policy := OrganizationResponsesRequestPolicy{RequestShape: strings.TrimSpace(requestShape)}
-	if policy.RequestShape != OrganizationRequestShapeHTTP && policy.RequestShape != OrganizationRequestShapeStreaming {
+	if policy.RequestShape != OrganizationRequestShapeHTTP &&
+		policy.RequestShape != OrganizationRequestShapeStreaming &&
+		policy.RequestShape != OrganizationRequestShapeWebSocketResponseCreate {
 		return policy, ErrOrganizationResponsesUnsupportedRequest
 	}
 	path := strings.TrimRight(strings.TrimSpace(requestPath), "/")
@@ -124,14 +132,16 @@ func BuildOrganizationResponsesRequestPolicy(body []byte, requestShape, requestP
 		return policy, ErrOrganizationResponsesUnsupportedRequest
 	}
 	policy.Stream = streamValue.Bool()
-	if (policy.RequestShape == OrganizationRequestShapeStreaming) != policy.Stream {
+	if policy.RequestShape != OrganizationRequestShapeWebSocketResponseCreate &&
+		(policy.RequestShape == OrganizationRequestShapeStreaming) != policy.Stream {
 		return policy, ErrOrganizationResponsesUnsupportedRequest
 	}
 	backgroundValue := gjson.GetBytes(body, "background")
 	if backgroundValue.Exists() && backgroundValue.Type != gjson.True && backgroundValue.Type != gjson.False {
 		return policy, ErrOrganizationResponsesUnsupportedRequest
 	}
-	if gjson.GetBytes(body, "previous_response_id").Exists() || backgroundValue.Bool() || gjson.GetBytes(body, "max_completion_tokens").Exists() {
+	if (policy.RequestShape != OrganizationRequestShapeWebSocketResponseCreate && gjson.GetBytes(body, "previous_response_id").Exists()) ||
+		backgroundValue.Bool() || gjson.GetBytes(body, "max_completion_tokens").Exists() {
 		return policy, ErrOrganizationResponsesUnsupportedRequest
 	}
 	var envelope map[string]json.RawMessage
@@ -151,7 +161,7 @@ func BuildOrganizationResponsesRequestPolicy(body []byte, requestShape, requestP
 	if !ok {
 		return policy, ErrOrganizationResponsesUnsupportedRequest
 	}
-	if policy.Stream && !verifiedOrganizationResponsesModelSupportsStreaming(model) {
+	if (policy.Stream || policy.RequestShape == OrganizationRequestShapeWebSocketResponseCreate) && !verifiedOrganizationResponsesModelSupportsStreaming(model) {
 		return policy, ErrOrganizationResponsesUnsupportedRequest
 	}
 	policy.MaxInputTokens = maxInput
@@ -451,6 +461,17 @@ func (s *OpenAIGatewayService) PlanOrganizationResponsesCandidates(ctx context.C
 		}
 		return accounts[i].ID < accounts[j].ID
 	})
+	if input.PreferredAccountID > 0 {
+		for index := range accounts {
+			if accounts[index].ID != input.PreferredAccountID {
+				continue
+			}
+			preferred := accounts[index]
+			copy(accounts[1:index+1], accounts[:index])
+			accounts[0] = preferred
+			break
+		}
+	}
 	maxAttempts := input.MaximumAttempts
 	if maxAttempts <= 0 || maxAttempts > organizationResponsesMaximumAttempts(s.cfg) {
 		maxAttempts = organizationResponsesMaximumAttempts(s.cfg)
@@ -471,9 +492,6 @@ func (s *OpenAIGatewayService) PlanOrganizationResponsesCandidates(ctx context.C
 		if account.Type == AccountTypeSetupToken {
 			continue
 		}
-		if account.Type == AccountTypeAPIKey && !openai_compat.ShouldUseResponsesAPI(account.Extra) {
-			continue
-		}
 		upstreamModel := resolveOpenAIAccountUpstreamModelForRequest(&account, policy.RequestedModel, false)
 		if account.Type == AccountTypeOAuth || account.Type == AccountTypeSetupToken {
 			upstreamModel = normalizeCodexModel(upstreamModel)
@@ -485,7 +503,7 @@ func (s *OpenAIGatewayService) PlanOrganizationResponsesCandidates(ctx context.C
 			continue
 		}
 		candidateMaxInput, candidateMaxOutput, ok := verifiedOrganizationResponsesModelLimits(upstreamModel)
-		if !ok || (policy.Stream && !verifiedOrganizationResponsesModelSupportsStreaming(upstreamModel)) {
+		if !ok || ((policy.Stream || policy.RequestShape == OrganizationRequestShapeWebSocketResponseCreate) && !verifiedOrganizationResponsesModelSupportsStreaming(upstreamModel)) {
 			continue
 		}
 		effectiveBody, err := s.applyOpenAIFastPolicyToBody(ctx, &account, upstreamModel, input.Body)
@@ -578,7 +596,7 @@ func (s *OpenAIGatewayService) RevalidateOrganizationResponsesCandidate(ctx cont
 	}
 	if account.ID != candidate.AccountID ||
 		account.IsOpenAIPassthroughEnabled() ||
-		(account.Type == AccountTypeAPIKey && !openai_compat.ShouldUseResponsesAPI(account.Extra)) ||
+		organizationResponsesAccountRoute(account) != candidate.Route ||
 		upstreamModel != candidate.UpstreamModel ||
 		account.BillingRateMultiplier() != candidate.Pricing.AccountMultiplier {
 		return nil, ErrOrganizationResponsesCandidateConflict
@@ -595,7 +613,7 @@ func (s *OpenAIGatewayService) RevalidateOrganizationResponsesCandidate(ctx cont
 		return nil, ErrOrganizationResponsesCandidateConflict
 	}
 	candidateMaxInput, candidateMaxOutput, ok := verifiedOrganizationResponsesModelLimits(upstreamModel)
-	if !ok || (candidate.RequestShape == OrganizationRequestShapeStreaming && !verifiedOrganizationResponsesModelSupportsStreaming(upstreamModel)) {
+	if !ok || ((candidate.RequestShape == OrganizationRequestShapeStreaming || candidate.RequestShape == OrganizationRequestShapeWebSocketResponseCreate) && !verifiedOrganizationResponsesModelSupportsStreaming(upstreamModel)) {
 		return nil, ErrOrganizationResponsesCandidateConflict
 	}
 	effectiveBody, err := s.applyOpenAIFastPolicyToBody(ctx, account, candidate.UpstreamModel, candidate.PlanningBody)
@@ -685,6 +703,9 @@ func organizationResponsesAccountRoute(account *Account) string {
 	if account.Type == AccountTypeOAuth || account.Type == AccountTypeSetupToken {
 		return "codex_http_responses"
 	}
+	if account.Type == AccountTypeAPIKey && !openai_compat.ShouldUseResponsesAPI(account.Extra) {
+		return OrganizationResponsesRouteChatFallback
+	}
 	return "openai_http_responses"
 }
 
@@ -705,6 +726,7 @@ func (p OrganizationResponsesCandidatePlan) NewExecutionReservationInput(apiKey 
 	input := OrganizationExecutionReservationInput{
 		Attribution:    attribution,
 		EndpointFamily: OrganizationEndpointFamilyResponses, RequestShape: p.Policy.RequestShape, ClientRequestID: clientRequestID,
+		Model:             p.Policy.RequestedModel,
 		CandidateSnapshot: p.CandidateSnapshot, PricingSnapshot: p.PricingSnapshot, CandidateRouteMaximumCost: p.CandidateRouteMaximumCost, BillingFingerprint: p.BillingFingerprint,
 	}
 	return input, nil
@@ -746,6 +768,7 @@ func NewOrganizationResponsesPreDispatchRejectionInput(apiKey *APIKey, body []by
 		Attribution:               attribution,
 		EndpointFamily:            OrganizationEndpointFamilyResponses,
 		RequestShape:              requestShape,
+		Model:                     strings.TrimSpace(gjson.GetBytes(body, "model").String()),
 		ClientRequestID:           clientRequestID,
 		CandidateSnapshot:         candidateSnapshot,
 		PricingSnapshot:           pricingSnapshot,

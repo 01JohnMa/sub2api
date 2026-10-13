@@ -51,6 +51,48 @@ type IdempotencyRecord func(*sql.Selector)
 // IdentityAdoptionDecision is the predicate function for identityadoptiondecision builders.
 type IdentityAdoptionDecision func(*sql.Selector)
 
+// Organization is the predicate function for organization builders.
+type Organization func(*sql.Selector)
+
+// OrganizationAllocation is the predicate function for organizationallocation builders.
+type OrganizationAllocation func(*sql.Selector)
+
+// OrganizationAttemptAccountEffect is the predicate function for organizationattemptaccounteffect builders.
+type OrganizationAttemptAccountEffect func(*sql.Selector)
+
+// OrganizationAttemptAccountPosting is the predicate function for organizationattemptaccountposting builders.
+type OrganizationAttemptAccountPosting func(*sql.Selector)
+
+// OrganizationAttemptEvidence is the predicate function for organizationattemptevidence builders.
+type OrganizationAttemptEvidence func(*sql.Selector)
+
+// OrganizationExecution is the predicate function for organizationexecution builders.
+type OrganizationExecution func(*sql.Selector)
+
+// OrganizationExecutionAttempt is the predicate function for organizationexecutionattempt builders.
+type OrganizationExecutionAttempt func(*sql.Selector)
+
+// OrganizationExecutionIncident is the predicate function for organizationexecutionincident builders.
+type OrganizationExecutionIncident func(*sql.Selector)
+
+// OrganizationExecutionOutbox is the predicate function for organizationexecutionoutbox builders.
+type OrganizationExecutionOutbox func(*sql.Selector)
+
+// OrganizationExecutionReconciliationAudit is the predicate function for organizationexecutionreconciliationaudit builders.
+type OrganizationExecutionReconciliationAudit func(*sql.Selector)
+
+// OrganizationFinalExecutionEvidence is the predicate function for organizationfinalexecutionevidence builders.
+type OrganizationFinalExecutionEvidence func(*sql.Selector)
+
+// OrganizationLedgerOperation is the predicate function for organizationledgeroperation builders.
+type OrganizationLedgerOperation func(*sql.Selector)
+
+// OrganizationLedgerPosting is the predicate function for organizationledgerposting builders.
+type OrganizationLedgerPosting func(*sql.Selector)
+
+// OrganizationReservation is the predicate function for organizationreservation builders.
+type OrganizationReservation func(*sql.Selector)
+
 // PaymentAuditLog is the predicate function for paymentauditlog builders.
 type PaymentAuditLog func(*sql.Selector)
 

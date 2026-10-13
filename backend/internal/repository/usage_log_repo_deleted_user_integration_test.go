@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -40,7 +41,7 @@ func TestUsageLog_ListWithFilters_ResolvesSoftDeletedUser(t *testing.T) {
 	}
 
 	// 软删除该用户（触发 SoftDeleteMixin Hook → UPDATE deleted_at）。
-	require.NoError(t, client.User.DeleteOneID(deleted.ID).Exec(ctx))
+	require.NoError(t, client.User.DeleteOneID(deleted.ID).Exec(mixins.AuthorizeUserDeletion(ctx)))
 
 	logs, _, err := repo.ListWithFilters(ctx, pagination.PaginationParams{Page: 1, PageSize: 50},
 		usagestats.UsageLogFilters{ExactTotal: true})

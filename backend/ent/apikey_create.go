@@ -13,6 +13,9 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/organization"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecution"
+	"github.com/Wei-Shaw/sub2api/ent/organizationfinalexecutionevidence"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
@@ -95,6 +98,20 @@ func (_c *APIKeyCreate) SetGroupID(v int64) *APIKeyCreate {
 func (_c *APIKeyCreate) SetNillableGroupID(v *int64) *APIKeyCreate {
 	if v != nil {
 		_c.SetGroupID(*v)
+	}
+	return _c
+}
+
+// SetOrganizationID sets the "organization_id" field.
+func (_c *APIKeyCreate) SetOrganizationID(v int64) *APIKeyCreate {
+	_c.mutation.SetOrganizationID(v)
+	return _c
+}
+
+// SetNillableOrganizationID sets the "organization_id" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableOrganizationID(v *int64) *APIKeyCreate {
+	if v != nil {
+		_c.SetOrganizationID(*v)
 	}
 	return _c
 }
@@ -317,6 +334,11 @@ func (_c *APIKeyCreate) SetGroup(v *Group) *APIKeyCreate {
 	return _c.SetGroupID(v.ID)
 }
 
+// SetOrganization sets the "organization" edge to the Organization entity.
+func (_c *APIKeyCreate) SetOrganization(v *Organization) *APIKeyCreate {
+	return _c.SetOrganizationID(v.ID)
+}
+
 // AddUsageLogIDs adds the "usage_logs" edge to the UsageLog entity by IDs.
 func (_c *APIKeyCreate) AddUsageLogIDs(ids ...int64) *APIKeyCreate {
 	_c.mutation.AddUsageLogIDs(ids...)
@@ -330,6 +352,36 @@ func (_c *APIKeyCreate) AddUsageLogs(v ...*UsageLog) *APIKeyCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddUsageLogIDs(ids...)
+}
+
+// AddOrganizationExecutionIDs adds the "organization_executions" edge to the OrganizationExecution entity by IDs.
+func (_c *APIKeyCreate) AddOrganizationExecutionIDs(ids ...int64) *APIKeyCreate {
+	_c.mutation.AddOrganizationExecutionIDs(ids...)
+	return _c
+}
+
+// AddOrganizationExecutions adds the "organization_executions" edges to the OrganizationExecution entity.
+func (_c *APIKeyCreate) AddOrganizationExecutions(v ...*OrganizationExecution) *APIKeyCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddOrganizationExecutionIDs(ids...)
+}
+
+// AddOrganizationFinalExecutionEvidenceIDs adds the "organization_final_execution_evidences" edge to the OrganizationFinalExecutionEvidence entity by IDs.
+func (_c *APIKeyCreate) AddOrganizationFinalExecutionEvidenceIDs(ids ...int64) *APIKeyCreate {
+	_c.mutation.AddOrganizationFinalExecutionEvidenceIDs(ids...)
+	return _c
+}
+
+// AddOrganizationFinalExecutionEvidences adds the "organization_final_execution_evidences" edges to the OrganizationFinalExecutionEvidence entity.
+func (_c *APIKeyCreate) AddOrganizationFinalExecutionEvidences(v ...*OrganizationFinalExecutionEvidence) *APIKeyCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddOrganizationFinalExecutionEvidenceIDs(ids...)
 }
 
 // Mutation returns the APIKeyMutation object of the builder.
@@ -629,6 +681,23 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 		_node.GroupID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
+	if nodes := _c.mutation.OrganizationIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   apikey.OrganizationTable,
+			Columns: []string{apikey.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.OrganizationID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := _c.mutation.UsageLogsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -638,6 +707,38 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.OrganizationExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationExecutionsTable,
+			Columns: []string{apikey.OrganizationExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationexecution.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.OrganizationFinalExecutionEvidencesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.OrganizationFinalExecutionEvidencesTable,
+			Columns: []string{apikey.OrganizationFinalExecutionEvidencesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organizationfinalexecutionevidence.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -778,6 +879,24 @@ func (u *APIKeyUpsert) UpdateGroupID() *APIKeyUpsert {
 // ClearGroupID clears the value of the "group_id" field.
 func (u *APIKeyUpsert) ClearGroupID() *APIKeyUpsert {
 	u.SetNull(apikey.FieldGroupID)
+	return u
+}
+
+// SetOrganizationID sets the "organization_id" field.
+func (u *APIKeyUpsert) SetOrganizationID(v int64) *APIKeyUpsert {
+	u.Set(apikey.FieldOrganizationID, v)
+	return u
+}
+
+// UpdateOrganizationID sets the "organization_id" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateOrganizationID() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldOrganizationID)
+	return u
+}
+
+// ClearOrganizationID clears the value of the "organization_id" field.
+func (u *APIKeyUpsert) ClearOrganizationID() *APIKeyUpsert {
+	u.SetNull(apikey.FieldOrganizationID)
 	return u
 }
 
@@ -1203,6 +1322,27 @@ func (u *APIKeyUpsertOne) UpdateGroupID() *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) ClearGroupID() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetOrganizationID sets the "organization_id" field.
+func (u *APIKeyUpsertOne) SetOrganizationID(v int64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetOrganizationID(v)
+	})
+}
+
+// UpdateOrganizationID sets the "organization_id" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateOrganizationID() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateOrganizationID()
+	})
+}
+
+// ClearOrganizationID clears the value of the "organization_id" field.
+func (u *APIKeyUpsertOne) ClearOrganizationID() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearOrganizationID()
 	})
 }
 
@@ -1841,6 +1981,27 @@ func (u *APIKeyUpsertBulk) UpdateGroupID() *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) ClearGroupID() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetOrganizationID sets the "organization_id" field.
+func (u *APIKeyUpsertBulk) SetOrganizationID(v int64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetOrganizationID(v)
+	})
+}
+
+// UpdateOrganizationID sets the "organization_id" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateOrganizationID() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateOrganizationID()
+	})
+}
+
+// ClearOrganizationID clears the value of the "organization_id" field.
+func (u *APIKeyUpsertBulk) ClearOrganizationID() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearOrganizationID()
 	})
 }
 

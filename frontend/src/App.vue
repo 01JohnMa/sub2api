@@ -80,6 +80,16 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => [route.meta.requiresOrganizationAdmin === true, authStore.isOrganizationAdmin] as const,
+  ([requiresOrganizationAdmin, isOrganizationAdmin]) => {
+    if (requiresOrganizationAdmin && !isOrganizationAdmin) {
+      void router.replace(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    }
+  },
+  { immediate: true }
+)
+
 // Route change trigger (throttled by store)
 router.afterEach(() => {
   if (authStore.isAuthenticated) {

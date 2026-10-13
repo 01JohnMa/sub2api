@@ -1,78 +1,45 @@
-## 1. Schema And Migration
+# Tasks: organization reporting dimension
 
-- [x] 1.1 Add organization status and role constants plus the Ent `Organization` schema with stable ID, normalized unique code, lifecycle status, creator, and timestamp fields.
-- [x] 1.2 Extend User and API Key schemas with nullable organization attribution and enforce the single-organization/valid-role invariant at the database level.
-- [x] 1.3 Add USD-only `DECIMAL(20,8)` organization unallocated pools, distinct member allocation records, durable execution/reservation state, immutable per-attempt provider evidence, one immutable final-execution-evidence record per trusted execution, immutable correlated balance postings/outbox, scoped idempotency constraints, and a partial uniqueness constraint allowing at most one active allocation per user; make positive consumption posting uniquely reference its final evidence/execution.
-- [ ] 1.4 Extend successful usage and ops error telemetry schemas/models with nullable request-time organization/execution attribution, add evidence `(organization_id, occurred_at)` and projection organization/time/execution indexes, and preserve the current projections without treating their float `actual_cost` as the organization settlement amount.
-- [x] 1.5 Add immutable forward SQL migrations that leave all existing rows unorganized with zero organization funds, follow the repository's transactional versus `_notx.sql` index convention, and never infer data from Group, subscription, payment, or upstream OAuth fields.
-- [x] 1.6 Regenerate Ent and dependency injection output, then add migration/schema tests for null compatibility, unique code, archived-code non-reuse, allocation identity non-reuse, fixed-precision checks, nonnegative buckets, one final evidence and at most one consumption posting per execution, ledger immutability, idempotency uniqueness, and `RESTRICT` plus non-null `*_id_snapshot`/nullable `*_ref_id ON DELETE SET NULL` rules that never cascade financial history.
+## 1. Identity And Membership
 
-## 2. Organization Domain And Membership Transactions
+- [x] 1.1 Confirm the existing Organization/User fields and keep Organization independent from Group and provider metadata.
+- [x] 1.2 Add or reuse active/disabled organization identity operations; do not add archive-with-funds semantics in this change.
+- [x] 1.3 Reuse the existing single-organization membership and role checks for platform administrators and organization administrators.
+- [x] 1.4 Add two-organization tests for join, remove, role checks, foreign-object 404, and no cross-organization access.
 
-- [ ] 2.1 Implement organization repository and service operations for create, list, get, edit name/code/description, disable, reactivate, archive, and platform-admin historical reads, with lifecycle mutations locking the Organization row.
-- [x] 2.2 Implement platform-admin membership assignment, removal, and organization-role changes without modifying the existing platform role; joining locks User, revalidates it is not deleted/deleting and unorganized, creates a zero active allocation, and role changes preserve it.
-- [x] 2.3 Implement organization-admin exact-email/exact-ID member addition as `organization_member`, with no global search or invitation flow and byte-equivalent status/error shape for nonexistent versus already-organized targets.
-- [x] 2.4 Implement organization-admin removal of same-organization ordinary members while rejecting organization administrators and foreign IDs.
-- [x] 2.5 Make member removal reject unresolved reservations, atomically reclaim available organization funds, close the allocation, clear User/API Key organization attribution, and preserve personal balance and consumed history.
-- [x] 2.6 Guard every platform-admin, self-service, OAuth-cleanup, and soft-delete user path by locking User and rechecking membership/allocation in the deletion transaction so an organized user cannot be deleted until idempotent membership removal closes/reclaims its allocation; add deletion-bypass and concurrent delete-versus-join regression tests.
-- [x] 2.7 Make lifecycle, member, and balance writes lock Organization then User/allocation rows in stable ID order; make API Key creation and User deletion lock the same User row; add rollback and concurrent archive/add/change/remove/Key-create/delete tests.
-- [x] 2.8 Invalidate affected API Key authentication and billing caches after membership or organization status commits, including a tested organization-wide invalidation path, while keeping authorization and balance correctness independent of cache invalidation.
+## 2. Trusted Request Attribution
 
-## 3. Organization Funding And Allocation
+- [x] 2.1 Resolve the current organization from server-side API Key/User state after existing authentication; ignore client-supplied organization values.
+- [x] 2.2 Keep personal behavior unchanged when the resolved organization is NULL.
+- [x] 2.3 Define the disabled-organization read/access response without introducing organization funding or billing behavior.
+- [ ] 2.4 Test membership change versus concurrent request attribution: old accepted requests retain their captured organization, new requests use committed state.
 
-- [x] 3.1 Implement platform-admin JWT-only organization credit for active/disabled organizations, with fixed-precision validation, scoped idempotency, immutable correlated ledger entries, and no settlement decrease, refund, withdrawal, or personal payment-order integration.
-- [x] 3.2 Implement organization balance summary and allocation preview models that reconcile unallocated, available, reserved, consumed, and total remaining values without exposing personal balances.
-- [x] 3.3 Implement organization-admin one-click allocation for the confirmed snapshot of active ordinary members: append the downward-rounded equal share of all unallocated funds, exclude organization administrators, preserve existing allocations, and leave the rounding remainder in the pool.
-- [x] 3.4 Implement organization-admin custom positive allocation for one or more active ordinary members, with whole-request rollback for stale, duplicate, foreign, invalid, or over-pool targets.
-- [x] 3.5 Implement explicit reclaim of only available unreserved ordinary-member funds; implement platform-admin allocation/reclaim for any current member, including organization administrators, only in active organizations, with disabled-state reclaim-only cleanup.
-- [x] 3.6 Require canonical preview tokens, decimal-string amounts, organization/operation-scoped idempotency keys, and current-authorization replay checks for every external monetary mutation; add transaction/concurrency tests proving retries do not duplicate changes, conflicting payloads fail, and parallel allocation/reclaim cannot over-allocate or lose updates.
+## 3. Reuse Existing Telemetry And Reports
 
-## 4. API Key Enforcement And Organization Billing
+- [x] 3.1 Add nullable request-time `organization_id` attribution to existing successful usage and attributable error records/writers.
+- [x] 3.2 Propagate the trusted organization context through existing gateway handlers and usage/error writer calls; do not add a second execution state machine.
+- [x] 3.3 Add organization predicates to existing list, aggregate, pagination-total, and date-range queries.
+- [x] 3.4 Preserve NULL attribution for pre-authentication failures and all historical rows created before organization assignment.
+- [x] 3.5 Add report tests proving organization A cannot see B, historical rows do not change after membership removal, and personal reports remain unchanged.
 
-- [x] 4.1 Add organization and allocation fields to API Key authorization models and implement indexed authoritative resolution of current Key, owner User, Organization, and active allocation for every API Key request regardless of cached Key loading; require Key/User/allocation user IDs and organization IDs to match exactly, fail closed and alert on every mismatch.
-- [x] 4.2 Enforce fail-closed resolver errors and disabled, archived, missing-organization, missing-allocation, or insufficient-allocation rejection before billing, scheduling, and upstream dispatch; retain personal Key behavior only after an authoritative null attribution.
-- [ ] 4.3 Define and test the supported endpoint/request-shape ceiling matrix for Anthropic/OpenAI Messages, Responses/WS/Codex aliases, Chat Completions, Embeddings, images, Gemini/Antigravity actions, streaming, tools, model mapping, pricing, multipliers, and failover; require a validated server/model default cap where clients omit one, reject unsupported shapes before dispatch, freeze the allowed candidate/pricing snapshot before reservation, stop dispatch if a new candidate appears, and treat every Responses WebSocket `response.create` as a fresh authoritative execution.
-- [x] 4.4 Generate server execution UUIDs for every authoritatively scoped organization request and per-dispatch attempt UUIDs; keep client request IDs as metadata only; persist provider request/correlation and provenance hashes; add uniqueness constraints for one parent reservation, one immutable final evidence, and at most one positive organization consumption posting per execution plus idempotent child-attempt evidence ingestion.
-- [x] 4.5 Implement one durable idempotent execution reservation before upstream dispatch, carrying organization ID, allocation ID, execution identity, candidate-set hash, candidate-route maximum amount, immutable pricing snapshot, and billing fingerprint in trusted request context; hold a compatible organization-status lock through commit or use an equivalent atomic active-state/version condition, and in the same conditional write revalidate Key/User/current organization/allocation active identity; stale auth becomes zero-cost error evidence with no reservation.
-- [ ] 4.6 Split platform-attempt accounting from member settlement: commit immutable attempt evidence and its unique Account side-effect outbox/apply-state together, redrive to one Account cost posting and live quota update (or audited deleted-target no-op), but update organization allocation, organization/member cost, cost/Token-dependent API Key quota, and user-platform quota only once from final execution evidence; apply request/RPM/rate/concurrency guards once per execution at acceptance and rerun them on every HTTP request/WebSocket turn; never debit personal balance or personal subscription usage for organization Keys, and fail closed in SimpleMode or when billing dependencies are missing. If a Key or Account is deleted after reservation/dispatch, its live quota projection is an audited terminal no-op and organization settlement continues.
-- [x] 4.7 Persist immutable attempt/provider evidence before discardable workers; atomically derive and commit final execution evidence, its optional unique consumption posting, reservation terminal state, side-effect apply states, and usage/error outbox; persist attribution snapshots, model/Tokens, raw cost, 8-place settled cost, terminal outcome, and the single terminal `occurred_at`/`created_at`/`reconciled_at` contract; create zero-cost evidence without a consumption posting for non-billable/pre-dispatch terminal requests, classify ceiling overage on the same Account posting, settle final usage even on downstream disconnect/timeout, release only with proven zero/no final result, and keep unknown outcomes pending without rolling back organization funds.
-- [x] 4.8 Implement a JWT-only platform reconciliation service for pending executions with immutable adapter/reconciler-ingested evidence detail, fixed provenance precedence, conflict-to-incident behavior, idempotent rule-computed settle or proven-zero release that atomically creates final evidence, immutable internal/public reason audit, and no evidence upload, evidence selection, arbitrary debit, refund, withdrawal, transfer, or non-pending mutation.
-- [ ] 4.9 Propagate captured organization, allocation, execution, final-attempt, and terminal-outcome identity through every gateway usage writer and ops-error path; materialize projections exactly once from outbox, preserve immutable organization attribution, and keep pre-authentication unknown-Key errors unattributed.
-- [ ] 4.10 Add concurrency, crash-recovery, stale-cache, attribution-mismatch, resolver-to-reservation TOCTOU, evidence-commit-before-Account-posting recovery, conflicting-provenance, deleted-User quota no-op/redrive, partial-stream, billable-disconnect, candidate-snapshot, overage, failover account-posting, WebSocket per-turn platform-guard, reconciliation, and Key-deletion-race tests proving no bucket becomes negative, each trusted execution has one report outcome/member debit, and no funds are both consumed and reclaimed.
+## 4. Minimal Organization Read API/UI
 
-## 5. Scoped Authorization And Backend APIs
+- [x] 4.1 Expose current organization identity, member summary, and read-only usage/error overview from server-derived scope.
+- [x] 4.2 Keep organization responses free of balances, ledger entries, provider evidence, request bodies, error details, full API Keys, and platform resources.
+- [x] 4.3 Add frontend organization summary/overview only; do not add funding, allocation, reservation, reconciliation, or billing pages.
 
-- [x] 5.1 Add current-organization authorization that reloads User and Organization state, requires `organization_admin`, and remains separate from existing platform AdminAuth.
-- [ ] 5.2 Register platform-only `/api/v1/admin/organizations/**` routes for lifecycle, membership roles, funding, platform allocation/reclaim, pending-reconciliation list/detail/resolve, and scoped historical reads without weakening any existing `/admin/**` route; reject long-lived Admin API Keys on every monetary or reconciliation mutation route.
-- [ ] 5.3 Register JWT-only `/api/v1/organization/**` routes that derive organization scope server-side and expose overview, members, member usage, balance summary, allocation preview/execute/reclaim, scoped ledger, and safe API Key metadata.
-- [ ] 5.4 Apply organization predicates to every list, detail, count, pagination total, filter, allocation, ledger, and aggregate query; return 404 for foreign member/allocation/Key objects and 403 for missing organization-admin authority.
-- [ ] 5.5 Add DTOs that omit full API Keys, ACLs, credentials, request/error payloads, personal balances, payment data, provider/evidence detail, internal audit reasons, actor IDs, and platform resources from organization responses; expose only public operation labels/reasons and approved redacted actor display.
-- [ ] 5.6 Add handler and integration tests with at least two organizations covering funding boundaries, self/administrator allocation denial, cross-organization IDOR, stale previews, JWT-only evidence-constrained reconciliation, totals, trends, ledger scoping, secret serialization, and excluded global endpoints.
+## 5. Verification And Rollout
 
-## 6. Organization Reporting
+- [x] 5.1 Run targeted backend schema, auth, telemetry, reporting, handler, and two-organization integration tests.
+- [ ] 5.2 Run frontend lint, typecheck, unit tests, and build using existing repository scripts when frontend files are changed.
+- [x] 5.3 Run `openspec status --change add-organization-tenancy --json` and strict validation.
+- [x] 5.4 Review the final diff and verify no organization allocation, reservation, ledger, final-evidence, pending-reconciliation, or independent billing requirement remains in this change.
+- [ ] 5.5 Roll out nullable schema and compatible code first; enable organization statistics only after personal-path regression checks pass.
 
-- [ ] 6.1 Add bounded organization/`occurred_at` filters over final execution evidence and exact-one projection joins without reusing the unscoped global dashboard cache or pre-aggregated results; retain `created_at` and `reconciled_at` only for audit/operations filtering.
-- [ ] 6.2 Implement organization overview totals by unique execution terminal outcome so `request_count = success + error`, a billable disconnect counts once as error, business-limited/SLA rates exclude `count_tokens`, active-member count uses distinct current member snapshots in the selected range, model/Token/trend values come from final evidence, and organization administrators receive only a redacted pending-reconciliation count/status.
-- [ ] 6.3 Implement organization financial summaries that reconcile current unallocated/available/reserved balances, unique consumption postings, and final evidence 8-place settled cost without using legacy float usage rows as the organization money source.
-- [ ] 6.4 Implement current-member usage and allocation summaries from final evidence grouped by immutable allocation/user snapshot plus current membership, include one non-actionable departed-member historical bucket, validate exact member/allocation/Key filters, and reconcile current rows plus that bucket to organization request count, Token, and cost totals.
-- [ ] 6.5 Implement read-only API Key metadata projection with only ID, name, status, owning member, organization identity, timestamps, expiration, quota, and quota-used fields.
-- [ ] 6.6 Add query and serialization tests proving departed/deleted members do not rewrite historical organization metrics, late reconciliation remains attributed to original `occurred_at`, positive final evidence and consumption ledger reconcile one-to-one while zero-cost evidence has no consumption posting, billable error executions are not double-counted, and no complete Key secret or personal balance appears in an organization response.
+## Deferred To A Separate Change
 
-## 7. Frontend Identity And Organization UI
-
-- [x] 7.1 Extend `auth/me`, frontend User types, and auth store with nullable organization summary/role and an `isOrganizationAdmin` capability without changing `isAdmin` semantics.
-- [x] 7.2 Add `requiresOrganizationAdmin` route metadata and guard tests for platform administrator, organization administrator, ordinary member, unorganized user, revoked membership, and non-active organization states.
-- [ ] 7.3 Add the platform administrator organization list/detail flow for create, edit, lifecycle changes, member assignment/removal, organization-admin appointment, organization credit, platform allocation/reclaim, and pending reconciliation; archive must show the exact currently unallocated amount that will be permanently frozen, require a second irreversible-action confirmation, and refresh on version/balance conflict.
-- [ ] 7.4 Add organization administrator overview, member management, member usage, balance summary, scoped ledger, safe API Key metadata, and redacted pending-reconciliation count/status views using only the new scoped APIs.
-- [x] 7.5 Add token-bound one-click and custom allocation preview/confirmation showing eligible/excluded members, each before/delta/after value, equal or custom additions, remainder, and resulting pool; add explicit reclaim controls with fixed-precision totals and stale-preview recovery.
-- [x] 7.6 Update sidebar navigation and i18n so organization administrators see organization pages but no global account, Group, proxy, settings, backup, operations, payment, personal balance, concurrency, RPM, platform quota, API Key quota, or role controls.
-- [ ] 7.7 Warn before membership addition that existing Keys immediately become organization Keys with an initial zero allocation; add component/API tests for that confirmation, empty and zero-pool states, protected removals, equal/custom allocation, self-allocation denial, idempotent retry, date filters, scoped totals, secret-free Key rendering, and backend 403/404/conflict recovery.
-
-## 8. Verification And Rollout
-
-- [x] 8.1 Run Go formatting, Ent generation checks, targeted schema/service/repository/middleware/handler tests, and the full backend `go test ./...` suite.
-- [x] 8.2 Run frontend lint check, typecheck, unit tests, and production build with the repository's existing pnpm scripts.
-- [ ] 8.3 Run balance invariant stress tests covering concurrent credit, equal/custom allocation, reclaim, active-state reservation commit, known-usage settlement, proven-zero release, pending reconciliation, member removal, delete/join, disable, and archive; reconcile the formal funding-minus-consumption equation, one evidence and at most one consumption posting per execution, and one Account posting per attempt.
-- [ ] 8.4 Run OpenSpec status/strict validation and inspect the final Git diff to confirm every change maps to this contract and no CPA OAuth rotation, Group routing, personal payment order, or unrelated behavior changed.
-- [ ] 8.5 Perform a read-only security review of schema/FK constraints, authoritative four-way attribution, monetary idempotency scope/replay authorization, status-reservation TOCTOU, candidate snapshot enforcement, attempt-versus-execution accounting, reconciliation authority, deletion bypasses, cache invalidation, IDOR coverage, secret serialization, terminal-outcome reporting, archive freeze confirmation, and rollback behavior; fix all Critical and Important findings.
-- [ ] 8.6 Deploy additive schema and null-compatible code with organization spending disabled until the endpoint ceiling matrix and reconciliation workers pass validation; then smoke-test personal Keys, platform credit, equal/custom allocation, organization Key reservation/settlement, join/remove conversion, scoped views, disable/reactivate, archive freeze, and the documented post-activation rollback precondition.
+- organization funding and credit;
+- member allocation, reclaim, and balance invariants;
+- organization Key admission based on allocation;
+- reservation, attempt/provider evidence, final execution evidence, outbox, and pending reconciliation;
+- organization settlement, ledger, archive freeze, and independent quota.

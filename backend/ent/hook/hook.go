@@ -189,6 +189,174 @@ func (f IdentityAdoptionDecisionFunc) Mutate(ctx context.Context, m ent.Mutation
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityAdoptionDecisionMutation", m)
 }
 
+// The OrganizationFunc type is an adapter to allow the use of ordinary
+// function as Organization mutator.
+type OrganizationFunc func(context.Context, *ent.OrganizationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationMutation", m)
+}
+
+// The OrganizationAllocationFunc type is an adapter to allow the use of ordinary
+// function as OrganizationAllocation mutator.
+type OrganizationAllocationFunc func(context.Context, *ent.OrganizationAllocationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationAllocationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationAllocationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationAllocationMutation", m)
+}
+
+// The OrganizationAttemptAccountEffectFunc type is an adapter to allow the use of ordinary
+// function as OrganizationAttemptAccountEffect mutator.
+type OrganizationAttemptAccountEffectFunc func(context.Context, *ent.OrganizationAttemptAccountEffectMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationAttemptAccountEffectFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationAttemptAccountEffectMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationAttemptAccountEffectMutation", m)
+}
+
+// The OrganizationAttemptAccountPostingFunc type is an adapter to allow the use of ordinary
+// function as OrganizationAttemptAccountPosting mutator.
+type OrganizationAttemptAccountPostingFunc func(context.Context, *ent.OrganizationAttemptAccountPostingMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationAttemptAccountPostingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationAttemptAccountPostingMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationAttemptAccountPostingMutation", m)
+}
+
+// The OrganizationAttemptEvidenceFunc type is an adapter to allow the use of ordinary
+// function as OrganizationAttemptEvidence mutator.
+type OrganizationAttemptEvidenceFunc func(context.Context, *ent.OrganizationAttemptEvidenceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationAttemptEvidenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationAttemptEvidenceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationAttemptEvidenceMutation", m)
+}
+
+// The OrganizationExecutionFunc type is an adapter to allow the use of ordinary
+// function as OrganizationExecution mutator.
+type OrganizationExecutionFunc func(context.Context, *ent.OrganizationExecutionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationExecutionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationExecutionMutation", m)
+}
+
+// The OrganizationExecutionAttemptFunc type is an adapter to allow the use of ordinary
+// function as OrganizationExecutionAttempt mutator.
+type OrganizationExecutionAttemptFunc func(context.Context, *ent.OrganizationExecutionAttemptMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationExecutionAttemptFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationExecutionAttemptMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationExecutionAttemptMutation", m)
+}
+
+// The OrganizationExecutionIncidentFunc type is an adapter to allow the use of ordinary
+// function as OrganizationExecutionIncident mutator.
+type OrganizationExecutionIncidentFunc func(context.Context, *ent.OrganizationExecutionIncidentMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationExecutionIncidentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationExecutionIncidentMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationExecutionIncidentMutation", m)
+}
+
+// The OrganizationExecutionOutboxFunc type is an adapter to allow the use of ordinary
+// function as OrganizationExecutionOutbox mutator.
+type OrganizationExecutionOutboxFunc func(context.Context, *ent.OrganizationExecutionOutboxMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationExecutionOutboxFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationExecutionOutboxMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationExecutionOutboxMutation", m)
+}
+
+// The OrganizationExecutionReconciliationAuditFunc type is an adapter to allow the use of ordinary
+// function as OrganizationExecutionReconciliationAudit mutator.
+type OrganizationExecutionReconciliationAuditFunc func(context.Context, *ent.OrganizationExecutionReconciliationAuditMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationExecutionReconciliationAuditFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationExecutionReconciliationAuditMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationExecutionReconciliationAuditMutation", m)
+}
+
+// The OrganizationFinalExecutionEvidenceFunc type is an adapter to allow the use of ordinary
+// function as OrganizationFinalExecutionEvidence mutator.
+type OrganizationFinalExecutionEvidenceFunc func(context.Context, *ent.OrganizationFinalExecutionEvidenceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationFinalExecutionEvidenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationFinalExecutionEvidenceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationFinalExecutionEvidenceMutation", m)
+}
+
+// The OrganizationLedgerOperationFunc type is an adapter to allow the use of ordinary
+// function as OrganizationLedgerOperation mutator.
+type OrganizationLedgerOperationFunc func(context.Context, *ent.OrganizationLedgerOperationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationLedgerOperationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationLedgerOperationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationLedgerOperationMutation", m)
+}
+
+// The OrganizationLedgerPostingFunc type is an adapter to allow the use of ordinary
+// function as OrganizationLedgerPosting mutator.
+type OrganizationLedgerPostingFunc func(context.Context, *ent.OrganizationLedgerPostingMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationLedgerPostingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationLedgerPostingMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationLedgerPostingMutation", m)
+}
+
+// The OrganizationReservationFunc type is an adapter to allow the use of ordinary
+// function as OrganizationReservation mutator.
+type OrganizationReservationFunc func(context.Context, *ent.OrganizationReservationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationReservationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationReservationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationReservationMutation", m)
+}
+
 // The PaymentAuditLogFunc type is an adapter to allow the use of ordinary
 // function as PaymentAuditLog mutator.
 type PaymentAuditLogFunc func(context.Context, *ent.PaymentAuditLogMutation) (ent.Value, error)

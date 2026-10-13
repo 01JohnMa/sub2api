@@ -27,6 +27,20 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/organization"
+	"github.com/Wei-Shaw/sub2api/ent/organizationallocation"
+	"github.com/Wei-Shaw/sub2api/ent/organizationattemptaccounteffect"
+	"github.com/Wei-Shaw/sub2api/ent/organizationattemptaccountposting"
+	"github.com/Wei-Shaw/sub2api/ent/organizationattemptevidence"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecution"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionattempt"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionincident"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionoutbox"
+	"github.com/Wei-Shaw/sub2api/ent/organizationexecutionreconciliationaudit"
+	"github.com/Wei-Shaw/sub2api/ent/organizationfinalexecutionevidence"
+	"github.com/Wei-Shaw/sub2api/ent/organizationledgeroperation"
+	"github.com/Wei-Shaw/sub2api/ent/organizationledgerposting"
+	"github.com/Wei-Shaw/sub2api/ent/organizationreservation"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
@@ -107,41 +121,55 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			apikey.Table:                        apikey.ValidColumn,
-			account.Table:                       account.ValidColumn,
-			accountgroup.Table:                  accountgroup.ValidColumn,
-			announcement.Table:                  announcement.ValidColumn,
-			announcementread.Table:              announcementread.ValidColumn,
-			authidentity.Table:                  authidentity.ValidColumn,
-			authidentitychannel.Table:           authidentitychannel.ValidColumn,
-			channelmonitor.Table:                channelmonitor.ValidColumn,
-			channelmonitordailyrollup.Table:     channelmonitordailyrollup.ValidColumn,
-			channelmonitorhistory.Table:         channelmonitorhistory.ValidColumn,
-			channelmonitorrequesttemplate.Table: channelmonitorrequesttemplate.ValidColumn,
-			errorpassthroughrule.Table:          errorpassthroughrule.ValidColumn,
-			group.Table:                         group.ValidColumn,
-			idempotencyrecord.Table:             idempotencyrecord.ValidColumn,
-			identityadoptiondecision.Table:      identityadoptiondecision.ValidColumn,
-			paymentauditlog.Table:               paymentauditlog.ValidColumn,
-			paymentorder.Table:                  paymentorder.ValidColumn,
-			paymentproviderinstance.Table:       paymentproviderinstance.ValidColumn,
-			pendingauthsession.Table:            pendingauthsession.ValidColumn,
-			promocode.Table:                     promocode.ValidColumn,
-			promocodeusage.Table:                promocodeusage.ValidColumn,
-			proxy.Table:                         proxy.ValidColumn,
-			redeemcode.Table:                    redeemcode.ValidColumn,
-			securitysecret.Table:                securitysecret.ValidColumn,
-			setting.Table:                       setting.ValidColumn,
-			subscriptionplan.Table:              subscriptionplan.ValidColumn,
-			tlsfingerprintprofile.Table:         tlsfingerprintprofile.ValidColumn,
-			usagecleanuptask.Table:              usagecleanuptask.ValidColumn,
-			usagelog.Table:                      usagelog.ValidColumn,
-			user.Table:                          user.ValidColumn,
-			userallowedgroup.Table:              userallowedgroup.ValidColumn,
-			userattributedefinition.Table:       userattributedefinition.ValidColumn,
-			userattributevalue.Table:            userattributevalue.ValidColumn,
-			userplatformquota.Table:             userplatformquota.ValidColumn,
-			usersubscription.Table:              usersubscription.ValidColumn,
+			apikey.Table:                                   apikey.ValidColumn,
+			account.Table:                                  account.ValidColumn,
+			accountgroup.Table:                             accountgroup.ValidColumn,
+			announcement.Table:                             announcement.ValidColumn,
+			announcementread.Table:                         announcementread.ValidColumn,
+			authidentity.Table:                             authidentity.ValidColumn,
+			authidentitychannel.Table:                      authidentitychannel.ValidColumn,
+			channelmonitor.Table:                           channelmonitor.ValidColumn,
+			channelmonitordailyrollup.Table:                channelmonitordailyrollup.ValidColumn,
+			channelmonitorhistory.Table:                    channelmonitorhistory.ValidColumn,
+			channelmonitorrequesttemplate.Table:            channelmonitorrequesttemplate.ValidColumn,
+			errorpassthroughrule.Table:                     errorpassthroughrule.ValidColumn,
+			group.Table:                                    group.ValidColumn,
+			idempotencyrecord.Table:                        idempotencyrecord.ValidColumn,
+			identityadoptiondecision.Table:                 identityadoptiondecision.ValidColumn,
+			organization.Table:                             organization.ValidColumn,
+			organizationallocation.Table:                   organizationallocation.ValidColumn,
+			organizationattemptaccounteffect.Table:         organizationattemptaccounteffect.ValidColumn,
+			organizationattemptaccountposting.Table:        organizationattemptaccountposting.ValidColumn,
+			organizationattemptevidence.Table:              organizationattemptevidence.ValidColumn,
+			organizationexecution.Table:                    organizationexecution.ValidColumn,
+			organizationexecutionattempt.Table:             organizationexecutionattempt.ValidColumn,
+			organizationexecutionincident.Table:            organizationexecutionincident.ValidColumn,
+			organizationexecutionoutbox.Table:              organizationexecutionoutbox.ValidColumn,
+			organizationexecutionreconciliationaudit.Table: organizationexecutionreconciliationaudit.ValidColumn,
+			organizationfinalexecutionevidence.Table:       organizationfinalexecutionevidence.ValidColumn,
+			organizationledgeroperation.Table:              organizationledgeroperation.ValidColumn,
+			organizationledgerposting.Table:                organizationledgerposting.ValidColumn,
+			organizationreservation.Table:                  organizationreservation.ValidColumn,
+			paymentauditlog.Table:                          paymentauditlog.ValidColumn,
+			paymentorder.Table:                             paymentorder.ValidColumn,
+			paymentproviderinstance.Table:                  paymentproviderinstance.ValidColumn,
+			pendingauthsession.Table:                       pendingauthsession.ValidColumn,
+			promocode.Table:                                promocode.ValidColumn,
+			promocodeusage.Table:                           promocodeusage.ValidColumn,
+			proxy.Table:                                    proxy.ValidColumn,
+			redeemcode.Table:                               redeemcode.ValidColumn,
+			securitysecret.Table:                           securitysecret.ValidColumn,
+			setting.Table:                                  setting.ValidColumn,
+			subscriptionplan.Table:                         subscriptionplan.ValidColumn,
+			tlsfingerprintprofile.Table:                    tlsfingerprintprofile.ValidColumn,
+			usagecleanuptask.Table:                         usagecleanuptask.ValidColumn,
+			usagelog.Table:                                 usagelog.ValidColumn,
+			user.Table:                                     user.ValidColumn,
+			userallowedgroup.Table:                         userallowedgroup.ValidColumn,
+			userattributedefinition.Table:                  userattributedefinition.ValidColumn,
+			userattributevalue.Table:                       userattributevalue.ValidColumn,
+			userplatformquota.Table:                        userplatformquota.ValidColumn,
+			usersubscription.Table:                         usersubscription.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

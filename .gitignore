@@ -90,6 +90,11 @@ temp/
 .cache/
 .dev/
 .serena/
+.pnpm-store/
+.playwright-cli/
+
+# 本地数据快照（模型定价缓存等）
+/data/
 
 # ===================
 # 构建产物
@@ -123,10 +128,13 @@ tests
 CLAUDE.md
 .claude
 scripts
+!openspec/archive/upgrade-production-cpa-v7-2-104/scripts/
+!openspec/archive/upgrade-production-cpa-v7-2-104/scripts/**
 .code-review-state
 #openspec/
 code-reviews/
 AGENTS.md
+skills/coococode-ops/
 backend/cmd/server/server
 deploy/docker-compose.override.yml
 .gocache/

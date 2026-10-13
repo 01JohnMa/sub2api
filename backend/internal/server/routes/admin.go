@@ -40,6 +40,9 @@ func RegisterAdminRoutes(
 		// 用户管理
 		registerUserManagementRoutes(admin, h)
 
+		// 平台组织管理
+		registerOrganizationRoutes(admin, h)
+
 		// 分组管理
 		registerGroupRoutes(admin, h)
 
@@ -164,6 +167,36 @@ func registerAdminComplianceRoutes(admin *gin.RouterGroup, h *handler.Handlers) 
 	{
 		compliance.GET("", h.Admin.Compliance.GetStatus)
 		compliance.POST("/accept", h.Admin.Compliance.Accept)
+	}
+}
+
+func registerOrganizationRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	organizations := admin.Group("/organizations")
+	{
+		organizations.GET("", h.Admin.Organization.List)
+		organizations.GET("/:id", h.Admin.Organization.Get)
+		organizations.POST("", h.Admin.Organization.Create)
+		organizations.PUT("/:id", h.Admin.Organization.Update)
+		organizations.POST("/:id/disable", h.Admin.Organization.Disable)
+		organizations.POST("/:id/reactivate", h.Admin.Organization.Reactivate)
+		organizations.GET("/:id/archive-preview", h.Admin.Organization.GetArchivePreview)
+		organizations.POST("/:id/archive", h.Admin.Organization.Archive)
+		organizations.GET("/:id/members", h.Admin.Organization.ListMembers)
+		organizations.POST("/:id/members", h.Admin.Organization.AddMember)
+		organizations.PUT("/:id/members/:user_id", h.Admin.Organization.UpdateMember)
+		organizations.DELETE("/:id/members/:user_id", h.Admin.Organization.RemoveMember)
+		organizations.POST("/:id/credit", h.Admin.Organization.Credit)
+		organizations.GET("/:id/balance", h.Admin.Organization.GetBalance)
+		organizations.GET("/:id/report", h.Admin.Organization.GetReport)
+		organizations.GET("/:id/report/members", h.Admin.Organization.ListReportMembers)
+		organizations.GET("/:id/ledger", h.Admin.Organization.ListLedger)
+		organizations.POST("/:id/allocations/custom/preview", h.Admin.Organization.PreviewCustomAllocation)
+		organizations.POST("/:id/allocations/custom", h.Admin.Organization.ExecuteCustomAllocation)
+		organizations.POST("/:id/allocations/reclaim/preview", h.Admin.Organization.PreviewReclaimAllocation)
+		organizations.POST("/:id/allocations/reclaim", h.Admin.Organization.ExecuteReclaimAllocation)
+		organizations.GET("/:id/pending-reconciliations", h.Admin.Organization.ListPendingReconciliations)
+		organizations.GET("/:id/pending-reconciliations/:execution_id", h.Admin.Organization.GetPendingReconciliation)
+		organizations.POST("/:id/pending-reconciliations/:execution_id/resolve", h.Admin.Organization.ResolvePendingReconciliation)
 	}
 }
 

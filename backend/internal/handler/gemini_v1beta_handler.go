@@ -45,6 +45,10 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 		googleError(c, http.StatusBadRequest, "API key group platform is not gemini")
 		return
 	}
+	if organizationNonBillableAuthorization(c) {
+		h.handleOrganizationGeminiModelsRead(c, apiKey, "")
+		return
+	}
 
 	// 分组级模型白名单开启时过滤 models[].name（名字形如 models/xxx）。
 	filterGeminiModels := func(models []gemini.Model) []gemini.Model {
@@ -244,6 +248,10 @@ func (h *GatewayHandler) GeminiV1BetaGetModel(c *gin.Context) {
 	if resolvedModel, ok := service.ResolvedUpstreamModelFromContext(c.Request.Context()); ok && strings.TrimSpace(resolvedModel) != "" {
 		modelName = strings.TrimSpace(resolvedModel)
 	}
+	if organizationNonBillableAuthorization(c) {
+		h.handleOrganizationGeminiModelsRead(c, apiKey, modelName)
+		return
+	}
 
 	// 强制 antigravity 模式：返回 antigravity 模型信息
 	if forcePlatform == service.PlatformAntigravity {
@@ -298,6 +306,11 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		zap.Int64("api_key_id", apiKey.ID),
 		zap.Any("group_id", apiKey.GroupID),
 	)
+	_, organizationRequest := middleware.GetOrganizationKeyAuthorizationFromContext(c)
+	endpointFamily := service.OrganizationEndpointFamilyGemini
+	if forcePlatform, forced := middleware.GetForcePlatformFromContext(c); forced && forcePlatform == service.PlatformAntigravity {
+		endpointFamily = service.OrganizationEndpointFamilyAntigravity
+	}
 
 	// 检查平台：优先使用强制平台（/antigravity 路由，中间件已设置 request.Context），否则要求 gemini 分组
 	if !middleware.HasForcePlatform(c) {
@@ -307,8 +320,21 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		}
 	}
 
-	modelName, action, err := parseGeminiModelAction(strings.TrimPrefix(c.Param("modelAction"), "/"))
+	rawModelAction := strings.TrimPrefix(c.Param("modelAction"), "/")
+	modelName, action, err := parseGeminiModelAction(rawModelAction)
 	if err != nil {
+		if organizationRequest {
+			var evidenceErr error
+			if strings.Contains(rawModelAction, "countTokens") {
+				evidenceErr = h.recordOrganizationCountTokensPreDispatchRejection(c, apiKey, "", nil, "gemini_count_tokens_path_invalid")
+			} else {
+				evidenceErr = h.recordOrganizationGeminiV1BetaPreDispatchRejection(c, apiKey, nil, endpointFamily, "", "", err)
+			}
+			if evidenceErr != nil {
+				h.writeOrganizationGeminiError(c, evidenceErr)
+				return
+			}
+		}
 		googleError(c, http.StatusNotFound, err.Error())
 		return
 	}
@@ -327,6 +353,18 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 
 	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
 	if err != nil {
+		if organizationRequest {
+			var evidenceErr error
+			if action == "countTokens" {
+				evidenceErr = h.recordOrganizationCountTokensPreDispatchRejection(c, apiKey, modelName, nil, "gemini_count_tokens_body_read_failed")
+			} else {
+				evidenceErr = h.recordOrganizationGeminiV1BetaPreDispatchRejection(c, apiKey, nil, endpointFamily, modelName, action, err)
+			}
+			if evidenceErr != nil {
+				h.writeOrganizationGeminiError(c, evidenceErr)
+				return
+			}
+		}
 		if maxErr, ok := extractMaxBytesError(err); ok {
 			googleError(c, http.StatusRequestEntityTooLarge, buildBodyTooLargeMessage(maxErr.Limit))
 			return
@@ -335,6 +373,18 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		return
 	}
 	if len(body) == 0 {
+		if organizationRequest {
+			var evidenceErr error
+			if action == "countTokens" {
+				evidenceErr = h.recordOrganizationCountTokensPreDispatchRejection(c, apiKey, modelName, body, "gemini_count_tokens_body_empty")
+			} else {
+				evidenceErr = h.recordOrganizationGeminiV1BetaPreDispatchRejection(c, apiKey, body, endpointFamily, modelName, action, service.ErrOrganizationGeminiUnsupportedRequest)
+			}
+			if evidenceErr != nil {
+				h.writeOrganizationGeminiError(c, evidenceErr)
+				return
+			}
+		}
 		googleError(c, http.StatusBadRequest, "Request body is empty")
 		return
 	}
@@ -343,6 +393,14 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(stream, false)))
 	pricingCtx, pricingAt := service.WithGatewayTokenRequestPricing(c.Request.Context())
 	c.Request = c.Request.WithContext(pricingCtx)
+	if organizationRequest && action == "countTokens" {
+		h.handleOrganizationGeminiCountTokens(c, apiKey, modelName, body, reqLog)
+		return
+	}
+	if organizationRequest {
+		h.handleOrganizationGeminiV1BetaModels(c, apiKey, authSubject, body, modelName, action, endpointFamily, reqLog)
+		return
+	}
 
 	if decision := h.checkSecurityAudit(c, reqLog, apiKey, authSubject, service.ContentModerationProtocolGemini, modelName, body); decision != nil && !decision.AllowNextStage {
 		googleSecurityAuditError(c, decision)
@@ -380,7 +438,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	}
 
 	// 2) billing eligibility check (after wait)
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+	if err := checkGatewayBillingEligibility(c.Request.Context(), c, h.billingCacheService, apiKey, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("gemini.billing_eligibility_check_failed", zap.Error(err))
 		status, _, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {

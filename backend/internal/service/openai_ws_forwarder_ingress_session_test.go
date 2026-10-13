@@ -90,6 +90,137 @@ func TestOpenAIWSDownstreamWriteContext_CancellationOwnership(t *testing.T) {
 		require.ErrorIs(t, writeCtx.Err(), context.Canceled)
 		require.ErrorIs(t, context.Cause(writeCtx), serverShutdown)
 	})
+type openAIWSPreDispatchTestDialer struct {
+	conn       openAIWSClientConn
+	statusCode int
+	err        error
+}
+
+func (d *openAIWSPreDispatchTestDialer) Dial(context.Context, string, http.Header, string) (openAIWSClientConn, int, http.Header, error) {
+	return d.conn, d.statusCode, http.Header{"X-Request-ID": []string{"req_pre_dispatch"}}, d.err
+}
+
+type openAIWSNonFrameTestConn struct{}
+
+func (*openAIWSNonFrameTestConn) WriteJSON(context.Context, any) error { return nil }
+func (*openAIWSNonFrameTestConn) ReadMessage(context.Context) ([]byte, error) {
+	return nil, io.EOF
+}
+func (*openAIWSNonFrameTestConn) Ping(context.Context) error { return nil }
+func (*openAIWSNonFrameTestConn) Close() error               { return nil }
+
+func TestOpenAIGatewayService_PassthroughPreDispatchFailuresNotifyTurn(t *testing.T) {
+	tests := []struct {
+		name      string
+		configure func(*OpenAIGatewayService, *Account)
+	}{
+		{
+			name: "invalid websocket URL",
+			configure: func(_ *OpenAIGatewayService, account *Account) {
+				account.Credentials["base_url"] = "://invalid"
+			},
+		},
+		{
+			name: "dialer unavailable",
+			configure: func(svc *OpenAIGatewayService, _ *Account) {
+				svc.openaiWSPassthroughDialerOnce.Do(func() {})
+			},
+		},
+		{
+			name: "non-429 handshake failure",
+			configure: func(svc *OpenAIGatewayService, _ *Account) {
+				svc.openaiWSPassthroughDialer = &openAIWSPreDispatchTestDialer{
+					statusCode: http.StatusServiceUnavailable, err: errors.New("handshake rejected"),
+				}
+			},
+		},
+		{
+			name: "connection lacks frame relay",
+			configure: func(svc *OpenAIGatewayService, _ *Account) {
+				svc.openaiWSPassthroughDialer = &openAIWSPreDispatchTestDialer{conn: &openAIWSNonFrameTestConn{}}
+			},
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			cfg := &config.Config{}
+			cfg.Security.URLAllowlist.Enabled = false
+			cfg.Gateway.OpenAIWS.DialTimeoutSeconds = 1
+			cfg.Gateway.OpenAIWS.WriteTimeoutSeconds = 1
+			svc := &OpenAIGatewayService{cfg: cfg, toolCorrector: NewCodexToolCorrector()}
+			account := &Account{
+				ID: 991, Name: "pre-dispatch", Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+				Status: StatusActive, Schedulable: true, Concurrency: 1,
+				Credentials: map[string]any{"api_key": "sk-test"},
+			}
+			testCase.configure(svc, account)
+
+			type afterTurnResult struct {
+				result *OpenAIForwardResult
+				err    error
+			}
+			serverErrCh := make(chan error, 1)
+			afterTurnCh := make(chan afterTurnResult, 1)
+			wsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				conn, err := coderws.Accept(w, r, nil)
+				if err != nil {
+					serverErrCh <- err
+					return
+				}
+				defer conn.CloseNow()
+				readCtx, cancelRead := context.WithTimeout(r.Context(), time.Second)
+				_, firstMessage, readErr := conn.Read(readCtx)
+				cancelRead()
+				if readErr != nil {
+					serverErrCh <- readErr
+					return
+				}
+				ginCtx, _ := gin.CreateTestContext(httptest.NewRecorder())
+				ginCtx.Request = r
+				serverErrCh <- svc.proxyResponsesWebSocketV2Passthrough(
+					r.Context(), ginCtx, conn, account, "sk-test", firstMessage,
+					&OpenAIWSIngressHooks{
+						BeforeRequest: func(int, []byte, string) error { return nil },
+						AfterTurn: func(_ int, result *OpenAIForwardResult, turnErr error) {
+							afterTurnCh <- afterTurnResult{result: result, err: turnErr}
+						},
+					},
+					OpenAIWSProtocolDecision{},
+				)
+			}))
+			defer wsServer.Close()
+
+			dialCtx, cancelDial := context.WithTimeout(context.Background(), time.Second)
+			clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
+			cancelDial()
+			require.NoError(t, err)
+			defer clientConn.CloseNow()
+			writeCtx, cancelWrite := context.WithTimeout(context.Background(), time.Second)
+			err = clientConn.Write(writeCtx, coderws.MessageText, []byte(`{"type":"response.create","model":"gpt-5.4","input":"hello"}`))
+			cancelWrite()
+			require.NoError(t, err)
+
+			var after afterTurnResult
+			select {
+			case after = <-afterTurnCh:
+			case <-time.After(2 * time.Second):
+				t.Fatal("timed out waiting for pre-dispatch AfterTurn callback")
+			}
+			require.Nil(t, after.result)
+			var preDispatchErr *OpenAILocalPreDispatchError
+			require.ErrorAs(t, after.err, &preDispatchErr)
+			require.Equal(t, OpenAIWSUpstreamPreDispatchZeroProof, preDispatchErr.ZeroProof)
+			var serverErr error
+			select {
+			case serverErr = <-serverErrCh:
+			case <-time.After(2 * time.Second):
+				t.Fatal("timed out waiting for passthrough pre-dispatch return")
+			}
+			require.ErrorAs(t, serverErr, &preDispatchErr)
+		})
+	}
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossTurns(t *testing.T) {

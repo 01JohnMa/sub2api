@@ -28,6 +28,10 @@ type User struct {
 	// group is bindable.
 	RestrictPublicGroups bool
 	TokenVersion         int64 // Incremented on password change to invalidate existing tokens
+
+	OrganizationID   *int64
+	OrganizationRole *string
+
 	// TokenVersionResolved indicates TokenVersion already contains the fingerprint-derived
 	// value expected in JWT claims and refresh-token state.
 	TokenVersionResolved bool

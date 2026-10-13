@@ -2454,6 +2454,7 @@ func TestOpenAIStreamingClientDisconnectDrainsUpstreamUsage(t *testing.T) {
 	if result.usage.InputTokens != 3 || result.usage.OutputTokens != 5 || result.usage.CacheReadInputTokens != 1 {
 		t.Fatalf("unexpected usage: %+v", *result.usage)
 	}
+	require.True(t, result.clientDisconnect)
 	if strings.Contains(rec.Body.String(), "event: error") || strings.Contains(rec.Body.String(), "write_failed") {
 		t.Fatalf("expected no injected SSE error event, got %q", rec.Body.String())
 	}
@@ -2983,7 +2984,7 @@ func TestOpenAIStreamingReuseScannerBufferAndStillWorks(t *testing.T) {
 
 	go func() {
 		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":3}}}}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":3,\"output_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":1}}}}\n\n"))
 	}()
 
 	result, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "model", "model")
@@ -2991,9 +2992,9 @@ func TestOpenAIStreamingReuseScannerBufferAndStillWorks(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.usage)
-	require.Equal(t, 1, result.usage.InputTokens)
+	require.Equal(t, 3, result.usage.InputTokens)
 	require.Equal(t, 2, result.usage.OutputTokens)
-	require.Equal(t, 3, result.usage.CacheReadInputTokens)
+	require.Equal(t, 1, result.usage.CacheReadInputTokens)
 }
 
 func TestOpenAIInvalidBaseURLWhenAllowlistDisabled(t *testing.T) {
@@ -3774,6 +3775,20 @@ func TestExtractOpenAIUsageFromJSONBytes_IncludesGrokReasoningTokens(t *testing.
 	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"usage":{"input_tokens":32,"output_tokens":9,"total_tokens":135,"output_tokens_details":{"reasoning_tokens":94}}}`))
 	require.True(t, ok)
 	require.Equal(t, 103, usage.OutputTokens, "Responses detail-only shape is normalized when total exposes the full output")
+}
+
+func TestExtractOpenAIUsageFromJSONBytesRejectsIncompleteOrInvalidUsage(t *testing.T) {
+	for _, body := range []string{
+		`{"usage":{}}`,
+		`{"usage":{"input_tokens":3}}`,
+		`{"usage":{"input_tokens":"3","output_tokens":5}}`,
+		`{"usage":{"input_tokens":3.5,"output_tokens":5}}`,
+		`{"usage":{"input_tokens":3,"output_tokens":-1}}`,
+		`{"usage":{"input_tokens":3,"output_tokens":1,"input_tokens_details":{"cached_tokens":4}}}`,
+	} {
+		_, ok := extractOpenAIUsageFromJSONBytes([]byte(body))
+		require.False(t, ok, body)
+	}
 }
 
 func TestExtractCodexFinalResponse_SampleReplay(t *testing.T) {

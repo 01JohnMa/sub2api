@@ -217,6 +217,12 @@ security:
 # 网关配置
 # =============================================================================
 gateway:
+  # Organization-key spending rollout gate. Keep disabled until the corresponding
+  # endpoint adapter, cost ceiling, and reconciliation path are validated.
+  # 组织 Key 计费总闸。各端点适配器、成本上界和对账链路验证前必须保持关闭。
+  organization_spending:
+    enabled: false
+    capabilities: {}
   # Timeout for waiting upstream response headers (seconds)
   # 等待上游响应头超时时间（秒）
   response_header_timeout: 600

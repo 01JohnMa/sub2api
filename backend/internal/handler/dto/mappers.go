@@ -58,6 +58,50 @@ func UserFromService(u *service.User) *User {
 	return out
 }
 
+// AuthenticatedUserFromService builds the auth/me and login payload. Personal
+// account fields are intentionally omitted for active organization admins who
+// are not platform administrators.
+func AuthenticatedUserFromService(u *service.User, includePersonal bool) *AuthenticatedUser {
+	if u == nil {
+		return nil
+	}
+	result := &AuthenticatedUser{
+		AuthenticatedUserIdentity: AuthenticatedUserIdentity{
+			ID:           u.ID,
+			Email:        u.Email,
+			Username:     u.Username,
+			Role:         u.Role,
+			Status:       u.Status,
+			LastActiveAt: u.LastActiveAt,
+			CreatedAt:    u.CreatedAt,
+			UpdatedAt:    u.UpdatedAt,
+			DeletedAt:    u.DeletedAt,
+		},
+	}
+	if !includePersonal {
+		return result
+	}
+
+	base := UserFromService(u)
+	if base == nil {
+		return result
+	}
+	result.AuthenticatedUserPersonalFields = &AuthenticatedUserPersonalFields{
+		Balance:                    base.Balance,
+		Concurrency:                base.Concurrency,
+		AllowedGroups:              base.AllowedGroups,
+		BalanceNotifyEnabled:       base.BalanceNotifyEnabled,
+		BalanceNotifyThresholdType: base.BalanceNotifyThresholdType,
+		BalanceNotifyThreshold:     base.BalanceNotifyThreshold,
+		BalanceNotifyExtraEmails:   base.BalanceNotifyExtraEmails,
+		TotalRecharged:             base.TotalRecharged,
+		RPMLimit:                   base.RPMLimit,
+		APIKeys:                    base.APIKeys,
+		Subscriptions:              base.Subscriptions,
+	}
+	return result
+}
+
 // UserFromServiceAdmin converts a service User to DTO for admin users.
 // It includes notes - user-facing endpoints must not use this.
 func UserFromServiceAdmin(u *service.User) *AdminUser {

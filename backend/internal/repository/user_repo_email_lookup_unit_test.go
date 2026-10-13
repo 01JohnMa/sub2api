@@ -36,6 +36,44 @@ func newUserEntRepo(t *testing.T) (*userRepository, *dbent.Client) {
 	return newUserRepositoryWithSQL(client, db), client
 }
 
+func TestUserOrganizationAssignmentCheckRejectsNullRoleOnSQLite(t *testing.T) {
+	_, client := newUserEntRepo(t)
+	ctx := context.Background()
+
+	creator, err := client.User.Create().
+		SetEmail("organization-check-creator@test.com").
+		SetPasswordHash("hash").
+		Save(ctx)
+	require.NoError(t, err)
+	organization, err := client.Organization.Create().
+		SetName("Organization Check").
+		SetCode("organization-check-sqlite").
+		SetCreatedBy(creator.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, err = client.ExecContext(ctx, "UPDATE users SET organization_id = ?, organization_role = NULL WHERE id = ?", organization.ID, creator.ID)
+	require.Error(t, err)
+}
+
+func TestUserRepositoryDeleteOnSQLite(t *testing.T) {
+	repo, client := newUserEntRepo(t)
+	ctx := context.Background()
+
+	entity, err := client.User.Create().
+		SetEmail("sqlite-delete@test.com").
+		SetUsername("sqlite-delete").
+		SetPasswordHash("hash").
+		SetRole(service.RoleUser).
+		SetStatus(service.StatusActive).
+		Save(ctx)
+	require.NoError(t, err)
+
+	require.NoError(t, repo.Delete(ctx, entity.ID))
+	_, err = client.User.Get(ctx, entity.ID)
+	require.True(t, dbent.IsNotFound(err))
+}
+
 func TestUserRepositoryGetByEmailNormalizesLegacySpacingAndCase(t *testing.T) {
 	repo, _ := newUserEntRepo(t)
 	ctx := context.Background()

@@ -62,11 +62,26 @@ import ProfilePasskeyCard from '@/components/user/profile/ProfilePasskeyCard.vue
 import { isWeChatWebOAuthEnabled } from '@/api/auth'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import type { AuthenticatedUser, User } from '@/types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
-const user = computed(() => authStore.user)
+
+function hasPersonalProfileFields(value: AuthenticatedUser | null): value is User {
+  return value !== null &&
+    value.balance !== undefined &&
+    value.concurrency !== undefined &&
+    value.allowed_groups !== undefined &&
+    value.balance_notify_enabled !== undefined &&
+    value.balance_notify_threshold !== undefined &&
+    value.balance_notify_extra_emails !== undefined
+}
+
+const user = computed<User | null>(() => {
+  const current = authStore.user
+  return hasPersonalProfileFields(current) ? current : null
+})
 
 const contactInfo = ref('')
 const balanceLowNotifyEnabled = ref(false)

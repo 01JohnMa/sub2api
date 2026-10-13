@@ -85,6 +85,8 @@ export interface User {
   oidc_bound?: boolean
   wechat_bound?: boolean
   role: 'admin' | 'user' // User role for authorization
+  organization?: OrganizationSummary | null
+  organization_role?: OrganizationRole | null
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
   concurrency: number // Allowed concurrent requests
@@ -100,6 +102,30 @@ export interface User {
   updated_at: string
   deleted_at?: string | null
 }
+
+export type AuthenticatedUser = Omit<
+  User,
+  | 'balance'
+  | 'concurrency'
+  | 'allowed_groups'
+  | 'balance_notify_enabled'
+  | 'balance_notify_threshold'
+  | 'balance_notify_extra_emails'
+  | 'rpm_limit'
+  | 'subscriptions'
+> & Partial<
+  Pick<
+    User,
+    | 'balance'
+    | 'concurrency'
+    | 'allowed_groups'
+    | 'balance_notify_enabled'
+    | 'balance_notify_threshold'
+    | 'balance_notify_extra_emails'
+    | 'rpm_limit'
+    | 'subscriptions'
+  >
+>
 
 export interface AdminUser extends User {
   // 管理员备注（普通用户接口不返回）
@@ -294,10 +320,10 @@ export interface AuthResponse {
   refresh_token?: string  // New: Refresh Token for token renewal
   expires_in?: number     // New: Access Token expiry time in seconds
   token_type: string
-  user: User & { run_mode?: 'standard' | 'simple' }
+  user: AuthenticatedUser & { run_mode?: 'standard' | 'simple' }
 }
 
-export interface CurrentUserResponse extends User {
+export interface CurrentUserResponse extends AuthenticatedUser {
   run_mode?: 'standard' | 'simple'
 }
 
@@ -492,6 +518,414 @@ export interface PaginatedResponse<T> {
   page: number
   page_size: number
   pages: number
+}
+
+// ==================== Organization Types ====================
+
+export type OrganizationStatus = 'active' | 'disabled' | 'archived'
+export type OrganizationRole = 'organization_admin' | 'organization_member'
+
+/**
+ * Organization identity returned to the current member. This intentionally
+ * excludes platform resources, allocations, and personal account data.
+ */
+export interface OrganizationSummary {
+  id: number
+  name: string
+  code: string
+  description: string
+  status: OrganizationStatus
+}
+
+export interface Organization {
+  id: number
+  name: string
+  code: string
+  description: string
+  status: OrganizationStatus
+  created_by: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateOrganizationRequest {
+  name: string
+  code: string
+  description?: string
+}
+
+export interface UpdateOrganizationRequest {
+  name?: string
+  code?: string
+  description?: string
+}
+
+/** Safe organization-scoped allocation summary. This is not a personal balance. */
+export interface OrganizationMemberAllocation {
+  id: number
+  status: string
+  available: string
+  reserved: string
+}
+
+/**
+ * Membership data intentionally omits platform roles, personal balances, API keys,
+ * and other cross-organization user data.
+ */
+export interface OrganizationMember {
+  user_id: number
+  email: string
+  username: string
+  status: 'active' | 'disabled'
+  organization_role: OrganizationRole
+  allocation: OrganizationMemberAllocation
+}
+
+export interface AddOrganizationMemberRequest {
+  user_id: number
+  organization_role: OrganizationRole
+}
+
+export interface UpdateOrganizationMemberRoleRequest {
+  organization_role: OrganizationRole
+}
+
+export interface RemoveOrganizationMemberRequest {
+  public_reason?: string
+}
+
+export interface OrganizationMemberRemovalResult {
+  operation_id: string
+  correlation_id: string
+  organization_id: number
+  user_id: number
+  allocation_id: number
+  operation_type: 'member_removal_reclaim'
+  currency: 'USD'
+  outcome: 'committed'
+  reclaimed: string
+  pool_before: string
+  pool_after: string
+  balance_version_before: number
+  balance_version_after: number
+  replayed: boolean
+}
+
+export interface OrganizationBalanceSummary {
+  organization_id: number
+  status: OrganizationStatus
+  currency: 'USD'
+  unallocated: string
+  available: string
+  reserved: string
+  consumed: string
+  total_remaining: string
+  balance_version: number
+}
+
+export interface OrganizationArchivePreview {
+  organization_id: number
+  status: OrganizationStatus
+  unallocated: string
+  balance_version: number
+  updated_at: string
+}
+
+export interface ArchiveOrganizationRequest {
+  balance_version: number
+  updated_at: string
+  confirm_archive: boolean
+}
+
+export type OrganizationPendingReconciliationResolution = 'settled' | 'released'
+
+export interface OrganizationPendingReconciliationEvidence {
+  attempt_id: string
+  attempt_sequence: number
+  evidence_source: string
+  terminal_outcome: 'success' | 'error' | 'unknown'
+  raw_actual_cost: string
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  provider_observed_at: string
+}
+
+export interface OrganizationPendingReconciliationAttempt {
+  attempt_id: string
+  attempt_sequence: number
+  status: string
+}
+
+export interface OrganizationPendingReconciliation {
+  execution_id: string
+  organization_id: number
+  allocation_id: number
+  reservation_id: number
+  candidate_ceiling: string
+  reserved_amount: string
+  accepted_at: string
+  attempt_count: number
+  attempts: OrganizationPendingReconciliationAttempt[]
+  evidence: OrganizationPendingReconciliationEvidence[]
+  allowed_resolution?: OrganizationPendingReconciliationResolution
+  computed_organization_amount?: string
+  conflict: boolean
+}
+
+export interface OrganizationPendingReconciliationResult {
+  execution_id: string
+  organization_id: number
+  reservation_id: number
+  reservation_state: OrganizationPendingReconciliationResolution
+  terminal_outcome: 'success' | 'error'
+  organization_settled_cost: string
+  occurred_at: string
+  reconciled_at?: string
+  replayed: boolean
+}
+
+export interface OrganizationPendingReconciliationSummary {
+  count: number
+  status: 'clear' | 'pending'
+}
+
+export interface OrganizationReportModel {
+  model: string
+  request_count: number
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  cost: string
+}
+
+export interface OrganizationReportTrend {
+  occurred_on: string
+  request_count: number
+  success_count: number
+  error_count_total: number
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  cost: string
+}
+
+export interface OrganizationReport {
+  organization_id: number
+  start: string
+  end: string
+  current_member_count: number
+  active_member_count: number
+  api_key_count: number
+  request_count_total: number
+  success_count: number
+  error_count_total: number
+  business_limited_count: number
+  error_count_sla: number
+  success_rate: number
+  error_rate: number
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  cost: string
+  models: OrganizationReportModel[]
+  trends: OrganizationReportTrend[]
+}
+
+export interface OrganizationPublicLedgerEntry {
+	entry_key: string
+	operation_type: string
+  public_reason: string | null
+  actor_display: string
+  bucket_type: string
+  before_amount: string
+  delta_amount: string
+  after_amount: string
+  occurred_at: string
+}
+
+export interface OrganizationReportMemberUsage {
+  user_id?: number
+  display_name: string
+  request_count: number
+  success_count: number
+  error_count_total: number
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  cost: string
+}
+
+export interface OrganizationReportMembersResponse {
+  items: OrganizationReportMemberUsage[]
+  departed: OrganizationReportMemberUsage
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
+// Current-organization key metadata intentionally excludes the raw key, ACLs,
+// credentials, rate windows, and all mutation controls.
+export interface OrganizationAPIKeyMetadata {
+  id: number
+  name: string
+  status: string
+  user_id: number
+  member_name: string
+  organization_id: number
+  created_at: string
+  last_used_at?: string | null
+  expires_at?: string | null
+  quota: number
+  quota_used: number
+}
+
+export interface OrganizationLedgerEntry {
+  posting_id: number
+  posting_sequence: number
+  operation_id: string
+  correlation_id: string
+  organization_id: number
+  operation_type: string
+  authorization_scope: string
+  actor_id_snapshot: number
+  actor_display_snapshot: string
+  actor_role_snapshot: string
+  currency: 'USD'
+  idempotency_key_hash: string
+  canonical_payload_hash: string
+  public_reason: string | null
+  internal_reason: string
+  bucket_type: string
+  bucket_id_snapshot: number
+  allocation_id_snapshot: number | null
+  target_user_id_snapshot: number | null
+  before_amount: string
+  delta_amount: string
+  after_amount: string
+  balance_version_before: number
+  balance_version_after: number
+  occurred_at: string
+  created_at: string
+}
+
+export interface CreditOrganizationRequest {
+  amount: string
+  public_reason?: string
+  internal_reason: string
+}
+
+export interface OrganizationFundingResult {
+  operation_id: string
+  correlation_id: string
+  organization_id: number
+  currency: 'USD'
+  amount: string
+  pool_before: string
+  pool_after: string
+  balance_version_before: number
+  balance_version_after: number
+  ledger: OrganizationLedgerEntry
+  replayed: boolean
+}
+
+/** Current-organization member addition. The server derives role and scope. */
+export type AddCurrentOrganizationMemberRequest =
+  | { user_id: number; email?: never }
+  | { email: string; user_id?: never }
+
+export type OrganizationAllocationOperation = 'equal' | 'custom' | 'reclaim'
+export type OrganizationAllocationOperationType =
+  | 'equal_allocation'
+  | 'custom_allocation'
+  | 'allocation_reclaim'
+
+export interface OrganizationAllocationTargetInput {
+  user_id: number
+  amount: string
+}
+
+/** Payload sent to a preview endpoint; amounts are canonical decimal strings. */
+export interface OrganizationAllocationPreviewRequest {
+  targets?: OrganizationAllocationTargetInput[]
+  public_reason?: string
+}
+
+export interface OrganizationAllocationMemberPreview {
+  user_id: number
+  user_status: string
+  organization_role: OrganizationRole
+  allocation_id: number
+  allocation_status: string
+  available: string
+  reserved: string
+  excluded_reason?: string
+}
+
+export interface OrganizationAllocationTargetPreview {
+  user_id: number
+  allocation_id: number
+  before: string
+  delta: string
+  after: string
+}
+
+/**
+ * Canonical plan echoed from preview into execute. Keep this shape opaque to
+ * the UI so execute cannot accidentally rebuild or normalize a stale plan.
+ */
+export interface OrganizationAllocationConfirmation {
+  organization_id: number
+  authorization_scope: string
+  operation_type: OrganizationAllocationOperationType
+  currency: 'USD'
+  money_scale: number
+  organization_at: string
+  balance_version: number
+  snapshot_hash: string
+  pool_before: string
+  pool_after: string
+  total_delta: string
+  rounding_remainder: string
+  public_reason?: string
+  no_op_reason?: string
+  targets: OrganizationAllocationTargetPreview[]
+}
+
+export interface OrganizationAllocationPreview {
+  confirmation: OrganizationAllocationConfirmation
+  eligible_members: OrganizationAllocationMemberPreview[]
+  excluded_members: OrganizationAllocationMemberPreview[]
+  canonical_payload_hash: string
+  preview_token: string
+  expires_at: string
+}
+
+export interface OrganizationAllocationExecuteRequest {
+  preview_token: string
+  confirmation: OrganizationAllocationConfirmation
+}
+
+export interface OrganizationAllocationResult {
+  operation_id?: string
+  correlation_id?: string
+  organization_id: number
+  operation_type: OrganizationAllocationOperationType
+  currency: 'USD'
+  outcome: 'committed' | 'no_op'
+  no_op_reason?: string
+  pool_before: string
+  pool_after: string
+  total_delta: string
+  balance_version_before: number
+  balance_version_after: number
+  replayed: boolean
 }
 
 // ==================== UI State Types ====================

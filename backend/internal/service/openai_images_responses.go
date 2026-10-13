@@ -1400,6 +1400,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthStreamingResponse(
 	responseFormat string,
 	streamPrefix string,
 	fallbackModel string,
+	clientDisconnectedOut *bool,
 ) (OpenAIUsage, int, []string, *int, error) {
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	c.Header("Content-Type", "text/event-stream")
@@ -1438,6 +1439,11 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthStreamingResponse(
 	}
 	var createdAt int64
 	clientDisconnected := false
+	defer func() {
+		if clientDisconnectedOut != nil {
+			*clientDisconnectedOut = clientDisconnected
+		}
+	}()
 	lastDownstreamWriteAt := time.Now()
 	var sseData openAISSEDataAccumulator
 	var processDataErr error
@@ -1926,19 +1932,20 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 	defer func() { _ = resp.Body.Close() }()
 
 	var (
-		usage            OpenAIUsage
-		imageCount       int
-		imageOutputSizes []string
-		firstTokenMs     *int
+		usage              OpenAIUsage
+		imageCount         int
+		imageOutputSizes   []string
+		firstTokenMs       *int
+		clientDisconnected bool
 	)
 	// 与 handleOpenAIImagesOAuthResponseError 的比较端同口径：排除非流式 JSON
 	// keepalive 心跳字节，避免 failover 第 2 轮起把上一轮心跳残留误判为已写响应。
 	writerSizeBeforeResponse := OpenAIImagesJSONKeepaliveAdjustedWrittenSize(c)
 	if parsed.Stream {
 		if direct {
-			usage, imageCount, imageOutputSizes, firstTokenMs, err = s.handleOpenAIImagesStreamingResponse(resp, c, startTime, parsed)
+			usage, imageCount, imageOutputSizes, firstTokenMs, err = s.handleOpenAIImagesStreamingResponse(resp, c, startTime, parsed, &clientDisconnected)
 		} else {
-			usage, imageCount, imageOutputSizes, firstTokenMs, err = s.handleOpenAIImagesOAuthStreamingResponse(resp, c, startTime, parsed.ResponseFormat, openAIImagesStreamPrefix(parsed), upstreamModel)
+			usage, imageCount, imageOutputSizes, firstTokenMs, err = s.handleOpenAIImagesOAuthStreamingResponse(resp, c, startTime, parsed.ResponseFormat, openAIImagesStreamPrefix(parsed), upstreamModel, &clientDisconnected)
 		}
 		if err != nil {
 			if imageCount > 0 {
@@ -1959,6 +1966,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 					ImageSize:                     parsed.SizeTier,
 					ImageInputSize:                parsed.Size,
 					ImageOutputSizes:              imageOutputSizes,
+					ClientDisconnect:              clientDisconnected,
 				}, err
 			}
 			return nil, s.handleOpenAIImagesOAuthResponseError(
@@ -1991,9 +1999,6 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 			)
 		}
 	}
-	if imageCount <= 0 {
-		imageCount = parsed.N
-	}
 	return &OpenAIForwardResult{
 		RequestID:                     resp.Header.Get("x-request-id"),
 		UpstreamHeaders:               resp.Header,
@@ -2011,6 +2016,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 		ImageSize:                     parsed.SizeTier,
 		ImageInputSize:                parsed.Size,
 		ImageOutputSizes:              imageOutputSizes,
+		ClientDisconnect:              clientDisconnected,
 	}, nil
 }
 

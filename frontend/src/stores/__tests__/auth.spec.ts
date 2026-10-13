@@ -342,6 +342,131 @@ describe('useAuthStore', () => {
     })
   })
 
+  describe('isOrganizationAdmin', () => {
+    it('active organization_admin 返回 true，且不改变 isAdmin 语义', async () => {
+      mockLogin.mockResolvedValue({
+        ...fakeAuthResponse,
+        user: {
+          ...fakeUser,
+          organization_role: 'organization_admin' as const,
+          organization: {
+            id: 12,
+            name: 'Example Organization',
+            code: 'example',
+            description: 'Example description',
+            status: 'active' as const,
+          },
+        },
+      })
+      const store = useAuthStore()
+
+      await store.login({ email: 'test@example.com', password: '123456' })
+
+      expect(store.isOrganizationAdmin).toBe(true)
+      expect(store.isAdmin).toBe(false)
+    })
+
+    it.each(['disabled', 'archived'] as const)('non-active organization %s 不授予组织管理员能力', async (status) => {
+      mockLogin.mockResolvedValue({
+        ...fakeAuthResponse,
+        user: {
+          ...fakeUser,
+          organization_role: 'organization_admin' as const,
+          organization: {
+            id: 12,
+            name: 'Example Organization',
+            code: 'example',
+            description: '',
+            status,
+          },
+        },
+      })
+      const store = useAuthStore()
+
+      await store.login({ email: 'test@example.com', password: '123456' })
+
+      expect(store.isOrganizationAdmin).toBe(false)
+    })
+
+    it('组织摘要缺失时不授予组织管理员能力', async () => {
+      mockLogin.mockResolvedValue({
+        ...fakeAuthResponse,
+        user: {
+          ...fakeUser,
+          organization_role: 'organization_admin' as const,
+          organization: null,
+        },
+      })
+      const store = useAuthStore()
+
+      await store.login({ email: 'test@example.com', password: '123456' })
+
+      expect(store.isOrganizationAdmin).toBe(false)
+    })
+
+    it.each(['disabled', 'archived'] as const)('刷新到 %s 组织后立即撤销组织管理员能力', async (status) => {
+      mockLogin.mockResolvedValue({
+        ...fakeAuthResponse,
+        user: {
+          ...fakeUser,
+          organization_role: 'organization_admin' as const,
+          organization: {
+            id: 12,
+            name: 'Example Organization',
+            code: 'example',
+            description: '',
+            status: 'active' as const,
+          },
+        },
+      })
+      mockGetCurrentUser.mockResolvedValue({
+        data: {
+          ...fakeUser,
+          organization_role: 'organization_admin' as const,
+          organization: {
+            id: 12,
+            name: 'Example Organization',
+            code: 'example',
+            description: '',
+            status,
+          },
+        },
+      })
+      const store = useAuthStore()
+
+      await store.login({ email: 'test@example.com', password: '123456' })
+      expect(store.isOrganizationAdmin).toBe(true)
+      await store.refreshUser()
+
+      expect(store.isOrganizationAdmin).toBe(false)
+    })
+
+    it('organization_member 与无组织用户都返回 false', async () => {
+      mockLogin.mockResolvedValue({
+        ...fakeAuthResponse,
+        user: {
+          ...fakeUser,
+          organization_role: 'organization_member' as const,
+          organization: {
+            id: 12,
+            name: 'Example Organization',
+            code: 'example',
+            description: '',
+            status: 'active' as const,
+          },
+        },
+      })
+      const store = useAuthStore()
+
+      await store.login({ email: 'test@example.com', password: '123456' })
+      expect(store.isOrganizationAdmin).toBe(false)
+
+      mockGetCurrentUser.mockResolvedValue({ data: fakeUser })
+      await store.refreshUser()
+      expect(store.isOrganizationAdmin).toBe(false)
+    })
+  })
+
   // --- refreshUser ---
 
   describe('refreshUser', () => {

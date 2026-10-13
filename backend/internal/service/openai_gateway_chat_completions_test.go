@@ -13,6 +13,7 @@ import (
 
 	"github.com/MACOS-DO/sub4api/internal/config"
 	"github.com/MACOS-DO/sub4api/internal/pkg/apicompat"
+	"github.com/MACOS-DO/sub4api/internal/pkg/openai_compat"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -87,6 +88,8 @@ func TestHandleChatStreamingResponse_ClassifiesHTTP2ReadError(t *testing.T) {
 	require.Equal(t, "Upstream HTTP/2 stream failed", message)
 	require.NotContains(t, message, "stream ID")
 	require.NotContains(t, message, "INTERNAL_ERROR")
+func (w *openAIChatFailingWriter) WriteString(s string) (int, error) {
+	return w.Write([]byte(s))
 }
 
 func TestNormalizeResponsesRequestServiceTier(t *testing.T) {
@@ -197,6 +200,94 @@ func TestForwardAsChatCompletions_UnknownModelWithoutMessagesDispatchKeepsReques
 	require.Equal(t, "gpt6", gjson.GetBytes(upstream.lastBody, "model").String())
 	require.NotEqual(t, "gpt-5.4", gjson.GetBytes(upstream.lastBody, "model").String())
 	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestForwardAsChatCompletions_OrganizationTokenFailureIsLocalPreDispatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":false}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+	account := &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Credentials: map[string]any{}}
+	ctx := WithOrganizationResponsesDispatchContext(context.Background())
+	ctx = WithOrganizationChatDispatchRoute(ctx, OrganizationChatRouteResponsesBridge)
+
+	result, err := (&OpenAIGatewayService{}).ForwardAsChatCompletions(ctx, c, account, body, "", "")
+
+	require.Nil(t, result)
+	var localErr *OpenAILocalPreDispatchError
+	require.ErrorAs(t, err, &localErr)
+	require.Equal(t, "local_pre_dispatch_rejected", localErr.ZeroProof)
+	require.False(t, c.Writer.Written())
+}
+
+func TestForwardAsChatCompletions_OrganizationConversionFailureIsLocalPreDispatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":123}],"stream":false}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+	account := &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "test"}}
+	ctx := WithOrganizationResponsesDispatchContext(context.Background())
+	ctx = WithOrganizationChatDispatchRoute(ctx, OrganizationChatRouteResponsesBridge)
+
+	result, err := (&OpenAIGatewayService{}).ForwardAsChatCompletions(ctx, c, account, body, "", "")
+
+	require.Nil(t, result)
+	var localErr *OpenAILocalPreDispatchError
+	require.ErrorAs(t, err, &localErr)
+	require.Equal(t, "local_pre_dispatch_rejected", localErr.ZeroProof)
+	require.False(t, c.Writer.Written())
+}
+
+func TestForwardAsChatCompletions_OrganizationHTTPErrorWithoutUsageDoesNotProveZeroCost(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	for _, testCase := range []struct {
+		name       string
+		statusCode int
+		unknown    bool
+	}{
+		{name: "401", statusCode: http.StatusUnauthorized},
+		{name: "404 unknown responses", statusCode: http.StatusNotFound, unknown: true},
+		{name: "429", statusCode: http.StatusTooManyRequests},
+		{name: "502", statusCode: http.StatusBadGateway},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":false}`)
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+			upstream := &httpUpstreamRecorder{resp: &http.Response{
+				StatusCode: testCase.statusCode,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"upstream rejected"}}`)),
+			}}
+			account := &Account{
+				ID: 1, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+				Credentials: map[string]any{"api_key": "test", "base_url": "https://api.openai.com"},
+				Extra:       map[string]any{openai_compat.ExtraKeyResponsesMode: string(openai_compat.ResponsesSupportModeForceResponses)},
+			}
+			if testCase.unknown {
+				account.Extra = map[string]any{openai_compat.ExtraKeyResponsesMode: string(openai_compat.ResponsesSupportModeAuto)}
+			}
+			ctx := WithOrganizationResponsesDispatchContext(context.Background())
+			ctx = WithOrganizationChatDispatchRoute(ctx, OrganizationChatRouteResponsesBridge)
+
+			cfg := &config.Config{}
+			cfg.Security.URLAllowlist.Enabled = false
+			result, err := (&OpenAIGatewayService{cfg: cfg, httpUpstream: upstream}).ForwardAsChatCompletions(ctx, c, account, body, "", "")
+
+			require.Nil(t, result)
+			var failoverErr *UpstreamFailoverError
+			require.ErrorAs(t, err, &failoverErr)
+			require.False(t, failoverErr.ZeroCostProven)
+			require.False(t, c.Writer.Written())
+			require.Len(t, upstream.requests, 1)
+		})
+	}
 }
 
 func TestForwardAsChatCompletions_APIKeyPropagatesPromptCacheKeyInResponsesBody(t *testing.T) {
@@ -491,6 +582,8 @@ func TestForwardAsChatCompletions_ClientDisconnectDrainsUpstreamUsage(t *testing
 	require.Equal(t, 11, result.Usage.InputTokens)
 	require.Equal(t, 5, result.Usage.OutputTokens)
 	require.Equal(t, 4, result.Usage.CacheReadInputTokens)
+	require.True(t, result.UsageObserved)
+	require.True(t, result.ClientDisconnect)
 }
 
 func TestForwardAsChatCompletions_BufferedContextWindowResponseFailedReturnsErrorWithoutFailover(t *testing.T) {

@@ -10,6 +10,27 @@ const (
 	StatusExpired  = "expired"
 )
 
+// Organization lifecycle constants. Keep these separate from the shared status
+// vocabulary because archived is meaningful only for platform organizations.
+const (
+	OrganizationStatusActive   = "active"
+	OrganizationStatusDisabled = "disabled"
+	OrganizationStatusArchived = "archived"
+)
+
+// Organization membership roles are distinct from the platform-wide user role.
+const (
+	OrganizationRoleAdmin  = "organization_admin"
+	OrganizationRoleMember = "organization_member"
+)
+
+// Organization allocation statuses preserve a membership's financial identity
+// after it is removed from the organization.
+const (
+	OrganizationAllocationStatusActive = "active"
+	OrganizationAllocationStatusClosed = "closed"
+)
+
 // Role constants
 const (
 	RoleAdmin = "admin"

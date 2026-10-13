@@ -13,6 +13,7 @@ import (
 func ProvideAdminHandlers(
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
+	organizationHandler *admin.OrganizationHandler,
 	groupHandler *admin.GroupHandler,
 	accountHandler *admin.AccountHandler,
 	announcementHandler *admin.AnnouncementHandler,
@@ -64,6 +65,7 @@ func ProvideAdminHandlers(
 	return &AdminHandlers{
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,
+		Organization:           organizationHandler,
 		Group:                  groupHandler,
 		Account:                accountHandler,
 		Announcement:           announcementHandler,
@@ -161,6 +163,31 @@ func ProvideBatchImageHandler(
 	return h
 }
 
+func ProvideAdminOrganizationHandler(
+	organizationService service.OrganizationManager,
+	membershipService service.OrganizationMembershipManager,
+	fundingService *service.OrganizationFundingService,
+	allocationService service.OrganizationAllocationManager,
+	recoveryService *service.OrganizationExecutionRecoveryService,
+	lifecycleService service.OrganizationLifecycleManager,
+) *admin.OrganizationHandler {
+	h := admin.NewOrganizationHandler(organizationService, membershipService, fundingService, allocationService)
+	h.SetRecoveryService(recoveryService)
+	h.SetLifecycleService(lifecycleService)
+	return h
+}
+
+func ProvideOrganizationHandler(
+	membershipService service.CurrentOrganizationMembershipManager,
+	fundingReader service.OrganizationFundingReader,
+	allocationService service.OrganizationAllocationManager,
+	recoveryService *service.OrganizationExecutionRecoveryService,
+) *OrganizationHandler {
+	h := NewOrganizationHandler(membershipService, fundingReader, allocationService)
+	h.SetRecoveryService(recoveryService)
+	return h
+}
+
 // ProvideSystemHandler creates admin.SystemHandler with UpdateService
 func ProvideSystemHandler(updateService *service.UpdateService, lockService *service.SystemOperationLockService) *admin.SystemHandler {
 	return admin.NewSystemHandler(updateService, lockService)
@@ -172,6 +199,8 @@ func ProvideSettingHandler(settingService *service.SettingService, buildInfo Bui
 	h.SetNotificationEmailService(notificationEmailService)
 	return h
 }
+
+
 
 // ProvideAdminSettingHandler creates admin.SettingHandler with notification template APIs.
 func ProvideAdminSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService, aliyunCaptchaService *service.AliyunCaptchaService, opsService *service.OpsService, paymentConfigService *service.PaymentConfigService, paymentService *service.PaymentService, userAttributeService *service.UserAttributeService, notificationEmailService *service.NotificationEmailService, totpService *service.TotpService, userService *service.UserService) *admin.SettingHandler {
@@ -185,6 +214,7 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
 	authHandler *AuthHandler,
+	organizationHandler *OrganizationHandler,
 	userHandler *UserHandler,
 	apiKeyHandler *APIKeyHandler,
 	usageHandler *UsageHandler,
@@ -211,6 +241,7 @@ func ProvideHandlers(
 ) *Handlers {
 	return &Handlers{
 		Auth:             authHandler,
+		Organization:     organizationHandler,
 		User:             userHandler,
 		APIKey:           apiKeyHandler,
 		Usage:            usageHandler,
@@ -238,6 +269,7 @@ func ProvideHandlers(
 var ProviderSet = wire.NewSet(
 	// Top-level handlers
 	NewAuthHandler,
+	ProvideOrganizationHandler,
 	NewUserHandler,
 	NewAPIKeyHandler,
 	NewUsageHandler,
@@ -258,11 +290,13 @@ var ProviderSet = wire.NewSet(
 	NewAsyncImageHandler,
 	ProvideBatchImageHandler,
 
-	// Admin handlers
+	// Admin handlers（上游升级版 provider：NewGroupHandlerWithConfig 与
+	// ProvideAccountHandler 是 1.1.8 形态，保留其一）
 	admin.NewDashboardHandler,
 	admin.NewUserHandler,
 	admin.NewGroupHandlerWithConfig,
 	admin.ProvideAccountHandler,
+	ProvideAdminOrganizationHandler,
 	admin.NewAnnouncementHandler,
 	admin.NewDataManagementHandler,
 	admin.NewBackupHandler,

@@ -301,6 +301,18 @@ func TestForwardAsRawChatCompletions_NonStreamingCapturesCacheWriteUsage(t *test
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body := []byte(`{"model":"gpt-5.6","messages":[{"role":"user","content":"hello"}],"stream":false}`)
+func TestForwardAsRawChatCompletions_PartialStreamUsageIsUnobserved(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	for _, testCase := range []struct {
+		name  string
+		usage string
+	}{
+		{name: "missing prompt tokens", usage: `{"completion_tokens":4,"total_tokens":4}`},
+		{name: "missing completion tokens", usage: `{"prompt_tokens":9,"total_tokens":9}`},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":true}`)
 			rec := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(rec)
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
@@ -317,6 +329,20 @@ func TestForwardAsRawChatCompletions_NonStreamingCapturesCacheWriteUsage(t *test
 				cfg:          rawChatCompletionsTestConfig(),
 				httpUpstream: upstream,
 			}
+			upstreamBody := strings.Join([]string{
+				`data: {"id":"chatcmpl_1","object":"chat.completion.chunk","model":"gpt-5.4","choices":[{"index":0,"delta":{"content":"ok"}}]}`,
+				"",
+				`data: {"id":"chatcmpl_1","object":"chat.completion.chunk","model":"gpt-5.4","choices":[],"usage":` + testCase.usage + `}`,
+				"",
+				"data: [DONE]",
+				"",
+			}, "\n")
+			upstream := &httpUpstreamRecorder{resp: &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body:       io.NopCloser(strings.NewReader(upstreamBody)),
+			}}
+			svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
 
 			result, err := svc.forwardAsRawChatCompletions(context.Background(), c, rawChatCompletionsTestAccount(), body, "")
 
@@ -325,6 +351,41 @@ func TestForwardAsRawChatCompletions_NonStreamingCapturesCacheWriteUsage(t *test
 			require.Equal(t, 12, result.Usage.InputTokens)
 			require.Equal(t, 4, result.Usage.CacheReadInputTokens)
 			require.Equal(t, tt.wantWrite, result.Usage.CacheCreationInputTokens)
+			require.False(t, result.UsageObserved)
+		})
+	}
+}
+
+func TestForwardAsRawChatCompletions_PartialBufferedUsageIsUnobserved(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	for _, testCase := range []struct {
+		name  string
+		usage string
+	}{
+		{name: "missing prompt tokens", usage: `{"completion_tokens":4,"total_tokens":4}`},
+		{name: "missing completion tokens", usage: `{"prompt_tokens":9,"total_tokens":9}`},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":false}`)
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			upstreamJSON := `{"id":"chatcmpl_1","object":"chat.completion","model":"gpt-5.4","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":` + testCase.usage + `}`
+			upstream := &httpUpstreamRecorder{resp: &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(upstreamJSON)),
+			}}
+			svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
+
+			result, err := svc.forwardAsRawChatCompletions(context.Background(), c, rawChatCompletionsTestAccount(), body, "")
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.False(t, result.UsageObserved)
 		})
 	}
 }
@@ -1091,6 +1152,8 @@ func TestForwardAsRawChatCompletions_ClientDisconnectDrainsUsage(t *testing.T) {
 	require.Equal(t, 17, result.Usage.InputTokens)
 	require.Equal(t, 8, result.Usage.OutputTokens)
 	require.Equal(t, 6, result.Usage.CacheReadInputTokens)
+	require.True(t, result.UsageObserved)
+	require.True(t, result.ClientDisconnect)
 	require.True(t, gjson.GetBytes(upstream.lastBody, "stream_options.include_usage").Bool())
 }
 
@@ -1171,6 +1234,68 @@ func TestForwardAsChatCompletions_UnknownResponsesSupportFallbackUsesVersionedCh
 	require.Equal(t, "https://open.bigmodel.cn/api/paas/v4/chat/completions", upstream.requests[1].URL.String())
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Contains(t, rec.Body.String(), `"content":"ok"`)
+}
+
+func TestForwardAsChatCompletions_OrganizationFrozenResponsesRouteDoesNotHideRawFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"glm-4.5-air","messages":[{"role":"user","content":"hello"}],"stream":false}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	upstream := &httpUpstreamRecorder{responses: []*http.Response{
+		{
+			StatusCode: http.StatusNotFound,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"not found"}}`)),
+		},
+		{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(`{"usage":{"prompt_tokens":1,"completion_tokens":2}}`)),
+		},
+	}}
+	svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
+	account := rawChatCompletionsTestAccount()
+	account.Credentials["base_url"] = "https://open.bigmodel.cn/api/paas/v4"
+	ctx := WithOrganizationResponsesDispatchContext(context.Background())
+	ctx = WithOrganizationChatDispatchRoute(ctx, OrganizationChatRouteResponsesBridge)
+
+	result, err := svc.ForwardAsChatCompletions(ctx, c, account, body, "", "")
+
+	require.Nil(t, result)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.False(t, failoverErr.ZeroCostProven)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://open.bigmodel.cn/api/paas/v4/responses", upstream.requests[0].URL.String())
+	require.False(t, c.Writer.Written())
+}
+
+func TestForwardAsRawChatCompletions_OrganizationMissingAPIKeyIsLocalPreDispatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":false}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+	upstream := &httpUpstreamRecorder{}
+	svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
+	account := rawChatCompletionsTestAccount()
+	delete(account.Credentials, "api_key")
+	ctx := WithOrganizationResponsesDispatchContext(context.Background())
+	ctx = WithOrganizationChatDispatchRoute(ctx, OrganizationChatRouteRawChat)
+
+	result, err := svc.forwardAsRawChatCompletions(ctx, c, account, body, "")
+
+	require.Nil(t, result)
+	var localErr *OpenAILocalPreDispatchError
+	require.ErrorAs(t, err, &localErr)
+	require.Equal(t, "local_pre_dispatch_rejected", localErr.ZeroProof)
+	require.Empty(t, upstream.requests)
+	require.False(t, c.Writer.Written())
 }
 
 func TestIsOpenAIChatUsageOnlyStreamChunk(t *testing.T) {

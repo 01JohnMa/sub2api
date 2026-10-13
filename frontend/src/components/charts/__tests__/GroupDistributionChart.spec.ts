@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
 import GroupDistributionChart from '../GroupDistributionChart.vue'
+import type { GroupStat } from '@/types'
 
 const messages: Record<string, string> = {
   'admin.dashboard.groupDistribution': 'Group Distribution',
@@ -43,6 +44,7 @@ describe('GroupDistributionChart', () => {
       total_tokens: 1200,
       cost: 1.8,
       actual_cost: 0.1,
+      account_cost: 1.1,
     },
     {
       group_id: 2,
@@ -51,8 +53,9 @@ describe('GroupDistributionChart', () => {
       total_tokens: 600,
       cost: 0.7,
       actual_cost: 0.9,
+      account_cost: 0.5,
     },
-  ]
+  ] satisfies GroupStat[]
 
   it('uses total_tokens and token ordering by default', () => {
     const wrapper = mount(GroupDistributionChart, {

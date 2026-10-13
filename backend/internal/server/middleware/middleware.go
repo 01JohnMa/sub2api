@@ -18,8 +18,16 @@ const (
 	ContextKeyUser ContextKey = "user"
 	// ContextKeyUserRole 当前用户角色（string）
 	ContextKeyUserRole ContextKey = "user_role"
+	// ContextKeyOrganizationScope 当前 JWT 用户经服务端重新解析后的组织范围。
+	ContextKeyOrganizationScope ContextKey = "organization_scope"
 	// ContextKeyAPIKey API密钥上下文键
 	ContextKeyAPIKey ContextKey = "api_key"
+	// ContextKeyOrganizationKeyAuthorization stores the authoritative,
+	// secret-free organization/allocation snapshot for an organization Key.
+	ContextKeyOrganizationKeyAuthorization ContextKey = "organization_key_authorization"
+	// ContextKeyOrganizationReportingID stores only the nullable organization
+	// dimension for existing usage/error attribution.
+	ContextKeyOrganizationReportingID ContextKey = "organization_reporting_id"
 	// ContextKeySubscription 订阅上下文键
 	ContextKeySubscription ContextKey = "subscription"
 	// ContextKeyForcePlatform 强制平台（用于 /antigravity 路由）

@@ -19,6 +19,7 @@ func RegisterPaymentRoutes(
 	jwtAuth middleware.JWTAuthMiddleware,
 	adminAuth middleware.AdminAuthMiddleware,
 	auditLog middleware.AuditLogMiddleware,
+	organizationAuth middleware.OrganizationAdminAuthMiddleware,
 	settingService *service.SettingService,
 	panelRateLimiter *middleware.PanelRateLimiter,
 ) {
@@ -28,6 +29,7 @@ func RegisterPaymentRoutes(
 	authenticated.Use(middleware.BackendModeUserGuard(settingService))
 	// 面板全局按用户限流
 	authenticated.Use(panelRateLimiter.Global())
+	authenticated.Use(organizationAuth.PersonalAccountAccess)
 	{
 		authenticated.GET("/config", paymentHandler.GetPaymentConfig)
 		authenticated.GET("/checkout-info", paymentHandler.GetCheckoutInfo)

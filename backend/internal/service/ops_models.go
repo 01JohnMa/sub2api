@@ -52,13 +52,14 @@ type OpsErrorLog struct {
 	RequestID       string `json:"request_id"`
 	Message         string `json:"message"`
 
-	UserID      *int64 `json:"user_id"`
-	UserEmail   string `json:"user_email"`
-	APIKeyID    *int64 `json:"api_key_id"`
-	AccountID   *int64 `json:"account_id"`
-	AccountName string `json:"account_name"`
-	GroupID     *int64 `json:"group_id"`
-	GroupName   string `json:"group_name"`
+	UserID         *int64 `json:"user_id"`
+	UserEmail      string `json:"user_email"`
+	APIKeyID       *int64 `json:"api_key_id"`
+	AccountID      *int64 `json:"account_id"`
+	OrganizationID *int64 `json:"organization_id,omitempty"`
+	AccountName    string `json:"account_name"`
+	GroupID        *int64 `json:"group_id"`
+	GroupName      string `json:"group_name"`
 
 	ClientIP    *string `json:"client_ip"`
 	RequestPath string  `json:"request_path"`
@@ -124,8 +125,9 @@ type OpsErrorLogFilter struct {
 
 	// User-scoped filters (used by the user-facing error requests endpoint and
 	// by admin drill-down from the usage page).
-	UserID   *int64
-	APIKeyID *int64
+	UserID         *int64
+	APIKeyID       *int64
+	OrganizationID *int64
 
 	// Model matches against requested_model first, then model.
 	Model string

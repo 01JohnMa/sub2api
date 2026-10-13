@@ -212,6 +212,26 @@ func RegisterGatewayRoutes(
 		gateway.GET("/models", modelsHandler)
 		// Single-model discovery never selects the Codex client_version manifest.
 		gateway.GET("/models/:model", h.Gateway.Models)
+		// /v1/messages/count_tokens: OpenAI groups get 404
+		gateway.POST("/messages/count_tokens", func(c *gin.Context) {
+			if getGroupPlatform(c) == service.PlatformOpenAI {
+				if _, ok := middleware.GetOrganizationKeyAuthorizationFromContext(c); ok {
+					h.Gateway.CountTokens(c)
+					return
+				}
+				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
+				c.JSON(http.StatusNotFound, gin.H{
+					"type": "error",
+					"error": gin.H{
+						"type":    "not_found_error",
+						"message": "Token counting is not supported for this platform",
+					},
+				})
+				return
+			}
+			h.Gateway.CountTokens(c)
+		})
+		gateway.GET("/models", h.Gateway.Models)
 		gateway.GET("/usage", h.Gateway.Usage)
 		gateway.POST("/live", h.OpenAIGateway.Live)
 		gateway.GET("/live/:call_id", h.OpenAIGateway.LiveSideband)

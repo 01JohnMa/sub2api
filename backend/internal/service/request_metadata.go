@@ -20,6 +20,20 @@ type RequestMetadata struct {
 	AccountSwitchCount         *int
 }
 
+// OrganizationReportingIDFromContext reads the server-derived, nullable
+// organization dimension used by existing telemetry writers. It has no
+// billing or allocation semantics.
+func OrganizationReportingIDFromContext(ctx context.Context) *int64 {
+	if ctx == nil {
+		return nil
+	}
+	value, ok := ctx.Value(ctxkey.OrganizationReportingID).(int64)
+	if !ok || value <= 0 {
+		return nil
+	}
+	return &value
+}
+
 var (
 	requestMetadataFallbackIsMaxTokensOneHaikuTotal atomic.Int64
 	requestMetadataFallbackThinkingEnabledTotal     atomic.Int64

@@ -23,6 +23,20 @@ func APIKeyAuthGoogle(apiKeyService *service.APIKeyService, cfg *config.Config) 
 //
 // It is intended for Gemini native endpoints (/v1beta) to match Gemini SDK expectations.
 func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) gin.HandlerFunc {
+	return apiKeyAuthWithSubscriptionGoogle(
+		apiKeyService,
+		subscriptionService,
+		cfg,
+		service.NewOrganizationSpendingCapabilityRegistry(cfg),
+	)
+}
+
+func apiKeyAuthWithSubscriptionGoogle(
+	apiKeyService *service.APIKeyService,
+	subscriptionService *service.SubscriptionService,
+	cfg *config.Config,
+	organizationSpending *service.OrganizationSpendingCapabilityRegistry,
+) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if rejectInvalidAuthAbuse(c, apiKeyService) {
 			abortWithGoogleError(c, 429, "Too many invalid authentication attempts; retry later")
@@ -58,7 +72,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			return
 		}
 
-		apiKey, err := apiKeyService.GetByKey(c.Request.Context(), apiKeyString)
+		apiKey, err := apiKeyService.GetByKeyAuthoritative(c.Request.Context(), apiKeyString)
 		if err != nil {
 			if errors.Is(err, service.ErrAPIKeyNotFound) {
 				recordInvalidAuthFailure(c, apiKeyService)
@@ -78,6 +92,9 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		// 同 api_key_auth.go：早退中断前也写入 Ops 回退 key，便于错误日志展示
 		// user/group/platform。
 		SetOpsFallbackAPIKey(c, apiKey)
+		if ensureOrganizationKeyAuthorizationContext(c, apiKey, true) {
+			return
+		}
 
 		// disabled / 未知状态 → 无条件拦截（expired 和 quota_exhausted 留给计费阶段，
 		// 与主中间件 api_key_auth.go 保持一致）。
@@ -166,6 +183,9 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		}
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+		if abortIfAPIKeyBillingStateInvalid(c, apiKey, true) {
+			return
+		}
 		if isSubscriptionType && subscriptionService != nil {
 			subscription, err := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),

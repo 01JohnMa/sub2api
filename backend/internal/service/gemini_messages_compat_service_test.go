@@ -171,6 +171,23 @@ func TestGeminiForwardAsChatCompletions_StreamsOpenAIChunksFromGeminiSSE(t *test
 }
 
 func TestGeminiForwardAsChatCompletions_FunctionNamedWebSearchStaysClientSide(t *testing.T) {
+func TestGeminiForwardAsChatCompletionsOrganizationAttemptReturnsTypedLocalFailure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	service := &GeminiMessagesCompatService{}
+
+	result, err := service.ForwardAsChatCompletionsOrganizationAttempt(context.Background(), c, nil, []byte(`{`))
+
+	require.Nil(t, result)
+	var localErr *OpenAILocalPreDispatchError
+	require.ErrorAs(t, err, &localErr)
+	require.Equal(t, "local_policy_rejected", localErr.ZeroProof)
+	require.False(t, c.Writer.Written())
+}
+
+func TestGeminiForwardAsChatCompletionsOrganizationAttemptUsesOneProviderCall(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	httpStub := &geminiCompatHTTPUpstreamStub{
@@ -236,6 +253,32 @@ func TestGeminiForwardAsChatCompletions_FunctionNamedWebSearchStaysClientSide(t 
 	require.Equal(t, "read_file", readFileDecl["name"])
 	require.NotContains(t, functionTool, "googleSearch")
 	require.NotContains(t, functionTool, "google_search")
+			StatusCode: http.StatusServiceUnavailable,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"overloaded"}}`)),
+		},
+	}
+	service := &GeminiMessagesCompatService{httpUpstream: httpStub, cfg: &config.Config{}}
+	account := &Account{
+		ID:          104,
+		Platform:    PlatformGemini,
+		Type:        AccountTypeAPIKey,
+		Credentials: map[string]any{"api_key": "gemini-api-key"},
+		Concurrency: 1,
+	}
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	body := []byte(`{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"hi"}]}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+
+	result, err := service.ForwardAsChatCompletionsOrganizationAttempt(context.Background(), c, account, body)
+
+	require.Nil(t, result)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.False(t, failoverErr.ZeroCostProven)
+	require.Equal(t, 1, httpStub.calls)
+	require.False(t, c.Writer.Written())
 }
 
 // TestConvertClaudeToolsToGeminiTools_CustomType 测试custom类型工具转换

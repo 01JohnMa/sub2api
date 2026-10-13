@@ -162,11 +162,13 @@ func (s *OpenAIGatewayService) ForwardEmbeddings(
 	}
 
 	writeOpenAIEmbeddingsUpstreamResponse(c, resp, respBody, s.responseHeaderFilter)
+	usage, usageObserved := extractOpenAIEmbeddingsUsage(respBody)
 
 	return &OpenAIForwardResult{
 		RequestID:       firstNonEmptyString(resp.Header.Get("x-request-id"), resp.Header.Get("request-id")),
 		UpstreamHeaders: resp.Header,
-		Usage:           extractOpenAIEmbeddingsUsage(respBody),
+		Usage:           usage,
+		UsageObserved:   usageObserved,
 		Model:           originalModel,
 		BillingModel:    billingModel,
 		UpstreamModel:   upstreamModel,
@@ -203,22 +205,41 @@ func writeOpenAIEmbeddingsError(c *gin.Context, statusCode int, errType, message
 	})
 }
 
-func extractOpenAIEmbeddingsUsage(body []byte) OpenAIUsage {
+func extractOpenAIEmbeddingsUsage(body []byte) (OpenAIUsage, bool) {
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return OpenAIUsage{}, false
+	}
 	usage := gjson.GetBytes(body, "usage")
 	if !usage.Exists() || !usage.IsObject() {
-		return OpenAIUsage{}
+		return OpenAIUsage{}, false
 	}
-	inputTokens := firstPositiveGJSONInt(
-		usage.Get("prompt_tokens"),
-		usage.Get("input_tokens"),
-		usage.Get("total_tokens"),
+	inputTokens, ok := openAIUsageRequiredToken(usage, "prompt_tokens", "input_tokens", "total_tokens")
+	if !ok {
+		return OpenAIUsage{}, false
+	}
+	outputTokens, ok := openAIUsageOptionalToken(usage, "completion_tokens", "output_tokens")
+	if !ok {
+		return OpenAIUsage{}, false
+	}
+	cacheReadTokens, ok := openAIUsageOptionalToken(
+		usage,
+		"prompt_tokens_details.cached_tokens",
+		"input_tokens_details.cached_tokens",
+		"cache_read_tokens",
+		"cache_read_input_tokens",
 	)
-	outputTokens := firstPositiveGJSONInt(
-		usage.Get("completion_tokens"),
-		usage.Get("output_tokens"),
+	if !ok || cacheReadTokens > inputTokens {
+		return OpenAIUsage{}, false
+	}
+	cacheCreationTokens, ok := openAIUsageOptionalToken(
+		usage,
+		"cache_creation_tokens",
+		"cache_creation_input_tokens",
+		"input_tokens_details.cache_creation_tokens",
 	)
-	cacheReadTokens := openAICacheReadTokensFromUsage(usage)
-	cacheCreationTokens := openAICacheCreationTokensFromUsage(usage)
+	if !ok {
+		return OpenAIUsage{}, false
+	}
 	// 多模态 embedding（如 doubao-embedding-vision）回传图文 token 拆分，
 	// 用于图文不同价计费；纯文本 embedding 该字段为 0，行为不变。
 	imageInputTokens := firstPositiveGJSONInt(
@@ -226,14 +247,16 @@ func extractOpenAIEmbeddingsUsage(body []byte) OpenAIUsage {
 		usage.Get("input_tokens_details.image_tokens"),
 	)
 	return OpenAIUsage{
-		InputTokens:              inputTokens,
+		InputTokens:              int(inputTokens),
 		ImageInputTokens:         imageInputTokens,
-		OutputTokens:             outputTokens,
-		CacheReadInputTokens:     cacheReadTokens,
-		CacheCreationInputTokens: cacheCreationTokens,
-	}
+		OutputTokens:             int(outputTokens),
+		CacheReadInputTokens:     int(cacheReadTokens),
+		CacheCreationInputTokens: int(cacheCreationTokens),
+	}, true
 }
 
+// firstPositiveGJSONInt returns the first strictly positive int among the
+// given gjson results; 0 when none matches (absent, non-numeric, or <= 0).
 func firstPositiveGJSONInt(values ...gjson.Result) int {
 	for _, value := range values {
 		if !value.Exists() {
@@ -249,4 +272,31 @@ func firstPositiveGJSONInt(values ...gjson.Result) int {
 
 func buildOpenAIEmbeddingsURL(base string) string {
 	return buildOpenAIEndpointURL(base, "/v1/embeddings")
+}
+
+func openAIUsageRequiredToken(value gjson.Result, paths ...string) (int64, bool) {
+	for _, path := range paths {
+		field := value.Get(path)
+		if field.Exists() {
+			return openAIUsageToken(field)
+		}
+	}
+	return 0, false
+}
+
+func openAIUsageToken(value gjson.Result) (int64, bool) {
+	if value.Type != gjson.Number || value.Float() != float64(value.Int()) || value.Int() < 0 {
+		return 0, false
+	}
+	return value.Int(), true
+}
+
+func openAIUsageOptionalToken(value gjson.Result, paths ...string) (int64, bool) {
+	for _, path := range paths {
+		field := value.Get(path)
+		if field.Exists() {
+			return openAIUsageToken(field)
+		}
+	}
+	return 0, true
 }

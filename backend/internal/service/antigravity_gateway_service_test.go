@@ -487,6 +487,16 @@ func TestAntigravityGatewayService_ForwardGemini_MissingProjectReturnsLocalError
 	require.Empty(t, internal500Cache.incrementCalls)
 	require.Contains(t, writer.Body.String(), "project_id")
 	require.NotContains(t, writer.Body.String(), `"project":""`)
+type antigravitySettingValuesRepoStub struct {
+	antigravitySettingRepoStub
+	values map[string]string
+}
+
+func (s *antigravitySettingValuesRepoStub) GetValue(_ context.Context, key string) (string, error) {
+	if value, ok := s.values[key]; ok {
+		return value, nil
+	}
+	return "", ErrSettingNotFound
 }
 
 func TestAntigravityGatewayService_Forward_PromptTooLong(t *testing.T) {
@@ -1209,6 +1219,83 @@ func TestAntigravityGatewayService_ForwardGemini_SignatureRetryPropagatesFailove
 	require.Len(t, events, 2)
 	require.Equal(t, "signature_error", events[0].Kind)
 	require.Equal(t, "failover", events[1].Kind)
+}
+
+func TestAntigravityGatewayService_ForwardGemini_PreparedPayloadDisablesRuntimeMutationRetries(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := []byte(`{"contents":[{"role":"user","parts":[{"text":"hello"}]},{"role":"model","parts":[{"text":"thinking","thought":true,"thoughtSignature":"sig_frozen"}]}]}`)
+	const originalModel = "gemini-3.1-pro-preview"
+	const mappedModel = "gemini-3.1-pro-high"
+	account := &Account{
+		ID: 9, Name: "acc-gemini-prepared", Platform: PlatformAntigravity, Type: AccountTypeOAuth,
+		Status: StatusActive, Concurrency: 1,
+		Credentials: map[string]any{
+			"access_token": "token",
+			"project_id":   "project-frozen",
+			"model_mapping": map[string]any{
+				originalModel: mappedModel,
+			},
+		},
+	}
+	settings := &antigravitySettingValuesRepoStub{values: map[string]string{
+		SettingKeyEnableModelFallback:      "true",
+		SettingKeyFallbackModelAntigravity: "gemini-2.5-pro",
+		SettingKeyRectifierSettings:        `{"enabled":true,"thinking_signature_enabled":true,"thinking_budget_enabled":true}`,
+	}}
+	serviceConfig := &config.Config{Gateway: config.GatewayConfig{MaxLineSize: defaultMaxLineSize}}
+	prepareService := &AntigravityGatewayService{}
+	prepared, err := prepareService.PrepareOrganizationGeminiPayload(account, originalModel, "streamGenerateContent", body)
+	require.NoError(t, err)
+	preparedHash := organizationGeminiBodyHash(prepared.Payload)
+
+	tests := []struct {
+		name     string
+		response *http.Response
+	}{
+		{
+			name: "model fallback",
+			response: &http.Response{
+				StatusCode: http.StatusNotFound,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(bytes.NewBufferString(`{"response":{"error":{"code":404,"message":"model not found","status":"NOT_FOUND"}}}`)),
+			},
+		},
+		{
+			name: "signature rectifier",
+			response: &http.Response{
+				StatusCode: http.StatusBadRequest,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(bytes.NewBufferString(`{"response":{"error":{"code":400,"message":"Corrupted thought signature.","status":"INVALID_ARGUMENT"}}}`)),
+			},
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			writer := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(writer)
+			c.Request = httptest.NewRequest(http.MethodPost, "/antigravity/v1beta/models/"+originalModel+":streamGenerateContent", bytes.NewReader(body))
+			upstream := &queuedHTTPUpstreamStub{responses: []*http.Response{testCase.response}}
+			svc := &AntigravityGatewayService{
+				settingService: NewSettingService(settings, serviceConfig),
+				tokenProvider:  &AntigravityTokenProvider{},
+				httpUpstream:   upstream,
+			}
+
+			result, forwardErr := svc.ForwardGemini(
+				context.Background(), c, account, originalModel, "streamGenerateContent", true, body, false,
+				WithPreparedAntigravityGeminiPayload(prepared),
+			)
+
+			require.Nil(t, result)
+			require.Error(t, forwardErr)
+			require.Equal(t, 1, upstream.callCount)
+			require.Equal(t, prepared.Payload, upstream.requestBodies[0])
+			require.Equal(t, mappedModel, prepared.DispatchModel)
+			require.Equal(t, preparedHash, organizationGeminiBodyHash(prepared.Payload))
+			require.Contains(t, string(upstream.requestBodies[0]), `"thoughtSignature":"sig_frozen"`)
+			require.NotContains(t, string(upstream.requestBodies[0]), "gemini-2.5-pro")
+		})
+	}
 }
 
 // TestStreamUpstreamResponse_UsageAndFirstToken

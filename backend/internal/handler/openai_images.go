@@ -2,12 +2,14 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
 	pkghttputil "github.com/MACOS-DO/sub4api/internal/pkg/httputil"
 	"github.com/MACOS-DO/sub4api/internal/pkg/ip"
 	"github.com/MACOS-DO/sub4api/internal/pkg/logger"
@@ -44,6 +46,11 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		zap.Int64("api_key_id", apiKey.ID),
 		zap.Any("group_id", apiKey.GroupID),
 	)
+	_, organizationRequest := middleware2.GetOrganizationKeyAuthorizationFromContext(c)
+	if organizationRequest {
+		h.handleOrganizationImages(c, apiKey, subject, reqLog, &streamStarted)
+		return
+	}
 	if !h.ensureResponsesDependencies(c, reqLog) {
 		return
 	}
@@ -103,7 +110,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		h.openAISecurityAuditError(c, decision)
 		return
 	}
-	imageReleaseFunc, acquired := h.acquireImageGenerationSlot(c, streamStarted)
+	imageReleaseFunc, acquired := h.acquireImageGenerationSlot(c, streamStarted, true)
 	if !acquired {
 		return
 	}
@@ -133,7 +140,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		defer userReleaseFunc()
 	}
 
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+	if err := checkGatewayBillingEligibility(c.Request.Context(), c, h.billingCacheService, apiKey, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("openai.images.billing_eligibility_check_failed", zap.Error(err))
 		status, code, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {
@@ -438,6 +445,330 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		)
 		return
 	}
+}
+
+func (h *OpenAIGatewayHandler) handleOrganizationImages(
+	c *gin.Context,
+	apiKey *service.APIKey,
+	subject middleware2.AuthSubject,
+	reqLog *zap.Logger,
+	streamStarted *bool,
+) {
+	if h == nil || h.organizationExecution == nil {
+		h.writeOrganizationEmbeddingsImagesError(c, service.ErrOrganizationBillingUnavailable, streamStarted)
+		return
+	}
+	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
+	if err != nil {
+		h.handleOrganizationImagesPreDispatchRejection(c, apiKey, nil, nil, service.ErrOrganizationEmbeddingsImagesUnsupportedRequest, streamStarted)
+		return
+	}
+	if h.gatewayService == nil {
+		h.handleOrganizationImagesPreDispatchRejection(c, apiKey, body, nil, service.ErrOrganizationBillingUnavailable, streamStarted)
+		return
+	}
+	parsed, err := h.gatewayService.ParseOpenAIImagesRequest(c, body)
+	if err != nil {
+		h.handleOrganizationImagesPreDispatchRejection(c, apiKey, body, nil, service.ErrOrganizationEmbeddingsImagesUnsupportedRequest, streamStarted)
+		return
+	}
+	shape := service.OrganizationRequestShapeGenerations
+	if parsed.IsEdits() {
+		shape = service.OrganizationRequestShapeEdits
+	}
+	setOpsRequestContext(c, parsed.Model, parsed.Stream)
+	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(parsed.Stream, false)))
+	if !service.GroupAllowsImageGeneration(apiKey.Group) {
+		h.handleOrganizationImagesPreDispatchRejection(c, apiKey, body, parsed, infraerrors.Forbidden("ORGANIZATION_IMAGES_PERMISSION_DENIED", service.ImageGenerationPermissionMessage()), streamStarted)
+		return
+	}
+	if decision := h.checkContentModeration(c, reqLog, apiKey, subject, service.ContentModerationProtocolOpenAIImages, parsed.Model, parsed.ModerationBody()); decision != nil && decision.Blocked {
+		rejection := infraerrors.New(contentModerationStatus(decision), contentModerationErrorCode(decision), decision.Message)
+		h.handleOrganizationImagesPreDispatchRejection(c, apiKey, body, parsed, rejection, streamStarted)
+		return
+	}
+	if err := h.validateOrganizationEmbeddingsImagesPreDispatch(apiKey, service.OrganizationEndpointFamilyImages, shape); err != nil {
+		reqLog.Info("openai.organization_images_admission_rejected", zap.Error(err))
+		h.handleOrganizationImagesPreDispatchRejection(c, apiKey, body, parsed, err, streamStarted)
+		return
+	}
+	plan, err := h.gatewayService.PlanOrganizationImagesCandidates(c.Request.Context(), service.OrganizationEmbeddingsImagesCandidatePlanInput{
+		APIKey: apiKey, Body: body, ParsedImages: parsed, MaximumAttempts: h.maxAccountSwitches + 1,
+	})
+	if err != nil {
+		reqLog.Info("openai.organization_images_plan_rejected", zap.Error(err))
+		h.handleOrganizationImagesPreDispatchRejection(c, apiKey, body, parsed, err, streamStarted)
+		return
+	}
+	imageReleaseFunc, acquired := h.acquireImageGenerationSlot(c, parsed.Stream, false)
+	if !acquired {
+		rejection := infraerrors.New(http.StatusTooManyRequests, "rate_limit_error", "Image generation concurrency limit exceeded, please retry later")
+		h.handleOrganizationImagesPreDispatchRejection(c, apiKey, body, parsed, rejection, streamStarted)
+		return
+	}
+	if imageReleaseFunc != nil {
+		defer imageReleaseFunc()
+	}
+	input, err := plan.NewExecutionReservationInput(apiKey, organizationEmbeddingsImagesClientRequestID(c))
+	if err != nil {
+		h.writeOrganizationEmbeddingsImagesError(c, err, streamStarted)
+		return
+	}
+	command, err := h.organizationExecution.NewReservationCommand(input)
+	if err != nil {
+		h.writeOrganizationEmbeddingsImagesError(c, err, streamStarted)
+		return
+	}
+	if h.errorPassthroughService != nil {
+		service.BindErrorPassthroughService(c, h.errorPassthroughService)
+	}
+	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+	adapter := &organizationImagesAdapter{
+		handler: h, c: c, apiKey: apiKey, subject: subject, subscription: subscription, plan: plan, reqLog: reqLog, streamStarted: streamStarted,
+	}
+	defer adapter.releaseUserSlot()
+	run, err := h.organizationExecution.ExecuteMultiAttempt(c.Request.Context(), *command, plan.MaximumAttempts, adapter)
+	if err != nil {
+		reqLog.Error("openai.organization_images_execution_failed", zap.Error(err))
+		if !c.Writer.Written() {
+			h.writeOrganizationEmbeddingsImagesError(c, err, streamStarted)
+		}
+		return
+	}
+	if run == nil || run.Final == nil {
+		if run != nil && run.PendingReconciliation {
+			reqLog.Warn("openai.organization_images_pending_reconciliation", zap.String("execution_id", run.ExecutionID))
+			if !c.Writer.Written() {
+				h.writeOrganizationEmbeddingsImagesError(c, service.ErrOrganizationExecutionPendingReconciliation, streamStarted)
+			}
+			return
+		}
+		if !c.Writer.Written() {
+			h.writeOrganizationEmbeddingsImagesError(c, service.ErrOrganizationExecutionInvariant, streamStarted)
+		}
+		return
+	}
+	h.recordOrganizationResponsesRateLimitUsage(apiKey, run.Final)
+	if run.Final.TerminalOutcome == service.OrganizationExecutionTerminalOutcomeError && !c.Writer.Written() {
+		if adapter.lastFailover != nil {
+			h.handleFailoverExhausted(c, adapter.lastFailover, streamStarted != nil && *streamStarted)
+			return
+		}
+		if adapter.lastErr != nil {
+			h.writeOrganizationEmbeddingsImagesError(c, adapter.lastErr, streamStarted)
+			return
+		}
+		h.ensureForwardErrorResponse(c, streamStarted != nil && *streamStarted)
+	}
+}
+
+func (h *OpenAIGatewayHandler) handleOrganizationImagesPreDispatchRejection(c *gin.Context, apiKey *service.APIKey, body []byte, parsed *service.OpenAIImagesRequest, rejection error, streamStarted *bool) {
+	shape := service.OrganizationRequestShapeGenerations
+	model := ""
+	if parsed != nil {
+		model = parsed.Model
+		if parsed.IsEdits() {
+			shape = service.OrganizationRequestShapeEdits
+		}
+	} else if strings.Contains(c.Request.URL.Path, "/images/edits") {
+		shape = service.OrganizationRequestShapeEdits
+	}
+	if err := h.recordOrganizationEmbeddingsImagesPreDispatchRejection(c, apiKey, body, service.OrganizationEndpointFamilyImages, shape, model, rejection); err != nil {
+		h.writeOrganizationEmbeddingsImagesError(c, err, streamStarted)
+		return
+	}
+	h.writeOrganizationEmbeddingsImagesError(c, rejection, streamStarted)
+}
+
+type organizationImagesAdapter struct {
+	handler       *OpenAIGatewayHandler
+	c             *gin.Context
+	apiKey        *service.APIKey
+	subject       middleware2.AuthSubject
+	subscription  *service.UserSubscription
+	plan          *service.OrganizationEmbeddingsImagesCandidatePlan
+	reqLog        *zap.Logger
+	streamStarted *bool
+	nextCandidate int
+	lastFailover  *service.UpstreamFailoverError
+	lastErr       error
+	zeroProof     string
+	admissionDone bool
+	userRelease   func()
+}
+
+func (a *organizationImagesAdapter) Dispatch(ctx context.Context, request service.OrganizationExecutionDispatchRequest) (*service.OrganizationExecutionAttemptResult, error) {
+	if a == nil || a.handler == nil || a.handler.gatewayService == nil || a.plan == nil {
+		return nil, service.ErrOrganizationExecutionAdapterUnavailable
+	}
+	if rejection := a.ensureAdmission(ctx); rejection != nil {
+		return rejection, nil
+	}
+	for a.nextCandidate < len(a.plan.Candidates) {
+		candidate := a.plan.Candidates[a.nextCandidate]
+		a.nextCandidate++
+		validated, err := a.handler.gatewayService.RevalidateOrganizationEmbeddingsImagesCandidate(ctx, a.apiKey, candidate)
+		if err != nil {
+			continue
+		}
+		sessionHash := a.handler.gatewayService.GenerateExplicitSessionHash(a.c, validated.ForwardBody)
+		release, acquired, err := a.handler.concurrencyHelper.TryAcquireAccountSlot(ctx, validated.AccountID, validated.Account.Concurrency)
+		if err != nil || !acquired {
+			if err != nil {
+				a.lastErr = err
+			}
+			a.zeroProof = "account_concurrency_unavailable"
+			continue
+		}
+		if err := a.handler.gatewayService.BindStickySession(ctx, a.apiKey.GroupID, sessionHash, validated.AccountID); err != nil {
+			a.reqLog.Warn("openai.organization_images_bind_sticky_failed", zap.Int64("account_id", validated.AccountID), zap.Error(err))
+		}
+		setOpsSelectedAccount(a.c, validated.AccountID, validated.Account.Platform)
+		writerSizeBefore := a.c.Writer.Size()
+		previousRequestID := a.c.Request.Header.Get("X-Client-Request-Id")
+		a.c.Request.Header.Set("X-Client-Request-Id", request.ProviderRequestID)
+		result, forwardErr := func() (*service.OpenAIForwardResult, error) {
+			defer func() {
+				if release != nil {
+					release()
+				}
+			}()
+			return a.handler.gatewayService.ForwardImages(service.WithOpenAIImageGenerationIntent(ctx), a.c, validated.Account, validated.ForwardBody, validated.ParsedImages, validated.ChannelMappedModel)
+		}()
+		if previousRequestID == "" {
+			a.c.Request.Header.Del("X-Client-Request-Id")
+		} else {
+			a.c.Request.Header.Set("X-Client-Request-Id", previousRequestID)
+		}
+		return a.resultForForward(request, *validated, result, forwardErr, writerSizeBefore)
+	}
+	if a.zeroProof == "" {
+		a.zeroProof = "candidate_snapshot_conflict"
+	}
+	return &service.OrganizationExecutionAttemptResult{Dispatched: false, TerminalOutcome: service.OrganizationExecutionTerminalOutcomeError, ZeroProof: a.zeroProof}, nil
+}
+
+func (a *organizationImagesAdapter) ensureAdmission(ctx context.Context) *service.OrganizationExecutionAttemptResult {
+	if a.admissionDone {
+		return nil
+	}
+	a.admissionDone = true
+	stream := a.plan.ImagesPolicy != nil && a.plan.ImagesPolicy.RequestShape != "" && a.plan.Candidates[0].ParsedImages != nil && a.plan.Candidates[0].ParsedImages.Stream
+	if err := checkGatewayBillingEligibility(ctx, a.c, a.handler.billingCacheService, a.apiKey, a.subscription, service.QuotaPlatform(ctx, a.apiKey)); err != nil {
+		a.lastErr = err
+		a.zeroProof = "organization_platform_admission_rejected"
+		return &service.OrganizationExecutionAttemptResult{Dispatched: false, TerminalOutcome: service.OrganizationExecutionTerminalOutcomeError, ZeroProof: a.zeroProof}
+	}
+	release, acquired := a.handler.acquireResponsesUserSlot(a.c, a.subject.UserID, a.subject.Concurrency, stream, a.streamStarted, a.reqLog)
+	if !acquired {
+		a.zeroProof = "user_concurrency_unavailable"
+		return &service.OrganizationExecutionAttemptResult{Dispatched: false, TerminalOutcome: service.OrganizationExecutionTerminalOutcomeError, ZeroProof: a.zeroProof}
+	}
+	a.userRelease = release
+	return nil
+}
+
+func (a *organizationImagesAdapter) releaseUserSlot() {
+	if a != nil && a.userRelease != nil {
+		a.userRelease()
+		a.userRelease = nil
+	}
+}
+
+func (a *organizationImagesAdapter) resultForForward(request service.OrganizationExecutionDispatchRequest, candidate service.OrganizationEmbeddingsImagesCandidate, result *service.OpenAIForwardResult, forwardErr error, writerSizeBefore int) (*service.OrganizationExecutionAttemptResult, error) {
+	now := time.Now().UTC()
+	if result != nil {
+		if result.ImageCount <= 0 {
+			a.lastErr = forwardErr
+			if a.lastErr == nil {
+				a.lastErr = service.ErrOrganizationExecutionPendingReconciliation
+			}
+			return &service.OrganizationExecutionAttemptResult{
+				Dispatched: true, PendingReconciliation: true, TerminalOutcome: service.OrganizationAttemptEvidenceTerminalOutcomeUnknown,
+				Observation: a.pendingObservation(request, candidate, result, forwardErr, now),
+			}, a.lastErr
+		}
+		rawCost, err := a.handler.gatewayService.CalculateOrganizationImagesActualCost(candidate, result)
+		if err != nil {
+			a.lastErr = err
+			return &service.OrganizationExecutionAttemptResult{
+				Dispatched: true, PendingReconciliation: true, TerminalOutcome: service.OrganizationAttemptEvidenceTerminalOutcomeUnknown,
+				Observation: a.pendingObservation(request, candidate, result, forwardErr, now),
+			}, err
+		}
+		outcome := service.OrganizationExecutionTerminalOutcomeSuccess
+		if forwardErr != nil || result.ClientDisconnect {
+			outcome = service.OrganizationExecutionTerminalOutcomeError
+		}
+		a.lastErr = forwardErr
+		return &service.OrganizationExecutionAttemptResult{Dispatched: true, TerminalOutcome: outcome, Observation: a.observation(request, candidate, result, rawCost, forwardErr, now)}, nil
+	}
+	if zeroProof, proven := organizationResponsesProvenLocalZeroProof(forwardErr); proven {
+		a.lastErr = forwardErr
+		a.zeroProof = zeroProof
+		return &service.OrganizationExecutionAttemptResult{
+			Dispatched: false, TerminalOutcome: service.OrganizationExecutionTerminalOutcomeError, ZeroProof: zeroProof,
+		}, nil
+	}
+	var failoverErr *service.UpstreamFailoverError
+	writerSizeUnchanged := a.c == nil || a.c.Writer == nil || a.c.Writer.Size() == writerSizeBefore
+	if errors.As(forwardErr, &failoverErr) && !failoverErr.NoHTTPResponse && writerSizeUnchanged {
+		a.handler.gatewayService.RecordOpenAIAccountSwitch()
+		a.lastFailover = failoverErr
+		a.lastErr = forwardErr
+		return &service.OrganizationExecutionAttemptResult{
+			Dispatched: true, TerminalOutcome: service.OrganizationExecutionTerminalOutcomeError, Retryable: true,
+			Observation: a.observation(request, candidate, nil, "0", forwardErr, now),
+		}, nil
+	}
+	if errors.As(forwardErr, &failoverErr) {
+	} else {
+		var upstreamErr *service.OpenAIImagesUpstreamError
+		if errors.As(forwardErr, &upstreamErr) {
+		} else {
+		}
+	}
+	a.lastErr = forwardErr
+	if a.lastErr == nil {
+		a.lastErr = service.ErrOrganizationExecutionPendingReconciliation
+	}
+	return &service.OrganizationExecutionAttemptResult{
+		Dispatched: true, PendingReconciliation: true, TerminalOutcome: service.OrganizationAttemptEvidenceTerminalOutcomeUnknown,
+		Observation: a.pendingObservation(request, candidate, nil, forwardErr, now),
+	}, a.lastErr
+}
+
+func (a *organizationImagesAdapter) observation(request service.OrganizationExecutionDispatchRequest, candidate service.OrganizationEmbeddingsImagesCandidate, result *service.OpenAIForwardResult, rawCost string, forwardErr error, observedAt time.Time) *service.OrganizationExecutionAttemptObservation {
+	evidence := map[string]any{"account_id": candidate.AccountID, "route": candidate.Route, "requested_model": candidate.RequestedModel, "upstream_model": candidate.UpstreamModel}
+	if result != nil {
+		evidence["upstream_request_id"] = result.RequestID
+		evidence["image_count"] = result.ImageCount
+		evidence["image_size"] = result.ImageSize
+		evidence["image_output_sizes"] = result.ImageOutputSizes
+		evidence["client_disconnect"] = result.ClientDisconnect
+	}
+	if forwardErr != nil {
+		evidence["error_class"] = "forward_error"
+		var upstreamErr *service.OpenAIImagesUpstreamError
+		if errors.As(forwardErr, &upstreamErr) {
+			evidence["upstream_status"] = upstreamErr.StatusCode
+		}
+		var failoverErr *service.UpstreamFailoverError
+		if errors.As(forwardErr, &failoverErr) {
+			evidence["upstream_status"] = failoverErr.StatusCode
+		}
+	}
+	evidenceJSON, _ := json.Marshal(evidence)
+	routeJSON, _ := json.Marshal(candidate)
+	tokens := service.UsageTokens{}
+	if result != nil {
+		tokens = service.UsageTokens{InputTokens: result.Usage.InputTokens, OutputTokens: result.Usage.OutputTokens, CacheCreationTokens: result.Usage.CacheCreationInputTokens, CacheReadTokens: result.Usage.CacheReadInputTokens}
+	}
+	return &service.OrganizationExecutionAttemptObservation{AccountID: candidate.AccountID, RouteSnapshot: routeJSON, ProviderRequestID: request.ProviderRequestID, ProviderCorrelationID: request.ProviderCorrelationID, Evidence: evidenceJSON, RawActualCost: rawCost, InputTokens: int64(tokens.InputTokens), OutputTokens: int64(tokens.OutputTokens), CacheCreationTokens: int64(tokens.CacheCreationTokens), CacheReadTokens: int64(tokens.CacheReadTokens), ProviderObservedAt: observedAt}
+}
+
+func (a *organizationImagesAdapter) pendingObservation(request service.OrganizationExecutionDispatchRequest, candidate service.OrganizationEmbeddingsImagesCandidate, result *service.OpenAIForwardResult, forwardErr error, observedAt time.Time) *service.OrganizationExecutionAttemptObservation {
+	return a.observation(request, candidate, result, "", forwardErr, observedAt)
 }
 
 func (h *OpenAIGatewayHandler) openAIImagesJSONKeepaliveInterval() time.Duration {

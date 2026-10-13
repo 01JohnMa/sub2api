@@ -4,13 +4,31 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/MACOS-DO/sub4api/internal/pkg/pagination"
+	dbent "github.com/MACOS-DO/sub4api/ent"
 	"github.com/stretchr/testify/require"
+
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	_ "modernc.org/sqlite"
 )
+
+func newAdminServiceDeleteTestClient(t *testing.T) *dbent.Client {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", "file:admin_service_delete_transaction?mode=memory&cache=shared")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.SQLite, db)))
+	t.Cleanup(func() { _ = client.Close() })
+	return client
+}
 
 type userRepoStub struct {
 	user                 *User
@@ -95,6 +113,10 @@ func (s *userRepoStub) GetByID(ctx context.Context, id int64) (*User, error) {
 		return nil, ErrUserNotFound
 	}
 	return s.user, nil
+}
+
+func (s *userRepoStub) LockUserForDeletion(ctx context.Context, id int64) (*User, error) {
+	return s.GetByID(ctx, id)
 }
 
 func (s *userRepoStub) GetByEmail(ctx context.Context, email string) (*User, error) {
@@ -592,7 +614,7 @@ func waitForInvalidations(t *testing.T, ch <-chan subscriptionInvalidateCall, ex
 
 func TestAdminService_DeleteUser_Success(t *testing.T) {
 	repo := &userRepoStub{user: &User{ID: 7, Role: RoleUser}}
-	svc := &adminServiceImpl{userRepo: repo}
+	svc := &adminServiceImpl{userRepo: repo, entClient: newAdminServiceDeleteTestClient(t)}
 
 	err := svc.DeleteUser(context.Background(), 7)
 	require.NoError(t, err)
@@ -613,6 +635,7 @@ func TestAdminService_DeleteUser_DeletesOwnedAPIKeys(t *testing.T) {
 		userRepo:             repo,
 		apiKeyRepo:           apiKeyRepo,
 		authCacheInvalidator: invalidator,
+		entClient:            newAdminServiceDeleteTestClient(t),
 	}
 
 	err := svc.DeleteUser(context.Background(), 7)
@@ -626,7 +649,7 @@ func TestAdminService_DeleteUser_DeletesOwnedAPIKeys(t *testing.T) {
 
 func TestAdminService_DeleteUser_NotFound(t *testing.T) {
 	repo := &userRepoStub{getErr: ErrUserNotFound}
-	svc := &adminServiceImpl{userRepo: repo}
+	svc := &adminServiceImpl{userRepo: repo, entClient: newAdminServiceDeleteTestClient(t)}
 
 	err := svc.DeleteUser(context.Background(), 404)
 	require.ErrorIs(t, err, ErrUserNotFound)
@@ -635,12 +658,33 @@ func TestAdminService_DeleteUser_NotFound(t *testing.T) {
 
 func TestAdminService_DeleteUser_AdminGuard(t *testing.T) {
 	repo := &userRepoStub{user: &User{ID: 1, Role: RoleAdmin}}
-	svc := &adminServiceImpl{userRepo: repo}
+	svc := &adminServiceImpl{userRepo: repo, entClient: newAdminServiceDeleteTestClient(t)}
 
 	err := svc.DeleteUser(context.Background(), 1)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "cannot delete admin user")
 	require.Empty(t, repo.deletedIDs)
+}
+
+func TestAdminService_DeleteUser_RequiresMembershipRemoval(t *testing.T) {
+	organizationID := int64(8)
+	repo := &userRepoStub{user: &User{
+		ID:             7,
+		Role:           RoleUser,
+		OrganizationID: &organizationID,
+	}}
+	apiKeyRepo := &apiKeyRepoStub{}
+	svc := &adminServiceImpl{
+		userRepo:   repo,
+		apiKeyRepo: apiKeyRepo,
+		entClient:  newAdminServiceDeleteTestClient(t),
+	}
+
+	err := svc.DeleteUser(context.Background(), 7)
+	require.ErrorIs(t, err, ErrOrganizationMembershipMustBeRemoved)
+	require.Empty(t, repo.deletedIDs)
+	require.Empty(t, apiKeyRepo.listByUserIDCalls)
+	require.Empty(t, apiKeyRepo.deletedIDs)
 }
 
 func TestAdminService_DeleteUser_DeleteError(t *testing.T) {
@@ -649,11 +693,31 @@ func TestAdminService_DeleteUser_DeleteError(t *testing.T) {
 		user:      &User{ID: 9, Role: RoleUser},
 		deleteErr: deleteErr,
 	}
-	svc := &adminServiceImpl{userRepo: repo}
+	svc := &adminServiceImpl{userRepo: repo, entClient: newAdminServiceDeleteTestClient(t)}
 
 	err := svc.DeleteUser(context.Background(), 9)
 	require.ErrorIs(t, err, deleteErr)
 	require.Equal(t, []int64{9}, repo.deletedIDs)
+}
+
+func TestAdminService_DeleteUser_WithoutEntClientFailsClosed(t *testing.T) {
+	repo := &userRepoStub{user: &User{ID: 7, Role: RoleUser}}
+	apiKeyRepo := &apiKeyRepoStub{}
+	invalidator := &authCacheInvalidatorStub{}
+	svc := &adminServiceImpl{
+		userRepo:             repo,
+		apiKeyRepo:           apiKeyRepo,
+		authCacheInvalidator: invalidator,
+	}
+
+	err := svc.DeleteUser(context.Background(), 7)
+
+	require.ErrorIs(t, err, ErrUserDeletionTransactionUnavailable)
+	require.Empty(t, repo.deletedIDs)
+	require.Empty(t, apiKeyRepo.listByUserIDCalls)
+	require.Empty(t, apiKeyRepo.deletedIDs)
+	require.Empty(t, invalidator.keys)
+	require.Empty(t, invalidator.userIDs)
 }
 
 func TestAdminService_DeleteGroup_Success_WithCacheInvalidation(t *testing.T) {

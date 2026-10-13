@@ -91,6 +91,10 @@ temp/
 .cache/
 .dev/
 .serena/
+.pnpm-store/
+.playwright-cli/
+
+/data/
 
 # ===================
 # 构建产物
@@ -132,6 +136,7 @@ scripts
 #openspec/
 code-reviews/
 AGENTS.md
+skills/coococode-ops/
 backend/cmd/server/server
 deploy/docker-compose.override.yml
 .gocache/

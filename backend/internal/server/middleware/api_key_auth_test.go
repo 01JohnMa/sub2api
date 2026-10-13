@@ -270,6 +270,345 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 	})
 }
 
+func TestAPIKeyAuthRejectsOrganizationAttributionBeforePersonalBilling(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	organizationID := int64(88)
+	organizationRole := service.OrganizationRoleMember
+	apiKey := &service.APIKey{
+		ID:             100,
+		UserID:         7,
+		Key:            "organization-key",
+		OrganizationID: &organizationID,
+		OrganizationAuthorization: &service.OrganizationKeyAuthorization{
+			APIKeyID:                 100,
+			UserID:                   7,
+			OrganizationID:           organizationID,
+			OrganizationStatus:       service.OrganizationStatusActive,
+			AllocationID:             900,
+			AllocationUserID:         7,
+			AllocationOrganizationID: organizationID,
+			AllocationStatus:         service.StatusActive,
+			Available:                "10.00000000",
+			Reserved:                 "0.00000000",
+		},
+		Status: service.StatusActive,
+		User: &service.User{
+			ID:               7,
+			Role:             service.RoleUser,
+			Status:           service.StatusActive,
+			OrganizationID:   &organizationID,
+			OrganizationRole: &organizationRole,
+			Balance:          100,
+			Concurrency:      3,
+		},
+	}
+	repo := &stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) {
+		clone := *apiKey
+		userClone := *apiKey.User
+		clone.User = &userClone
+		return &clone, nil
+	}}
+
+	for _, runMode := range []string{config.RunModeStandard, config.RunModeSimple} {
+		t.Run(runMode, func(t *testing.T) {
+			cfg := &config.Config{RunMode: runMode}
+			apiKeyService := service.NewAPIKeyService(repo, nil, nil, nil, nil, nil, cfg)
+			router := newAuthTestRouter(apiKeyService, nil, cfg)
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+			req.Header.Set("x-api-key", apiKey.Key)
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusForbidden, w.Code)
+			require.Contains(t, w.Body.String(), "ORGANIZATION_SPENDING_DISABLED")
+		})
+	}
+
+	t.Run("inconsistent persisted attribution", func(t *testing.T) {
+		repo := &stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) {
+			return nil, service.ErrOrganizationMembershipInconsistent
+		}}
+		cfg := &config.Config{RunMode: config.RunModeStandard}
+		apiKeyService := service.NewAPIKeyService(repo, nil, nil, nil, nil, nil, cfg)
+		router := newAuthTestRouter(apiKeyService, nil, cfg)
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+		req.Header.Set("x-api-key", apiKey.Key)
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusForbidden, w.Code)
+		require.Contains(t, w.Body.String(), "ORGANIZATION_KEY_ATTRIBUTION_INVALID")
+	})
+}
+
+func TestAPIKeyAuthAllowsVerifiedOrganizationResponsesWithoutPersonalBilling(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	apiKey := organizationAPIKeyForMiddlewareTest(service.OrganizationStatusActive)
+	apiKey.User.Balance = 0
+	group := &service.Group{ID: 42, Name: "openai", Status: service.StatusActive, Platform: service.PlatformOpenAI, Hydrated: true, RateMultiplier: 1}
+	apiKey.Group = group
+	apiKey.GroupID = &group.ID
+	repo := &stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) {
+		clone := *apiKey
+		userClone := *apiKey.User
+		clone.User = &userClone
+		return &clone, nil
+	}}
+	cfg := &config.Config{RunMode: config.RunModeStandard, Log: config.LogConfig{Environment: "development"}}
+	cfg.Gateway.OrganizationSpending.Enabled = true
+	cfg.Gateway.OrganizationSpending.Capabilities = map[string]map[string]bool{
+		service.OrganizationEndpointFamilyResponses: {
+			service.OrganizationRequestShapeHTTP:      true,
+			service.OrganizationRequestShapeStreaming: true,
+		},
+	}
+	apiKeyService := service.NewAPIKeyService(repo, nil, nil, nil, nil, nil, cfg)
+	router := newAuthTestRouter(apiKeyService, nil, cfg)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestAPIKeyAuthDefersOrganizationResponsesProductionCapabilityToHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	apiKey := organizationAPIKeyForMiddlewareTest(service.OrganizationStatusActive)
+	group := &service.Group{ID: 42, Name: "openai", Status: service.StatusActive, Platform: service.PlatformOpenAI, Hydrated: true, RateMultiplier: 1}
+	apiKey.Group = group
+	apiKey.GroupID = &group.ID
+	repo := &stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) {
+		clone := *apiKey
+		userClone := *apiKey.User
+		clone.User = &userClone
+		return &clone, nil
+	}}
+	cfg := &config.Config{RunMode: config.RunModeStandard, Log: config.LogConfig{Environment: "production"}}
+	cfg.Gateway.OrganizationSpending.Enabled = true
+	cfg.Gateway.OrganizationSpending.Capabilities = map[string]map[string]bool{
+		service.OrganizationEndpointFamilyResponses: {
+			service.OrganizationRequestShapeHTTP:      true,
+			service.OrganizationRequestShapeStreaming: true,
+		},
+	}
+	apiKeyService := service.NewAPIKeyService(repo, nil, nil, nil, nil, nil, cfg)
+	router := newAuthTestRouter(apiKeyService, nil, cfg)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestAPIKeyAuthStoresAuthoritativeOrganizationSnapshotInRequestContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	apiKey := organizationAPIKeyForMiddlewareTest(service.OrganizationStatusActive)
+	repo := &stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) {
+		clone := *apiKey
+		userClone := *apiKey.User
+		clone.User = &userClone
+		return &clone, nil
+	}}
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	apiKeyService := service.NewAPIKeyService(repo, nil, nil, nil, nil, nil, cfg)
+	router := gin.New()
+	var captured *service.OrganizationKeyAuthorization
+	router.Use(func(c *gin.Context) {
+		c.Next()
+		captured, _ = c.Request.Context().Value(ctxkey.OrganizationKeyAuthorization).(*service.OrganizationKeyAuthorization)
+	})
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+	router.POST("/v1/messages", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	req.Header.Set("X-Organization-ID", "999999")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	require.Contains(t, w.Body.String(), "ORGANIZATION_SPENDING_DISABLED")
+	require.NotNil(t, captured)
+	require.Equal(t, apiKey.ID, captured.APIKeyID)
+	require.Equal(t, *apiKey.OrganizationID, captured.OrganizationID)
+	require.Equal(t, int64(900), captured.AllocationID)
+}
+
+func TestAPIKeyAuthStoresOrganizationSnapshotBeforeEarlyGuardRejection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	apiKey := organizationAPIKeyForMiddlewareTest(service.OrganizationStatusActive)
+	apiKey.IPWhitelist = []string{"203.0.113.10"}
+	repo := &stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) {
+		clone := *apiKey
+		userClone := *apiKey.User
+		clone.User = &userClone
+		return &clone, nil
+	}}
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	apiKeyService := service.NewAPIKeyService(repo, nil, nil, nil, nil, nil, cfg)
+	router := gin.New()
+	var captured *service.OrganizationKeyAuthorization
+	router.Use(func(c *gin.Context) {
+		c.Next()
+		captured, _ = c.Request.Context().Value(ctxkey.OrganizationKeyAuthorization).(*service.OrganizationKeyAuthorization)
+	})
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+	router.POST("/v1/messages", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	require.Contains(t, w.Body.String(), "ACCESS_DENIED")
+	require.NotNil(t, captured)
+	require.Equal(t, apiKey.ID, captured.APIKeyID)
+}
+
+func TestAPIKeyAuthRejectsNonActiveOrganizationBeforeCapability(t *testing.T) {
+	for _, status := range []string{service.OrganizationStatusDisabled, service.OrganizationStatusArchived} {
+		t.Run(status, func(t *testing.T) {
+			apiKey := organizationAPIKeyForMiddlewareTest(status)
+			repo := &stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) {
+				clone := *apiKey
+				userClone := *apiKey.User
+				clone.User = &userClone
+				return &clone, nil
+			}}
+			cfg := &config.Config{RunMode: config.RunModeStandard}
+			apiKeyService := service.NewAPIKeyService(repo, nil, nil, nil, nil, nil, cfg)
+			router := newAuthTestRouter(apiKeyService, nil, cfg)
+			req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+			req.Header.Set("x-api-key", apiKey.Key)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusForbidden, w.Code)
+			require.Contains(t, w.Body.String(), "ORGANIZATION_UNAVAILABLE")
+		})
+	}
+}
+
+func TestAPIKeyAuthRejectsUnknownOrganizationRequestShape(t *testing.T) {
+	apiKey := organizationAPIKeyForMiddlewareTest(service.OrganizationStatusActive)
+	repo := &stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) {
+		clone := *apiKey
+		userClone := *apiKey.User
+		clone.User = &userClone
+		return &clone, nil
+	}}
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	apiKeyService := service.NewAPIKeyService(repo, nil, nil, nil, nil, nil, cfg)
+	router := newAuthTestRouter(apiKeyService, nil, cfg)
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "ORGANIZATION_SPENDING_UNSUPPORTED_REQUEST")
+}
+
+func organizationAPIKeyForMiddlewareTest(organizationStatus string) *service.APIKey {
+	organizationID := int64(88)
+	organizationRole := service.OrganizationRoleMember
+	return &service.APIKey{
+		ID:             100,
+		UserID:         7,
+		Key:            "organization-key",
+		OrganizationID: &organizationID,
+		OrganizationAuthorization: &service.OrganizationKeyAuthorization{
+			APIKeyID:                 100,
+			UserID:                   7,
+			OrganizationID:           organizationID,
+			OrganizationStatus:       organizationStatus,
+			AllocationID:             900,
+			AllocationUserID:         7,
+			AllocationOrganizationID: organizationID,
+			AllocationStatus:         service.StatusActive,
+			Available:                "10.00000000",
+			Reserved:                 "0.00000000",
+		},
+		Status: service.StatusActive,
+		User: &service.User{
+			ID:               7,
+			Role:             service.RoleUser,
+			Status:           service.StatusActive,
+			OrganizationID:   &organizationID,
+			OrganizationRole: &organizationRole,
+			Balance:          100,
+			Concurrency:      3,
+		},
+	}
+}
+
+func TestOrganizationCapabilityRequestMatrix(t *testing.T) {
+	tests := []struct {
+		path   string
+		method string
+		want   []organizationCapabilityRequest
+	}{
+		{
+			path:   "/v1/messages",
+			method: http.MethodPost,
+			want: []organizationCapabilityRequest{
+				{family: service.OrganizationEndpointFamilyMessages, shape: service.OrganizationRequestShapeHTTP},
+				{family: service.OrganizationEndpointFamilyMessages, shape: service.OrganizationRequestShapeStreaming},
+			},
+		},
+		{
+			path:   "/backend-api/codex/responses",
+			method: http.MethodPost,
+			want: []organizationCapabilityRequest{
+				{family: service.OrganizationEndpointFamilyResponses, shape: service.OrganizationRequestShapeHTTP},
+				{family: service.OrganizationEndpointFamilyResponses, shape: service.OrganizationRequestShapeStreaming},
+			},
+		},
+		{
+			path:   "/responses",
+			method: http.MethodGet,
+			want: []organizationCapabilityRequest{
+				{family: service.OrganizationEndpointFamilyResponses, shape: service.OrganizationRequestShapeWebSocketResponseCreate},
+			},
+		},
+		{
+			path:   "/v1beta/models/gemini-2.5:generateContent",
+			method: http.MethodPost,
+			want: []organizationCapabilityRequest{
+				{family: service.OrganizationEndpointFamilyGemini, shape: service.OrganizationRequestShapeModelsAction},
+			},
+		},
+		{
+			path:   "/antigravity/v1beta/models/gemini-2.5:streamGenerateContent",
+			method: http.MethodPost,
+			want: []organizationCapabilityRequest{
+				{family: service.OrganizationEndpointFamilyAntigravity, shape: service.OrganizationRequestShapeStreaming},
+			},
+		},
+		{
+			path:   "/v1/models",
+			method: http.MethodGet,
+			want:   nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(tt.method, tt.path, nil)
+			require.Equal(t, tt.want, organizationCapabilityRequests(c))
+		})
+	}
+}
+
 func TestAPIKeyAuthSetsGroupContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -1510,6 +1849,16 @@ func newAuthTestRouter(apiKeyService *service.APIKeyService, subscriptionService
 	router.POST("/v1/messages", ok)
 	router.GET("/v1/usage", ok)
 	router.GET("/v1/sub2api/billing", ok)
+	})
+	router.POST("/v1/messages", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	router.POST("/v1/responses", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	router.GET("/v1/models", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
 	return router
 }
 

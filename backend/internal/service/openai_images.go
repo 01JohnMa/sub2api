@@ -741,10 +741,11 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 	defer func() { _ = resp.Body.Close() }()
 
 	var usage OpenAIUsage
-	imageCount := parsed.N
+	imageCount := 0
 	var firstTokenMs *int
+	clientDisconnected := false
 	if parsed.Stream && isEventStreamResponse(resp.Header) {
-		streamUsage, streamCount, streamSizes, ttft, err := s.handleOpenAIImagesStreamingResponse(resp, c, startTime, nil)
+		streamUsage, streamCount, streamSizes, ttft, err := s.handleOpenAIImagesStreamingResponse(resp, c, startTime, nil, &clientDisconnected)
 		if err != nil {
 			if streamCount > 0 {
 				return &OpenAIForwardResult{
@@ -761,6 +762,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 					ImageSize:        parsed.SizeTier,
 					ImageInputSize:   parsed.Size,
 					ImageOutputSizes: streamSizes,
+					ClientDisconnect: clientDisconnected,
 				}, err
 			}
 			return nil, err
@@ -783,6 +785,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			ImageSize:        parsed.SizeTier,
 			ImageInputSize:   parsed.Size,
 			ImageOutputSizes: imageOutputSizes,
+			ClientDisconnect: clientDisconnected,
 		}, nil
 	} else {
 		nonStreamUsage, nonStreamCount, nonStreamSizes, err := s.handleOpenAIImagesNonStreamingResponse(upstreamCtx, resp, c, account, parsed)
@@ -790,9 +793,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			return nil, err
 		}
 		usage = nonStreamUsage
-		if nonStreamCount > 0 {
-			imageCount = nonStreamCount
-		}
+		imageCount = nonStreamCount
 		return &OpenAIForwardResult{
 			RequestID:        resp.Header.Get("x-request-id"),
 			UpstreamHeaders:  resp.Header,
@@ -987,6 +988,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 	c *gin.Context,
 	startTime time.Time,
 	direct *OpenAIImagesRequest,
+	clientDisconnectedOut *bool,
 ) (OpenAIUsage, int, []string, *int, error) {
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
@@ -1005,6 +1007,11 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 	imageCounter := newOpenAIImageOutputCounter()
 	var firstTokenMs *int
 	clientDisconnected := false
+	defer func() {
+		if clientDisconnectedOut != nil {
+			*clientDisconnectedOut = clientDisconnected
+		}
+	}()
 	lastDownstreamWriteAt := time.Now()
 	var fallbackBody bytes.Buffer
 	fallbackBytes := int64(0)

@@ -104,6 +104,7 @@ func jwtAuth(
 		c.Set(string(ContextKeyUserRole), user.Role)
 		c.Set(ContextKeyAuthEmail, user.Email)
 		c.Set(ContextKeySessionID, claims.SessionID)
+		c.Set("auth_method", "jwt")
 		if activityToucher != nil {
 			activityToucher.TouchLastActiveForUser(c.Request.Context(), user)
 		}

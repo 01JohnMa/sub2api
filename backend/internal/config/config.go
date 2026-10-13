@@ -1052,6 +1052,9 @@ type GatewayConfig struct {
 	OpenAIProxyStreamCircuit GatewayOpenAIProxyStreamCircuitConfig `mapstructure:"openai_proxy_stream_circuit"`
 	// ImageConcurrency: 图片生成独立并发限制配置（默认关闭）
 	ImageConcurrency ImageConcurrencyConfig `mapstructure:"image_concurrency"`
+	// OrganizationSpending gates organization-key billing by endpoint family and
+	// request shape. It is intentionally disabled until each adapter is proven.
+	OrganizationSpending OrganizationSpendingConfig `mapstructure:"organization_spending"`
 
 	// HTTP 上游连接池配置（性能优化：支持高并发场景调优）
 	// MaxIdleConns: 所有主机的最大空闲连接总数
@@ -1182,6 +1185,13 @@ type GatewayCNProvidersConfig struct {
 type GatewayLiveConfig struct {
 	// MaxSessionDurationSeconds 是 Live 会话的硬上限。
 	MaxSessionDurationSeconds int `mapstructure:"max_session_duration_seconds"`
+}
+
+// OrganizationSpendingConfig keeps rollout decisions at startup configuration
+// scope. An absent capability map is fail-closed for every known request shape.
+type OrganizationSpendingConfig struct {
+	Enabled      bool                       `mapstructure:"enabled"`
+	Capabilities map[string]map[string]bool `mapstructure:"capabilities"`
 }
 
 // GatewayOpenAIHTTP2Config OpenAI HTTP 上游协议配置。
@@ -2468,6 +2478,8 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_codex_ticket.harvest_retry_max_seconds", 30)
 	viper.SetDefault("gateway.openai_codex_ticket.harvest_refresh_seconds", 1800)
 	viper.SetDefault("gateway.live.max_session_duration_seconds", 3600)
+	viper.SetDefault("gateway.organization_spending.enabled", false)
+	viper.SetDefault("gateway.organization_spending.capabilities", map[string]map[string]bool{})
 	// OpenAI Responses WebSocket（默认开启；可通过 force_http 紧急回滚）
 	viper.SetDefault("gateway.openai_ws.enabled", true)
 	viper.SetDefault("gateway.openai_ws.mode_router_v2_enabled", false)

@@ -13,8 +13,11 @@ import (
 	dbent "github.com/MACOS-DO/sub4api/ent"
 	"github.com/MACOS-DO/sub4api/ent/apikey"
 	"github.com/MACOS-DO/sub4api/ent/group"
+	"github.com/MACOS-DO/sub4api/ent/organization"
+	"github.com/MACOS-DO/sub4api/ent/organizationallocation"
 	"github.com/MACOS-DO/sub4api/ent/schema/mixins"
 	"github.com/MACOS-DO/sub4api/ent/user"
+	"github.com/MACOS-DO/sub4api/internal/domain"
 	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/lib/pq"
 
@@ -28,6 +31,8 @@ type apiKeyRepository struct {
 	client *dbent.Client
 	sql    sqlExecutor
 }
+
+var errAPIKeyOwnerOrganizationChanged = errors.New("api key owner organization changed while acquiring locks")
 
 func NewAPIKeyRepository(client *dbent.Client, sqlDB *sql.DB) service.APIKeyRepository {
 	return newAPIKeyRepositoryWithSQL(client, sqlDB)
@@ -43,12 +48,106 @@ func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
 }
 
 func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) error {
-	builder := r.client.APIKey.Create().
+	if existingTx := dbent.TxFromContext(ctx); existingTx != nil {
+		err := r.createWithLockedOwner(ctx, existingTx.Client(), key)
+		if errors.Is(err, errAPIKeyOwnerOrganizationChanged) {
+			return service.ErrOrganizationMembershipInconsistent.WithCause(err)
+		}
+		return err
+	}
+
+	for attempt := 0; attempt < 3; attempt++ {
+		tx, err := r.client.Tx(ctx)
+		if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
+			return err
+		}
+		if err != nil {
+			err = r.createWithLockedOwner(ctx, r.client, key)
+			if errors.Is(err, errAPIKeyOwnerOrganizationChanged) {
+				return service.ErrOrganizationMembershipInconsistent.WithCause(err)
+			}
+			return err
+		}
+
+		txCtx := dbent.NewTxContext(ctx, tx)
+		err = r.createWithLockedOwner(txCtx, tx.Client(), key)
+		if err != nil {
+			_ = tx.Rollback()
+			if errors.Is(err, errAPIKeyOwnerOrganizationChanged) {
+				continue
+			}
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		return nil
+	}
+	return service.ErrOrganizationMembershipInconsistent.WithCause(errAPIKeyOwnerOrganizationChanged)
+}
+
+func (r *apiKeyRepository) createWithLockedOwner(ctx context.Context, client *dbent.Client, key *service.APIKey) error {
+	ownerSnapshot, err := client.User.Query().
+		Where(user.IDEQ(key.UserID), user.DeletedAtIsNil()).
+		Only(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	if ownerSnapshot.OrganizationID != nil && client.Driver().Dialect() == dialect.Postgres {
+		if _, err := client.Organization.Query().
+			Where(organization.IDEQ(*ownerSnapshot.OrganizationID)).
+			ForShare().
+			Only(ctx); err != nil {
+			return translatePersistenceError(err, service.ErrOrganizationMembershipInconsistent, nil)
+		}
+	}
+
+	ownerQuery := client.User.Query().
+		Where(user.IDEQ(key.UserID), user.DeletedAtIsNil())
+	// SQLite does not implement SELECT .. FOR UPDATE. Production PostgreSQL
+	// keeps the row lock that serializes key creation with membership changes;
+	// SQLite callers are schema/unit-test paths without row-lock semantics.
+	if client.Driver().Dialect() == dialect.Postgres {
+		ownerQuery = ownerQuery.ForUpdate()
+	}
+	owner, err := ownerQuery.Only(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	if !sameOptionalInt64(ownerSnapshot.OrganizationID, owner.OrganizationID) {
+		return errAPIKeyOwnerOrganizationChanged
+	}
+
+	if (owner.OrganizationID == nil) != (owner.OrganizationRole == nil) {
+		return service.ErrOrganizationMembershipInconsistent
+	}
+
+	allocations, err := client.OrganizationAllocation.Query().
+		Where(
+			organizationallocation.UserIDSnapshotEQ(owner.ID),
+			organizationallocation.StatusEQ(domain.OrganizationAllocationStatusActive),
+		).
+		All(ctx)
+	if err != nil {
+		return err
+	}
+	if owner.OrganizationID == nil {
+		if len(allocations) != 0 {
+			return service.ErrOrganizationMembershipInconsistent
+		}
+	} else if len(allocations) != 1 ||
+		allocations[0].UserRefID == nil || *allocations[0].UserRefID != owner.ID ||
+		allocations[0].OrganizationID != *owner.OrganizationID {
+		return service.ErrOrganizationMembershipInconsistent
+	}
+
+	builder := client.APIKey.Create().
 		SetUserID(key.UserID).
 		SetKey(key.Key).
 		SetName(key.Name).
 		SetStatus(key.Status).
 		SetNillableGroupID(key.GroupID).
+		SetNillableOrganizationID(owner.OrganizationID).
 		SetNillableLastUsedAt(key.LastUsedAt).
 		SetQuota(key.Quota).
 		SetQuotaUsed(key.QuotaUsed).
@@ -67,11 +166,19 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 	created, err := builder.Save(ctx)
 	if err == nil {
 		key.ID = created.ID
+		key.OrganizationID = created.OrganizationID
 		key.LastUsedAt = created.LastUsedAt
 		key.CreatedAt = created.CreatedAt
 		key.UpdatedAt = created.UpdatedAt
 	}
 	return translatePersistenceError(err, nil, service.ErrAPIKeyExists)
+}
+
+func sameOptionalInt64(left, right *int64) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 func (r *apiKeyRepository) GetByID(ctx context.Context, id int64) (*service.APIKey, error) {
@@ -128,12 +235,18 @@ func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.A
 }
 
 func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*service.APIKey, error) {
-	m, err := r.activeQuery().
+	client := clientFromContext(ctx, r.client)
+	if client == nil {
+		return nil, service.ErrOrganizationKeyAuthorizationUnavailable
+	}
+	m, err := client.APIKey.Query().
+		Where(apikey.DeletedAtIsNil()).
 		Where(apikey.KeyEQ(key)).
 		Select(
 			apikey.FieldID,
 			apikey.FieldUserID,
 			apikey.FieldGroupID,
+			apikey.FieldOrganizationID,
 			apikey.FieldName,
 			apikey.FieldStatus,
 			apikey.FieldIPWhitelist,
@@ -146,8 +259,11 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldRateLimit7d,
 		).
 		WithUser(func(q *dbent.UserQuery) {
+			q.Where(user.DeletedAtIsNil())
 			q.Select(
 				user.FieldID,
+				user.FieldOrganizationID,
+				user.FieldOrganizationRole,
 				user.FieldEmail,
 				user.FieldUsername,
 				user.FieldStatus,
@@ -232,14 +348,148 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldProfitSafetyBuffer,
 			)
 		}).
+		WithOrganization(func(q *dbent.OrganizationQuery) {
+			q.Select(
+				organization.FieldID,
+				organization.FieldStatus,
+			)
+		}).
 		Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
 			return nil, service.ErrAPIKeyNotFound
 		}
+		return nil, service.ErrOrganizationKeyAuthorizationUnavailable.WithCause(err)
+	}
+	authorization, err := resolveAPIKeyOrganizationAuthorization(ctx, client, m)
+	if err != nil {
 		return nil, err
 	}
-	return apiKeyEntityToService(m), nil
+	apiKey := apiKeyEntityToService(m)
+	apiKey.OrganizationAuthorization = authorization
+	return apiKey, nil
+}
+
+// resolveAPIKeyOrganizationAuthorization establishes the authorization fact
+// used by the gateway. It only accepts either a fully consistent organization
+// attribution or a fully personal key; every partial state fails closed.
+func resolveAPIKeyOrganizationAuthorization(ctx context.Context, client *dbent.Client, key *dbent.APIKey) (*service.OrganizationKeyAuthorization, error) {
+	if key == nil || key.Edges.User == nil {
+		return nil, rejectOrganizationKeyAttribution("owner_missing", key, nil)
+	}
+	owner := key.Edges.User
+	if key.ID <= 0 || key.UserID <= 0 || owner.ID <= 0 || key.UserID != owner.ID {
+		return nil, rejectOrganizationKeyAttribution("key_owner_mismatch", key, nil)
+	}
+	if (owner.OrganizationID == nil) != (owner.OrganizationRole == nil) {
+		return nil, rejectOrganizationKeyAttribution("owner_membership_partial", key, nil)
+	}
+	if owner.OrganizationRole != nil && *owner.OrganizationRole != domain.OrganizationRoleAdmin && *owner.OrganizationRole != domain.OrganizationRoleMember {
+		return nil, rejectOrganizationKeyAttribution("owner_organization_role_invalid", key, nil)
+	}
+	if client == nil {
+		return nil, service.ErrOrganizationKeyAuthorizationUnavailable
+	}
+	allocations, err := client.OrganizationAllocation.Query().
+		Where(
+			organizationallocation.Or(
+				organizationallocation.UserIDSnapshotEQ(owner.ID),
+				organizationallocation.UserRefIDEQ(owner.ID),
+			),
+			organizationallocation.StatusEQ(domain.OrganizationAllocationStatusActive),
+		).
+		Select(
+			organizationallocation.FieldID,
+			organizationallocation.FieldOrganizationID,
+			organizationallocation.FieldUserIDSnapshot,
+			organizationallocation.FieldUserRefID,
+			organizationallocation.FieldStatus,
+			organizationallocation.FieldVersion,
+			organizationallocation.FieldAvailable,
+			organizationallocation.FieldReserved,
+		).
+		All(ctx)
+	if err != nil {
+		return nil, service.ErrOrganizationKeyAuthorizationUnavailable.WithCause(err)
+	}
+
+	if key.OrganizationID == nil && owner.OrganizationID == nil && owner.OrganizationRole == nil {
+		if len(allocations) == 0 {
+			return nil, nil
+		}
+		return nil, rejectOrganizationKeyAttribution("personal_key_active_allocation", key, allocations[0])
+	}
+
+	if key.OrganizationID == nil {
+		return nil, rejectOrganizationKeyAttribution("key_organization_missing", key, firstAllocation(allocations))
+	}
+	if owner.OrganizationID == nil || owner.OrganizationRole == nil {
+		return nil, rejectOrganizationKeyAttribution("owner_organization_missing", key, firstAllocation(allocations))
+	}
+	if *owner.OrganizationID != *key.OrganizationID {
+		return nil, rejectOrganizationKeyAttribution("key_owner_organization_mismatch", key, firstAllocation(allocations))
+	}
+	organizationEntity := key.Edges.Organization
+	if organizationEntity == nil || organizationEntity.ID != *key.OrganizationID {
+		return nil, rejectOrganizationKeyAttribution("organization_missing", key, firstAllocation(allocations))
+	}
+	if len(allocations) != 1 {
+		return nil, rejectOrganizationKeyAttribution("allocation_missing_or_duplicate", key, firstAllocation(allocations))
+	}
+
+	allocation := allocations[0]
+	if allocation.Status != domain.OrganizationAllocationStatusActive ||
+		allocation.UserRefID == nil || *allocation.UserRefID != owner.ID ||
+		allocation.UserIDSnapshot != owner.ID ||
+		allocation.OrganizationID != *key.OrganizationID {
+		return nil, rejectOrganizationKeyAttribution("allocation_attribution_mismatch", key, allocation)
+	}
+	return &service.OrganizationKeyAuthorization{
+		APIKeyID:                   key.ID,
+		UserID:                     owner.ID,
+		OrganizationID:             organizationEntity.ID,
+		OrganizationStatus:         organizationEntity.Status,
+		OrganizationBalanceVersion: organizationEntity.BalanceVersion,
+		AllocationID:               allocation.ID,
+		AllocationUserID:           allocation.UserIDSnapshot,
+		AllocationOrganizationID:   allocation.OrganizationID,
+		AllocationStatus:           allocation.Status,
+		AllocationVersion:          allocation.Version,
+		Available:                  allocation.Available.StringFixed(domain.OrganizationMoneyScale),
+		Reserved:                   allocation.Reserved.StringFixed(domain.OrganizationMoneyScale),
+	}, nil
+}
+
+func firstAllocation(allocations []*dbent.OrganizationAllocation) *dbent.OrganizationAllocation {
+	if len(allocations) == 0 {
+		return nil
+	}
+	return allocations[0]
+}
+
+func rejectOrganizationKeyAttribution(reason string, key *dbent.APIKey, allocation *dbent.OrganizationAllocation) error {
+	return service.NewOrganizationKeyAttributionError(reason, organizationKeyAuthorizationAlertSnapshot(key, allocation))
+}
+
+func organizationKeyAuthorizationAlertSnapshot(key *dbent.APIKey, allocation *dbent.OrganizationAllocation) *service.OrganizationKeyAuthorization {
+	if key == nil {
+		return nil
+	}
+	auth := &service.OrganizationKeyAuthorization{
+		APIKeyID: key.ID,
+		UserID:   key.UserID,
+	}
+	if key.OrganizationID != nil {
+		auth.OrganizationID = *key.OrganizationID
+	} else if key.Edges.User != nil && key.Edges.User.OrganizationID != nil {
+		auth.OrganizationID = *key.Edges.User.OrganizationID
+	}
+	if allocation != nil {
+		auth.AllocationID = allocation.ID
+		auth.AllocationUserID = allocation.UserIDSnapshot
+		auth.AllocationOrganizationID = allocation.OrganizationID
+	}
+	return auth
 }
 
 func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey, fields service.APIKeyUpdateFields) error {
@@ -873,29 +1123,30 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		return nil
 	}
 	out := &service.APIKey{
-		ID:            m.ID,
-		UserID:        m.UserID,
-		Key:           m.Key,
-		Name:          m.Name,
-		Status:        m.Status,
-		IPWhitelist:   m.IPWhitelist,
-		IPBlacklist:   m.IPBlacklist,
-		LastUsedAt:    m.LastUsedAt,
-		CreatedAt:     m.CreatedAt,
-		UpdatedAt:     m.UpdatedAt,
-		GroupID:       m.GroupID,
-		Quota:         m.Quota,
-		QuotaUsed:     m.QuotaUsed,
-		ExpiresAt:     m.ExpiresAt,
-		RateLimit5h:   m.RateLimit5h,
-		RateLimit1d:   m.RateLimit1d,
-		RateLimit7d:   m.RateLimit7d,
-		Usage5h:       m.Usage5h,
-		Usage1d:       m.Usage1d,
-		Usage7d:       m.Usage7d,
-		Window5hStart: m.Window5hStart,
-		Window1dStart: m.Window1dStart,
-		Window7dStart: m.Window7dStart,
+		ID:             m.ID,
+		UserID:         m.UserID,
+		OrganizationID: m.OrganizationID,
+		Key:            m.Key,
+		Name:           m.Name,
+		Status:         m.Status,
+		IPWhitelist:    m.IPWhitelist,
+		IPBlacklist:    m.IPBlacklist,
+		LastUsedAt:     m.LastUsedAt,
+		CreatedAt:      m.CreatedAt,
+		UpdatedAt:      m.UpdatedAt,
+		GroupID:        m.GroupID,
+		Quota:          m.Quota,
+		QuotaUsed:      m.QuotaUsed,
+		ExpiresAt:      m.ExpiresAt,
+		RateLimit5h:    m.RateLimit5h,
+		RateLimit1d:    m.RateLimit1d,
+		RateLimit7d:    m.RateLimit7d,
+		Usage5h:        m.Usage5h,
+		Usage1d:        m.Usage1d,
+		Usage7d:        m.Usage7d,
+		Window5hStart:  m.Window5hStart,
+		Window1dStart:  m.Window1dStart,
+		Window7dStart:  m.Window7dStart,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
@@ -925,6 +1176,8 @@ func userEntityToService(u *dbent.User) *service.User {
 		Notes:                      u.Notes,
 		PasswordHash:               u.PasswordHash,
 		Role:                       u.Role,
+		OrganizationID:             u.OrganizationID,
+		OrganizationRole:           u.OrganizationRole,
 		Balance:                    u.Balance,
 		FrozenBalance:              u.FrozenBalance,
 		Concurrency:                u.Concurrency,

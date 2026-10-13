@@ -51,12 +51,19 @@ type GatewayHandler struct {
 	errorPassthroughService   *service.ErrorPassthroughService
 	contentModerationService  *service.ContentModerationService
 	securityAuditCoordinator  *securityaudit.Coordinator
+	organizationExecution     *service.OrganizationExecutionService
 	concurrencyHelper         *ConcurrencyHelper
 	userMsgQueueHelper        *UserMsgQueueHelper
 	maxAccountSwitches        int
 	maxAccountSwitchesGemini  int
 	cfg                       *config.Config
 	settingService            *service.SettingService
+}
+
+func (h *GatewayHandler) SetOrganizationExecutionService(execution *service.OrganizationExecutionService) {
+	if h != nil {
+		h.organizationExecution = execution
+	}
 }
 
 // NewGatewayHandler creates a new GatewayHandler
@@ -140,10 +147,24 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		zap.Any("group_id", apiKey.GroupID),
 	)
 	defer h.maybeLogCompatibilityFallbackMetrics(reqLog)
+	forcePlatform, forcedPlatform := middleware2.GetForcePlatformFromContext(c)
+	_, organizationRequest := middleware2.GetOrganizationKeyAuthorizationFromContext(c)
+	organizationAntigravityRequest := forcedPlatform && forcePlatform == service.PlatformAntigravity && organizationRequest
 
 	// 读取请求体
 	body, err := readLenientJSONRequestBodyWithPrealloc(c.Request, h.cfg)
 	if err != nil {
+		if organizationAntigravityRequest {
+			if evidenceErr := h.recordOrganizationGeminiPreDispatchRejectionForFamily(c, apiKey, nil, service.OrganizationEndpointFamilyAntigravity, service.OrganizationRequestShapeHTTP, "messages", "", err); evidenceErr != nil {
+				h.writeOrganizationAntigravityError(c, evidenceErr, nil)
+				return
+			}
+		}
+		if organizationRequest && !organizationAntigravityRequest {
+			if !h.recordOrganizationGatewayMessagesPreDispatchRejection(c, apiKey, nil, service.OrganizationRequestShapeHTTP, service.ErrOrganizationMessagesUnsupportedRequest, nil) {
+				return
+			}
+		}
 		if maxErr, ok := extractMaxBytesError(err); ok {
 			h.errorResponse(c, http.StatusRequestEntityTooLarge, "invalid_request_error", buildBodyTooLargeMessage(maxErr.Limit))
 			return
@@ -153,6 +174,17 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 
 	if len(body) == 0 {
+		if organizationAntigravityRequest {
+			if evidenceErr := h.recordOrganizationGeminiPreDispatchRejectionForFamily(c, apiKey, body, service.OrganizationEndpointFamilyAntigravity, service.OrganizationRequestShapeHTTP, "messages", "", service.ErrOrganizationGeminiUnsupportedRequest); evidenceErr != nil {
+				h.writeOrganizationAntigravityError(c, evidenceErr, nil)
+				return
+			}
+		}
+		if organizationRequest && !organizationAntigravityRequest {
+			if !h.recordOrganizationGatewayMessagesPreDispatchRejection(c, apiKey, body, service.OrganizationRequestShapeHTTP, service.ErrOrganizationMessagesUnsupportedRequest, nil) {
+				return
+			}
+		}
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Request body is empty")
 		return
 	}
@@ -162,12 +194,25 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	bodyRef := service.NewRequestBodyRef(body)
 	parsedReq, err := service.ParseGatewayRequest(bodyRef, domain.PlatformAnthropic)
 	if err != nil {
+		if organizationAntigravityRequest {
+			if evidenceErr := h.recordOrganizationGeminiPreDispatchRejectionForFamily(c, apiKey, body, service.OrganizationEndpointFamilyAntigravity, service.OrganizationRequestShapeHTTP, "messages", "", service.ErrOrganizationGeminiUnsupportedRequest); evidenceErr != nil {
+				h.writeOrganizationAntigravityError(c, evidenceErr, nil)
+				return
+			}
+		}
+		if organizationRequest && !organizationAntigravityRequest {
+			if !h.recordOrganizationGatewayMessagesPreDispatchRejection(c, apiKey, body, service.OrganizationRequestShapeHTTP, service.ErrOrganizationMessagesUnsupportedRequest, nil) {
+				return
+			}
+		}
 		logRequestBodyParseFailure(reqLog, body, err)
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 		return
 	}
 	body = parsedReq.Body.Bytes()
 	reqModel := parsedReq.Model
+	// 渠道级模型映射：按分组解析，仅在命中时改写出站模型。
+	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
 	reqStream := parsedReq.Stream
 	bindRequestedReasoningEffort(c, body, reqModel)
 	ensureCompositeTargetPlatform(c, apiKey, reqModel)
@@ -186,9 +231,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
-	// 解析渠道级模型映射
-	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
-
 	// 设置 max_tokens=1 + haiku 探测请求标识到 context 中
 	// 必须在 SetClaudeCodeClientContext 之前设置，因为 ClaudeCodeValidator 需要读取此标识进行绕过判断
 	if isMaxTokensOneHaikuRequest(reqModel, parsedReq.MaxTokens) {
@@ -199,6 +241,15 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// 检查是否为 Claude Code 客户端，设置到 context 中（复用已解析请求，避免二次反序列化）。
 	SetClaudeCodeClientContext(c, body, parsedReq)
 	isClaudeCodeClient := service.IsClaudeCodeClient(c.Request.Context())
+	streamStarted := false
+	if forcedPlatform && forcePlatform == service.PlatformAntigravity && organizationRequest {
+		h.handleOrganizationAntigravityMessages(c, apiKey, subject, body, reqModel, reqStream, reqLog, &streamStarted)
+		return
+	}
+	if organizationRequest {
+		h.handleOrganizationGatewayMessages(c, apiKey, subject, body, reqModel, reqStream, reqLog, &streamStarted)
+		return
+	}
 
 	// 版本检查：仅对 Claude Code 客户端，拒绝低于最低版本的请求
 	if !h.checkClaudeCodeVersion(c) {
@@ -215,6 +266,16 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	// 验证 model 必填
 	if reqModel == "" {
+		if organizationAntigravityRequest {
+			shape := service.OrganizationRequestShapeHTTP
+			if reqStream {
+				shape = service.OrganizationRequestShapeStreaming
+			}
+			if evidenceErr := h.recordOrganizationGeminiPreDispatchRejectionForFamily(c, apiKey, body, service.OrganizationEndpointFamilyAntigravity, shape, "messages", reqModel, service.ErrOrganizationGeminiUnsupportedRequest); evidenceErr != nil {
+				h.writeOrganizationAntigravityError(c, evidenceErr, nil)
+				return
+			}
+		}
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 		return
 	}
@@ -227,9 +288,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		h.anthropicSecurityAuditError(c, decision)
 		return
 	}
-
-	// Track if we've started streaming (for error handling)
-	streamStarted := false
 
 	// 绑定错误透传服务，允许 service 层在非 failover 错误场景复用规则。
 	if h.errorPassthroughService != nil {
@@ -253,7 +311,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 
 	// 2. 【新增】Wait后二次检查余额/订阅
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+	if err := checkGatewayBillingEligibility(c.Request.Context(), c, h.billingCacheService, apiKey, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("gateway.billing_eligibility_check_failed", zap.Error(err))
 		status, code, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {
@@ -1023,6 +1081,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 							_ = h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body)
 							return
 						}
+						if _, organizationRequest := middleware2.GetOrganizationKeyAuthorizationFromContext(c); organizationRequest {
+							reqLog.Warn("gateway.organization_fallback_blocked", zap.Int64("fallback_group_id", fallbackGroup.ID))
+							status, code, message, _ := billingErrorDetails(service.ErrOrganizationBillingUnavailable)
+							h.handleStreamingAwareError(c, status, code, message, streamStarted)
+							return
+						}
 						fallbackAPIKey := cloneAPIKeyWithGroup(apiKey, fallbackGroup)
 						if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), fallbackAPIKey.User, fallbackAPIKey, fallbackGroup, nil, service.PlatformFromAPIKey(fallbackAPIKey)); err != nil {
 							status, code, message, retryAfter := billingErrorDetails(err)
@@ -1143,6 +1207,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 // Falls back to default models if no whitelist is configured
 func (h *GatewayHandler) Models(c *gin.Context) {
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+	if organizationNonBillableAuthorization(c) {
+		if err := h.organizationLocalAdmission(c, apiKey, service.OrganizationEndpointFamilyModels, service.OrganizationRequestShapeHTTP, "", "local_models_response", nil, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+			h.writeOrganizationNonBillableError(c, err, false)
+			return
+		}
+	}
 
 	var groupID *int64
 	var platform string
@@ -1536,6 +1606,13 @@ func mergeModelIDs(primary, secondary []string) []string {
 // GET /antigravity/models
 // 分组级模型白名单开启时按白名单过滤。
 func (h *GatewayHandler) AntigravityModels(c *gin.Context) {
+	if organizationNonBillableAuthorization(c) {
+		apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+		if err := h.organizationLocalAdmission(c, apiKey, service.OrganizationEndpointFamilyModels, service.OrganizationRequestShapeHTTP, "", "local_antigravity_models_response", nil, service.PlatformAntigravity); err != nil {
+			h.writeOrganizationNonBillableError(c, err, false)
+			return
+		}
+	}
 	models := antigravity.DefaultModels()
 	if apiKey, ok := middleware2.GetAPIKeyFromContext(c); ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
 		filtered := make([]antigravity.ClaudeModel, 0, len(models))
@@ -1583,13 +1660,31 @@ func (h *GatewayHandler) Usage(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+	organizationRequest := organizationNonBillableAuthorization(c)
+	if organizationRequest {
+		if err := h.requireOrganizationNonBillable(c, apiKey, service.OrganizationEndpointFamilyUsage, service.OrganizationRequestShapeHTTP, service.QuotaPlatform(ctx, apiKey)); err != nil {
+			h.writeOrganizationNonBillableError(c, err, false)
+			return
+		}
+	}
 
-	// 解析可选的日期范围参数（用于 model_stats 查询）
 	startTime, endTime := h.parseUsageDateRange(c)
 	days, ok := parseAPIKeyDailyUsageDays(c.DefaultQuery("days", ""))
 	if !ok {
+		if organizationRequest {
+			if err := h.executeOrganizationLocalNonBillableOutcome(c, apiKey, service.OrganizationEndpointFamilyUsage, service.OrganizationRequestShapeHTTP, "", "usage_invalid_days", nil, service.OrganizationExecutionTerminalOutcomeError, true); err != nil {
+				h.writeOrganizationNonBillableError(c, err, false)
+				return
+			}
+		}
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Invalid days, allowed range is 1-90")
 		return
+	}
+	if organizationRequest {
+		if err := h.executeOrganizationLocalNonBillable(c, apiKey, service.OrganizationEndpointFamilyUsage, service.OrganizationRequestShapeHTTP, "", "local_usage_response", nil); err != nil {
+			h.writeOrganizationNonBillableError(c, err, false)
+			return
+		}
 	}
 
 	// Best-effort: 获取用量统计（按当前 API Key 过滤），失败不影响基础响应
@@ -1609,6 +1704,10 @@ func (h *GatewayHandler) Usage(c *gin.Context) {
 
 	if isQuotaLimited {
 		h.usageQuotaLimited(c, ctx, apiKey, usageData, dailyUsage, modelStats)
+		return
+	}
+	if organizationRequest {
+		h.usageOrganization(c, apiKey, usageData, dailyUsage, modelStats)
 		return
 	}
 
@@ -2123,9 +2222,16 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
 		return
 	}
+	organizationRequest := organizationNonBillableAuthorization(c)
 
 	_, ok = middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
+		if organizationRequest {
+			if evidenceErr := h.recordOrganizationCountTokensPreDispatchRejection(c, apiKey, "", nil, "count_tokens_auth_context_missing"); evidenceErr != nil {
+				h.writeOrganizationNonBillableError(c, evidenceErr, false)
+				return
+			}
+		}
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")
 		return
 	}
@@ -2140,6 +2246,12 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	// 读取请求体
 	body, err := readLenientJSONRequestBodyWithPrealloc(c.Request, h.cfg)
 	if err != nil {
+		if organizationRequest {
+			if evidenceErr := h.recordOrganizationCountTokensPreDispatchRejection(c, apiKey, "", nil, "count_tokens_body_read_failed"); evidenceErr != nil {
+				h.writeOrganizationNonBillableError(c, evidenceErr, false)
+				return
+			}
+		}
 		if maxErr, ok := extractMaxBytesError(err); ok {
 			h.errorResponse(c, http.StatusRequestEntityTooLarge, "invalid_request_error", buildBodyTooLargeMessage(maxErr.Limit))
 			return
@@ -2149,6 +2261,12 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	}
 
 	if len(body) == 0 {
+		if organizationRequest {
+			if evidenceErr := h.recordOrganizationCountTokensPreDispatchRejection(c, apiKey, "", body, "count_tokens_body_empty"); evidenceErr != nil {
+				h.writeOrganizationNonBillableError(c, evidenceErr, false)
+				return
+			}
+		}
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Request body is empty")
 		return
 	}
@@ -2158,6 +2276,12 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	bodyRef := service.NewRequestBodyRef(body)
 	parsedReq, err := service.ParseGatewayRequest(bodyRef, domain.PlatformAnthropic)
 	if err != nil {
+		if organizationRequest {
+			if evidenceErr := h.recordOrganizationCountTokensPreDispatchRejection(c, apiKey, "", body, "count_tokens_body_invalid"); evidenceErr != nil {
+				h.writeOrganizationNonBillableError(c, evidenceErr, false)
+				return
+			}
+		}
 		logRequestBodyParseFailure(reqLog, body, err)
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 		return
@@ -2172,6 +2296,12 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 
 	// 验证 model 必填
 	if parsedReq.Model == "" {
+		if organizationRequest {
+			if evidenceErr := h.recordOrganizationCountTokensPreDispatchRejection(c, apiKey, "", body, "count_tokens_model_missing"); evidenceErr != nil {
+				h.writeOrganizationNonBillableError(c, evidenceErr, false)
+				return
+			}
+		}
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 		return
 	}
@@ -2182,6 +2312,10 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 
 	setOpsRequestContext(c, parsedReq.Model, parsedReq.Stream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(parsedReq.Stream, false)))
+	if organizationRequest {
+		h.handleOrganizationCountTokens(c, apiKey, parsedReq, reqLog)
+		return
+	}
 
 	// 获取订阅信息（可能为nil）
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
@@ -2471,6 +2605,20 @@ func extractQuotaResetSeconds(err error) int {
 }
 
 func billingErrorDetails(err error) (status int, code, message string, retryAfter int) {
+	if errors.Is(err, service.ErrOrganizationBillingUnavailable) {
+		msg := pkgerrors.Message(err)
+		if msg == "" {
+			msg = "Organization billing is temporarily unavailable. Please retry later."
+		}
+		return http.StatusServiceUnavailable, "organization_billing_unavailable", msg, 0
+	}
+	if errors.Is(err, service.ErrOrganizationAllocationInsufficient) {
+		msg := pkgerrors.Message(err)
+		if msg == "" {
+			msg = "Organization allocation is insufficient"
+		}
+		return http.StatusConflict, "organization_allocation_insufficient", msg, 0
+	}
 	if errors.Is(err, service.ErrBillingServiceUnavailable) {
 		msg := pkgerrors.Message(err)
 		if msg == "" {

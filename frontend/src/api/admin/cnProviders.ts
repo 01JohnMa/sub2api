@@ -134,6 +134,10 @@ export async function queryBalance(id: number): Promise<CNProviderBalanceResult>
 /** 拉取智谱 Coding Plan 账号的重置卡列表（后端同时落 extra 快照）。 */
 export async function listResetCards(id: number): Promise<ZhipuResetCards> {
   const { data } = await apiClient.get<ZhipuResetCards>(
+    `/admin/cn-providers/accounts/${id}/reset-quota`
+  )
+  return data
+}
 
 /** 使用智谱「用量重置额度」周重置次数，恢复账号周用量。 */
 export async function resetQuota(id: number): Promise<CNProviderQuotaResetResult> {
@@ -162,9 +166,6 @@ export default {
   queryQuota,
   queryBalance,
   listResetCards,
-  useResetCard
-
-export default {
-  queryQuota,
-  queryBalance,
-  resetQuota}
+  useResetCard,
+  resetQuota
+}

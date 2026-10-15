@@ -116,7 +116,8 @@ import type {
 } from '@/api/admin/cnProviders'
 import type { Account } from '@/types'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import { cnQuotaCellVisible, zhipuResetCardsSupported } from './credentialsBuilder'import UsageProgressBar from './UsageProgressBar.vue'
+import { cnQuotaCellVisible, zhipuResetCardsSupported } from './credentialsBuilder'
+import UsageProgressBar from './UsageProgressBar.vue'
 import ZhipuResetCardActions from './ZhipuResetCardActions.vue'
 
 const props = defineProps<{

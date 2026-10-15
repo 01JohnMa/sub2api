@@ -427,7 +427,7 @@ func (s *CNProviderQuotaService) ResetUsageForAccount(ctx context.Context, accou
 		"recordId":   record.RecordID,
 		"requestId":  uuid.NewString(), // 官网同款幂等请求号，逐次生成
 	})
-	status, body, err := s.doZhipuResetRequest(probeCtx, account, http.MethodPost,
+	status, body, err := s.doZhipuResetUsageRequest(probeCtx, account, http.MethodPost,
 		zhipuResetUseURL(account.GetOpenAIBaseURL()), payload)
 	if err != nil {
 		return nil, infraerrors.Newf(http.StatusBadGateway, "CN_QUOTA_RESET_REQUEST_FAILED", "upstream request failed: %v", err)
@@ -474,7 +474,7 @@ type zhipuResetRecord struct {
 func (s *CNProviderQuotaService) queryZhipuResetList(ctx context.Context, account *Account) ([]zhipuResetRecord, error) {
 	targetType := zhipuResetTargetType(account)
 	listURL := zhipuResetListURL(account.GetOpenAIBaseURL()) + "?targetType=" + targetType
-	status, body, err := s.doZhipuResetRequest(ctx, account, http.MethodGet, listURL, nil)
+	status, body, err := s.doZhipuResetUsageRequest(ctx, account, http.MethodGet, listURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -501,9 +501,9 @@ func (s *CNProviderQuotaService) queryZhipuResetList(ctx context.Context, accoun
 	return records, nil
 }
 
-// doZhipuResetRequest 发起智谱额度重置域请求（list/use 共用），
+// doZhipuResetUsageRequest 发起智谱额度重置域请求（list/use 共用），
 // 鉴权/头/出站校验与额度探测保持同一套约束。
-func (s *CNProviderQuotaService) doZhipuResetRequest(ctx context.Context, account *Account, method, targetURL string, body []byte) (int, []byte, error) {
+func (s *CNProviderQuotaService) doZhipuResetUsageRequest(ctx context.Context, account *Account, method, targetURL string, body []byte) (int, []byte, error) {
 	validatedURL, err := cnValidateProbeURL(s.cfg, targetURL)
 	if err != nil {
 		return 0, nil, err

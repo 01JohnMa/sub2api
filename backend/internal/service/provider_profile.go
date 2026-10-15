@@ -113,7 +113,8 @@ var providerProfiles = map[string]*ProviderProfile{
 		Platform:    PlatformZhipu,
 		DefaultMode: AccountModePayG,
 		Routing:     ProviderRoutingByInbound,
-		// 智谱没有原生 Responses 端点，故不登记 responses 条目。
+		// 智谱 Coding Plan 提供原生 Responses 端点 /api/coding/paas/v4/responses
+		// （base 带版本后缀，按版本感知规则自动拼接 /responses）。
 		Modes: map[string]ProviderEndpoints{
 			AccountModePayG: {
 				BaseURLs: map[string]string{
@@ -124,6 +125,7 @@ var providerProfiles = map[string]*ProviderProfile{
 			AccountModeCoding: {
 				BaseURLs: map[string]string{
 					APIProtocolChatCompletions: DefaultZhipuCodingBaseURL,
+					APIProtocolResponses:       DefaultZhipuCodingBaseURL,
 					APIProtocolAnthropic:       DefaultZhipuAnthropicBaseURL,
 				},
 			},

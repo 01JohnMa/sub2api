@@ -73,7 +73,7 @@
             d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
           />
         </svg>
-        {{ t('admin.accounts.cnProviders.reset') }}
+        {{ t('admin.accounts.cnProviders.weeklyReset') }}
       </button>
     </div>
 
@@ -88,9 +88,9 @@
 
     <ConfirmDialog
       :show="showResetConfirm"
-      :title="t('admin.accounts.cnProviders.resetConfirmTitle')"
-      :message="t('admin.accounts.cnProviders.resetConfirmMessage')"
-      :confirm-text="t('admin.accounts.cnProviders.reset')"
+      :title="t('admin.accounts.cnProviders.weeklyResetConfirmTitle')"
+      :message="t('admin.accounts.cnProviders.weeklyResetConfirmMessage')"
+      :confirm-text="t('admin.accounts.cnProviders.weeklyReset')"
       :cancel-text="t('common.cancel')"
       @confirm="handleReset()"
       @cancel="showResetConfirm = false"    />

@@ -72,11 +72,7 @@ type CNProviderQuotaProbeResult struct {
 	// 智谱专用：是否存在可用的周额度重置次数（官网「用量重置额度」卡片显隐同源：
 	// list 响应 weekResets 含 available=true 记录才展示重置按钮）。
 	ResetAvailable    bool   `json:"reset_available,omitempty"`
-	WeekResetExpireAt string `json:"week_reset_expire_at,omitempty"` // 可用次数有效期（上游原样字符串）
-	StatusCode        int    `json:"status_code,omitempty"`
-	FetchedAt         int64  `json:"fetched_at"`
-	Persisted         bool   `json:"persisted"`
-	Error             string `json:"error,omitempty"`}
+	WeekResetExpireAt string `json:"week_reset_expire_at,omitempty"`}
 
 // CNProviderQuotaService 探测 Kimi / Zhipu / MiniMax Coding Plan、OpenCode Go、
 // Command Code 与 Cline（ClinePass）的滚动窗口用量。

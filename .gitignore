@@ -154,6 +154,8 @@ docs/*
 !docs/channel-monitor-v2-safe-defaults.md
 !docs/CODEX_PROBE_TEMPLATE.md
 !docs/codex-credits.md
+!docs/FAQ.md
+!docs/cc-switch.md
 !docs/legal/
 !docs/legal/*.md
 !docs/screenshots/

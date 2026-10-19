@@ -1,6 +1,7 @@
 package service
 
 import (
+	"time"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -321,6 +322,24 @@ func isOpenAIRequestBodyTooLargeError(statusCode int, upstreamMsg string, upstre
 	return statusCode == http.StatusRequestEntityTooLarge && !isOpenAIContextWindowError(upstreamMsg, upstreamBody)
 }
 
+// isDeepSeekTransientThinkingModeError 报告 DeepSeek 上游的两种间歇性 400：
+// response_format 灰度抖动与 thinking 模式回传字段校验抖动。实测同一请求体
+// 秒级重发即过，属于上游多后端不一致，不反映账号或请求本身有问题——
+// 禁用账号、切换账号都是错误反应，同账号静默重试一次即可。
+func isDeepSeekTransientThinkingModeError(statusCode int, upstreamMsg string, body []byte) bool {
+	if statusCode != http.StatusBadRequest {
+		return false
+	}
+	if strings.Contains(upstreamMsg, "response_format type is unavailable") ||
+		strings.Contains(upstreamMsg, "reasoning_text` in the thinking mode must be passed back") ||
+		strings.Contains(upstreamMsg, "reasoning_content` in the thinking mode must be passed back") {
+		return true
+	}
+	return bytes.Contains(body, []byte("response_format type is unavailable")) ||
+		bytes.Contains(body, []byte("reasoning_text` in the thinking mode must be passed back")) ||
+		bytes.Contains(body, []byte("reasoning_content` in the thinking mode must be passed back"))
+}
+
 func newOpenAIUpstreamFailoverError(
 	statusCode int,
 	responseHeaders http.Header,
@@ -359,6 +378,12 @@ func newOpenAIUpstreamFailoverError(
 		// retries are exhausted, but expose it as a retryable server_error.
 		failoverErr.ClientStatusCode = http.StatusServiceUnavailable
 		failoverErr.ClientMessage = openAICapacityShedClientMessage(upstreamMsg, responseBody)
+	}
+	if isDeepSeekTransientThinkingModeError(statusCode, upstreamMsg, responseBody) {
+		failoverErr.RetryableOnSameAccount = true
+		failoverErr.RequestScopedTransient = false
+		failoverErr.SameAccountRetryDelay = 400 * time.Millisecond
+		failoverErr.SameAccountRetryMax = 1
 	}
 	return failoverErr
 }

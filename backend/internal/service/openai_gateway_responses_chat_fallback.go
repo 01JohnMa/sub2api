@@ -509,6 +509,34 @@ func ensureDeepSeekChatReasoningPlaceholders(account *Account, body []byte) []by
 		updated = next
 		changed = true
 	}
+	// DeepSeek v4 把 thinking mode 的回传字段改名为 reasoning_text（旧名
+	// reasoning_content）。对 assistant 消息做双向镜像，两个名字都带齐，
+	// 避免 v4 校验 400
+	// "The `reasoning_text` in the thinking mode must be passed back to the API"。
+	// 注意从 updated 重读消息，确保占位结果也参与镜像。
+	for i := range messages.Array() {
+		cur := gjson.GetBytes(updated, "messages."+strconv.Itoa(i))
+		if !cur.IsObject() || strings.TrimSpace(cur.Get("role").String()) != "assistant" {
+			continue
+		}
+		rc := cur.Get("reasoning_content").String()
+		rt := cur.Get("reasoning_text").String()
+		if rc != "" && rt == "" {
+			next, err := sjson.SetBytes(updated, "messages."+strconv.Itoa(i)+".reasoning_text", rc)
+			if err != nil {
+				return updated
+			}
+			updated = next
+			changed = true
+		} else if rt != "" && rc == "" {
+			next, err := sjson.SetBytes(updated, "messages."+strconv.Itoa(i)+".reasoning_content", rt)
+			if err != nil {
+				return updated
+			}
+			updated = next
+			changed = true
+		}
+	}
 	if !changed {
 		return body
 	}

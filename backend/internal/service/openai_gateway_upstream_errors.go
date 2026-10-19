@@ -720,6 +720,19 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		}
 	}
 
+	// DeepSeek 间歇性 400 例外（response_format 灰度抖动 / thinking 回传校验抖动）：
+	// 实测同请求体秒级重发即过，不是确定性客户端错误，不能落入下方确定性透传。
+	if isDeepSeekTransientThinkingModeError(resp.StatusCode, upstreamMsg, body) {
+		return nil, &UpstreamFailoverError{
+			StatusCode:             resp.StatusCode,
+			ResponseBody:           body,
+			ResponseHeaders:        resp.Header.Clone(),
+			RetryableOnSameAccount: true,
+			SameAccountRetryDelay:  400 * time.Millisecond,
+			SameAccountRetryMax:    1,
+		}
+	}
+
 	MarkResponseCommitted(c)
 
 	// 上游 400 是确定性的请求错误：同一份请求体换账号、重试多少次都会失败。归一成
@@ -916,6 +929,19 @@ func (s *OpenAIGatewayService) handleCompatErrorResponse(
 			StatusCode:             resp.StatusCode,
 			ResponseBody:           body,
 			RetryableOnSameAccount: false,
+		}
+	}
+
+	// DeepSeek 间歇性 400 例外（response_format 灰度抖动 / thinking 回传校验抖动）：
+	// 实测同请求体秒级重发即过，不是确定性客户端错误，不能落入下方确定性透传。
+	if isDeepSeekTransientThinkingModeError(resp.StatusCode, upstreamMsg, body) {
+		return nil, &UpstreamFailoverError{
+			StatusCode:             resp.StatusCode,
+			ResponseBody:           body,
+			ResponseHeaders:        resp.Header.Clone(),
+			RetryableOnSameAccount: true,
+			SameAccountRetryDelay:  400 * time.Millisecond,
+			SameAccountRetryMax:    1,
 		}
 	}
 

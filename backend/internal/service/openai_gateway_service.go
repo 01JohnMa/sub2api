@@ -86,6 +86,7 @@ var openaiAllowedHeaders = map[string]bool{
 	"x-codex-turn-metadata":   true,
 	"x-codex-window-id":       true,
 	responsesLiteHeaderKey:    true,
+	"x-client-request-id":   true,
 }
 
 // OpenAI passthrough allowed headers whitelist.
@@ -105,6 +106,7 @@ var openaiPassthroughAllowedHeaders = map[string]bool{
 	"x-codex-turn-metadata":   true,
 	"x-codex-window-id":       true,
 	responsesLiteHeaderKey:    true,
+	"x-client-request-id":   true,
 }
 
 // codex_cli_only 拒绝时记录的请求头白名单（仅用于诊断日志，不参与上游透传）
@@ -239,6 +241,9 @@ type OpenAIForwardResult struct {
 	// UpstreamHeaders 是直接上游的响应头，用于按账户配置解析上游请求标识。
 	UpstreamHeaders http.Header
 	Usage           OpenAIUsage
+	// UsageObserved 仅在上游给出完整且通过校验的 token usage 时为 true；
+	// 组织计费缺此证据不得结算。
+	UsageObserved bool
 	Model           string // 原始模型（用于响应和日志显示）
 	// BillingModel is the model used for cost calculation.
 	// When non-empty, CalculateCost uses this instead of Model.

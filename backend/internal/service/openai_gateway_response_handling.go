@@ -28,16 +28,19 @@ import (
 // openaiStreamingResult streaming response result
 type openaiStreamingResult struct {
 	usage            *OpenAIUsage
+	usageObserved    bool
 	firstTokenMs     *int
 	responseID       string
 	imageCount       int
 	imageOutputSizes []string
 	searchCount      int
+	clientDisconnect bool
 }
 
 type openaiNonStreamingResult struct {
 	*OpenAIUsage
 	usage            *OpenAIUsage
+	usageObserved    bool
 	responseID       string
 	imageCount       int
 	imageOutputSizes []string
@@ -158,6 +161,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	}
 
 	usage := &OpenAIUsage{}
+	usageObserved := false
 	imageCounter := newOpenAIImageOutputCounter()
 	responseID := ""
 	var firstOutputScanGuard atomic.Bool
@@ -352,11 +356,13 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	resultWithUsage := func() *openaiStreamingResult {
 		return &openaiStreamingResult{
 			usage:            usage,
+			usageObserved:    usageObserved,
 			firstTokenMs:     firstTokenMs,
 			responseID:       responseID,
 			imageCount:       imageCounter.Count(),
 			imageOutputSizes: imageCounter.Sizes(),
 			searchCount:      searchCounter,
+			clientDisconnect: clientDisconnected,
 		}
 	}
 	flushPending := func(disconnectMessage string) {
@@ -721,6 +727,12 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				stopFirstOutputTimer()
 			}
 			s.parseSSEUsageBytesWithType(dataBytes, eventType, usage)
+			// 终态事件的 usage 完整且通过校验才构成"已观察到"（计费零成本证明）。
+			if openAIStreamEventTypeIsTerminal(eventType) {
+				if _, ok := extractOpenAIUsageFromJSONBytes(dataBytes); ok {
+					usageObserved = true
+				}
+			}
 			return
 		}
 
@@ -1513,13 +1525,32 @@ func openAIUsageFromGJSON(value gjson.Result) (OpenAIUsage, bool) {
 	if !value.Exists() || !value.IsObject() {
 		return OpenAIUsage{}, false
 	}
-	inputTokens := value.Get("input_tokens").Int()
-	if inputTokens == 0 {
-		inputTokens = value.Get("prompt_tokens").Int()
+	// 计费零成本证明要求 usage 完整且通过校验。口径区分：
+	// - Responses 口径（input_tokens）：input/output 必须齐备且为非负整数，
+	//   缺失任一即视为未观察到用量；
+	// - CC 口径（prompt_tokens，部分图片/兼容上游）：output 可缺失，字段存在
+	//   时仍需通过校验。
+	inputTokens, ok := openAIUsageRequiredToken(value, "input_tokens")
+	responsesStyle := ok
+	if !ok {
+		inputTokens, ok = openAIUsageRequiredToken(value, "prompt_tokens")
+		if !ok {
+			return OpenAIUsage{}, false
+		}
 	}
-	outputTokens := value.Get("output_tokens").Int()
-	if outputTokens == 0 {
-		outputTokens = value.Get("completion_tokens").Int()
+	outputTokens, ok := openAIUsageRequiredToken(value, "output_tokens", "completion_tokens")
+	if !ok {
+		if responsesStyle {
+			return OpenAIUsage{}, false
+		}
+		if value.Get("output_tokens").Exists() || value.Get("completion_tokens").Exists() {
+			return OpenAIUsage{}, false
+		}
+		outputTokens = 0
+	}
+	cacheReadTokens := openAICacheReadTokensFromUsage(value)
+	if cacheReadTokens > int(inputTokens) {
+		return OpenAIUsage{}, false
 	}
 	// xAI reports visible output separately from reasoning_tokens; OpenAI
 	// folds reasoning into completion/output. Use total_tokens to tell them apart.
@@ -1532,7 +1563,6 @@ func openAIUsageFromGJSON(value gjson.Result) (OpenAIUsage, bool) {
 			inputTokens, outputTokens, value.Get("total_tokens").Int(), int64(reasoningTokens),
 		)
 	}
-	cacheReadTokens := openAICacheReadTokensFromUsage(value)
 	cacheCreationTokens := openAICacheCreationTokensFromUsage(value)
 	imageOutputTokens := value.Get("output_tokens_details.image_tokens").Int()
 	if imageOutputTokens == 0 {
@@ -1682,6 +1712,7 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 	return &openaiNonStreamingResult{
 		OpenAIUsage:      usage,
 		usage:            usage,
+		usageObserved:    true,
 		responseID:       extractOpenAIResponseIDFromJSONBytes(body),
 		imageCount:       countOpenAIResponseImageOutputsFromJSONBytes(body),
 		imageOutputSizes: collectOpenAIResponseImageOutputSizesFromJSONBytes(body),
@@ -1729,9 +1760,11 @@ func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Conte
 	finalResponse, ok := extractCodexFinalResponse(bodyText)
 
 	usage := s.parseSSEUsageFromBody(bodyText)
+	usageObserved := false
 	if ok {
 		if parsedUsage, parsed := extractOpenAIUsageFromJSONBytes(finalResponse); parsed {
 			*usage = parsedUsage
+			usageObserved = true
 		}
 		// When the terminal event has an empty output array, reconstruct
 		// output from accumulated delta events so the client gets full content.
@@ -1789,6 +1822,7 @@ func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Conte
 	return &openaiNonStreamingResult{
 		OpenAIUsage:      usage,
 		usage:            usage,
+		usageObserved:    usageObserved,
 		responseID:       extractOpenAIResponseIDFromJSONBytes(body),
 		imageCount:       countOpenAIImageOutputsFromSSEBody(bodyText),
 		imageOutputSizes: collectOpenAIImageOutputSizesFromSSEBody(bodyText),

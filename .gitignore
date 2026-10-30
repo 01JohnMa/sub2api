@@ -2,6 +2,10 @@
 /docs-local/
 .codex
 
+# 本地 agent 工具产物
+.mimosa/
+.video_agent/
+
 # ===================
 # Go 后端
 # ===================

@@ -24,7 +24,9 @@ func RegisterUserRoutes(
 	// 面板全局按用户限流：防止单个账号高频刷接口打爆数据库
 	authenticated.Use(panelRateLimiter.Global())
 	// 用户管理面变更类操作入审计（含 TOTP 启用/禁用、step-up 验证、密码修改等安全事件）
-	authenticated.Use(gin.HandlerFunc(auditLog))
+	if auditLog != nil {
+		authenticated.Use(gin.HandlerFunc(auditLog))
+	}
 	{
 		// 用户接口
 		user := authenticated.Group("/user")
@@ -38,9 +40,7 @@ func RegisterUserRoutes(
 			user.POST("/account-bindings/email", h.User.BindEmailIdentity)
 			user.DELETE("/account-bindings/:provider", h.User.UnbindIdentity)
 			user.POST("/auth-identities/bind/start", h.User.StartIdentityBinding)
-			user.GET("/api-keys/:id/usage/daily", panelRateLimiter.Heavy(), h.Usage.GetMyAPIKeyDailyUsage)
-			user.GET("/platform-quotas", h.User.GetMyPlatformQuotas)
-			user.GET("/api-keys/:id/usage/daily", organizationAuth.PersonalAccountAccess, h.Usage.GetMyAPIKeyDailyUsage)
+			user.GET("/api-keys/:id/usage/daily", organizationAuth.PersonalAccountAccess, panelRateLimiter.Heavy(), h.Usage.GetMyAPIKeyDailyUsage)
 			user.GET("/platform-quotas", organizationAuth.PersonalAccountAccess, h.User.GetMyPlatformQuotas)
 
 			// 通知邮箱管理

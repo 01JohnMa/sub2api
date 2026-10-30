@@ -211,3 +211,34 @@ func cloneSecurityAuditGroupID(value *int64) *int64 {
 	cloned := *value
 	return &cloned
 }
+
+// checkContentModeration 是 dev 组织线调用点的兼容包装：统一走上游安全审计
+// 体系（coordinator 已内联 legacy content moderation），并把 Decision 映射回
+// 旧的 ContentModerationDecision 形态（Blocked/Message/Status/ErrorCode）。
+func moderationDecisionFromAudit(audit *securityaudit.Decision) *service.ContentModerationDecision {
+	if audit == nil {
+		return nil
+	}
+	if audit.Legacy != nil {
+		return &service.ContentModerationDecision{
+			Allowed:    audit.Legacy.Allowed,
+			Blocked:    audit.Legacy.Blocked,
+			Flagged:    audit.Legacy.Flagged,
+			Message:    audit.Legacy.Message,
+			StatusCode: audit.Legacy.StatusCode,
+			Action:     audit.Legacy.Action,
+		}
+	}
+	return &service.ContentModerationDecision{
+		Blocked: !audit.AllowNextStage,
+		Message: audit.ClientMessage,
+	}
+}
+
+func (h *GatewayHandler) checkContentModeration(c *gin.Context, reqLog *zap.Logger, apiKey *service.APIKey, subject middleware2.AuthSubject, protocol, model string, body []byte) *service.ContentModerationDecision {
+	return moderationDecisionFromAudit(h.checkSecurityAudit(c, reqLog, apiKey, subject, protocol, model, body))
+}
+
+func (h *OpenAIGatewayHandler) checkContentModeration(c *gin.Context, reqLog *zap.Logger, apiKey *service.APIKey, subject middleware2.AuthSubject, protocol, model string, body []byte) *service.ContentModerationDecision {
+	return moderationDecisionFromAudit(h.checkSecurityAudit(c, reqLog, apiKey, subject, protocol, model, body))
+}

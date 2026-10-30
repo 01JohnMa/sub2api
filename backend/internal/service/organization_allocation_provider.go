@@ -1,6 +1,6 @@
 package service
 
-import "github.com/Wei-Shaw/sub2api/internal/config"
+import "github.com/MACOS-DO/sub4api/internal/config"
 
 func ProvideOrganizationAllocationService(
 	repo OrganizationAllocationRepository,

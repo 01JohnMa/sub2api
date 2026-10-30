@@ -3,6 +3,7 @@ package middleware
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/MACOS-DO/sub4api/internal/config"
@@ -145,6 +146,27 @@ func apiKeyAuthWithSubscriptionGoogle(
 			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
 			MarkIngressRejected(c, IngressRejectGroupNotAllowed)
 			abortWithGoogleError(c, 403, "API Key 所属专属分组不再允许当前用户使用")
+			return
+		}
+		if abortIfOrganizationKeyAdmissionDenied(c, apiKey, organizationSpending, true) {
+			return
+		}
+		if hasOrganizationKeyAttribution(apiKey) && isOrganizationNonBillableRequest(c) {
+			c.Set(string(ContextKeyAPIKey), apiKey)
+			c.Set(string(ContextKeyUser), AuthSubject{
+				UserID:      apiKey.User.ID,
+				Concurrency: apiKey.User.Concurrency,
+			})
+			c.Set(string(ContextKeyUserRole), apiKey.User.Role)
+			setGroupContext(c, apiKey.Group)
+			_ = apiKeyService.TouchLastUsed(c.Request.Context(), apiKey.ID)
+			c.Next()
+			return
+		}
+		// Keep organization traffic fail-closed until a reservation adapter owns
+		// the complete execution path; do not fall through to personal billing.
+		if hasOrganizationKeyAttribution(apiKey) {
+			writeAPIKeyAuthError(c, http.StatusServiceUnavailable, "ORGANIZATION_BILLING_UNAVAILABLE", "organization billing is not available", true)
 			return
 		}
 

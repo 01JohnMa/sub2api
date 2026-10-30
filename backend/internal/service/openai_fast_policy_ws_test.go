@@ -1161,9 +1161,10 @@ func TestPassthroughUsageMeta_TracksReasoningEffortAcrossTurns(t *testing.T) {
 
 func TestPassthroughUsageMeta_BindsConcurrentCompletionToRequestTurn(t *testing.T) {
 	meta := newOpenAIWSPassthroughUsageMeta("gpt-5.5", nil)
-	meta.initFromFirstFrame([]byte(`{"type":"response.create","model":"gpt-5.5","service_tier":"flex","reasoning":{"effort":"medium"}}`))
+	meta.initFromFirstFrame([]byte(`{"type":"response.create","model":"gpt-5.5","service_tier":"flex","reasoning":{"effort":"medium"}}`), "gpt-5.5")
 	meta.updateFromResponseCreate(
 		[]byte(`{"type":"response.create","model":"gpt-5.5","service_tier":"priority","reasoning":{"effort":"high"}}`),
+		"gpt-5.5",
 		"gpt-5.5",
 		2,
 	)

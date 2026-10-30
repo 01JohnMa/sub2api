@@ -3,7 +3,7 @@ package dto
 import (
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/service"
 )
 
 // Organization is the non-secret platform organization representation.

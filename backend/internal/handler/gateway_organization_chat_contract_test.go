@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	"github.com/MACOS-DO/sub4api/internal/pkg/tlsfingerprint"
+	middleware2 "github.com/MACOS-DO/sub4api/internal/server/middleware"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -54,13 +54,13 @@ func TestOrganizationGatewayChatGeminiUsesGeminiAttemptLimit(t *testing.T) {
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewGatewayService(
 		&organizationGatewayChatAccountRepoStub{accounts: accounts}, nil, nil, nil, nil, nil, nil, nil, cfg, nil,
-		concurrency, billing, nil, nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		concurrency, billing, nil, nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	geminiCompat := service.NewGeminiMessagesCompatService(nil, nil, nil, nil, nil, nil, upstream, nil, cfg)
 	billingCache := service.NewBillingCacheService(nil, nil, nil, nil, organizationGatewayChatRPMCacheStub{}, organizationGatewayChatUserGroupRateRepoStub{}, cfg, organizationGatewayChatQuotaRepoStub{})
 	t.Cleanup(billingCache.Stop)
 	executionRepo := &organizationGeminiPendingRepoStub{organizationResponsesExecutionRepoStub: &organizationResponsesExecutionRepoStub{}}
-	handler := NewGatewayHandler(gateway, geminiCompat, nil, nil, concurrency, billingCache, nil, nil, nil, nil, nil, nil, cfg, nil)
+	handler := NewGatewayHandler(gateway, nil, geminiCompat, nil, nil, concurrency, billingCache, nil, nil, nil, nil, nil, nil, cfg, nil)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 
 	body := []byte(`{"model":"gemini-3.1-pro","messages":[{"role":"user","content":"hello"}]}`)
@@ -212,7 +212,7 @@ func newOrganizationGatewayChatAdapterForContractTest() *organizationGatewayChat
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewGatewayService(
 		nil, nil, nil, nil, nil, nil, nil, nil, cfg, nil, nil, billing,
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)

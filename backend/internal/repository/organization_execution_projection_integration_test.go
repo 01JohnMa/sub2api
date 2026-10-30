@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
-	"github.com/Wei-Shaw/sub2api/migrations"
+	"github.com/MACOS-DO/sub4api/internal/service"
+	"github.com/MACOS-DO/sub4api/migrations"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/shopspring/decimal"

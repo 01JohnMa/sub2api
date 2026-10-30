@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/MACOS-DO/sub4api/internal/domain"
 )
 
 // Models and usage are local/non-billable organization observations. They are

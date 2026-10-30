@@ -267,6 +267,8 @@ type OpenAIWSIngressHooks struct {
 	// that must be written into the upstream response.create frame.
 	MapRequestModel func(turn int, originalModel string) (string, error)
 	AfterTurn       func(turn int, result *OpenAIForwardResult, turnErr error)
+	// InitialTurn 保留冻结组织 turn 重连到下一候选时的逻辑请求身份；零值表示 turn 1。
+	InitialTurn   int
 }
 
 func (s *OpenAIGatewayService) getOpenAIWSConnPool() *openAIWSConnPool {

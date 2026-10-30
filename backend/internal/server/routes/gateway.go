@@ -205,33 +205,20 @@ func RegisterGatewayRoutes(
 		})
 		// /v1/messages/count_tokens: OpenAI bridges upstream, Grok estimates
 		// locally, and Anthropic-compatible platforms retain their existing path.
-		gateway.POST("/messages/count_tokens", countTokensHandler)
+		// 组织 Key 始终走 Anthropic 风格计数（组织计费口径），个人 Key 按平台分派。
+		gateway.POST("/messages/count_tokens", func(c *gin.Context) {
+			if _, ok := middleware.GetOrganizationKeyAuthorizationFromContext(c); ok {
+				h.Gateway.CountTokens(c)
+				return
+			}
+			countTokensHandler(c)
+		})
 		// Codex CLI / Codex app refresh their model picker from the provider's
 		// /models endpoint with a client_version query and expect the ChatGPT
 		// Codex manifest format; other clients keep the OpenAI-style list.
 		gateway.GET("/models", modelsHandler)
 		// Single-model discovery never selects the Codex client_version manifest.
 		gateway.GET("/models/:model", h.Gateway.Models)
-		// /v1/messages/count_tokens: OpenAI groups get 404
-		gateway.POST("/messages/count_tokens", func(c *gin.Context) {
-			if getGroupPlatform(c) == service.PlatformOpenAI {
-				if _, ok := middleware.GetOrganizationKeyAuthorizationFromContext(c); ok {
-					h.Gateway.CountTokens(c)
-					return
-				}
-				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
-				c.JSON(http.StatusNotFound, gin.H{
-					"type": "error",
-					"error": gin.H{
-						"type":    "not_found_error",
-						"message": "Token counting is not supported for this platform",
-					},
-				})
-				return
-			}
-			h.Gateway.CountTokens(c)
-		})
-		gateway.GET("/models", h.Gateway.Models)
 		gateway.GET("/usage", h.Gateway.Usage)
 		gateway.POST("/live", h.OpenAIGateway.Live)
 		gateway.GET("/live/:call_id", h.OpenAIGateway.LiveSideband)

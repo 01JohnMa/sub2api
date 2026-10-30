@@ -940,6 +940,10 @@ func TestBoundedJSONNonNegativeInt(t *testing.T) {
 			got, ok := boundedJSONNonNegativeInt(gjson.Parse(tt.raw))
 			require.Equal(t, tt.ok, ok)
 			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestOpenAIGatewayServiceForwardImages_EmptyUpstreamResultsDoNotSynthesizeImageCount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

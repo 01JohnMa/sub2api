@@ -356,6 +356,8 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	rejectedFieldRetryState := openAIResponsesRejectedFieldRetryStateForRequest(c, body)
 	var resp *http.Response
 	var usage *OpenAIUsage
+	usageObserved := false
+	clientDisconnected := false
 	var firstTokenMs *int
 	responseID := ""
 	imageCount := 0
@@ -467,6 +469,8 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 				return nil, handleErr
 			}
 			usage = result.usage
+			usageObserved = result.usageObserved
+			clientDisconnected = result.clientDisconnect
 			firstTokenMs = result.firstTokenMs
 			responseID = strings.TrimSpace(result.responseID)
 			imageCount = result.imageCount
@@ -494,6 +498,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 				return nil, handleErr
 			}
 			usage = result.usage
+			usageObserved = result.usageObserved
 			responseID = strings.TrimSpace(result.responseID)
 			imageCount = result.imageCount
 			imageOutputSizes = result.imageOutputSizes
@@ -522,6 +527,8 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		UpstreamHeaders:               resp.Header,
 		ResponseID:                    responseID,
 		Usage:                         *usage,
+		UsageObserved:                 usageObserved,
+		ClientDisconnect:              clientDisconnected,
 		Model:                         reqModel,
 		UpstreamModel:                 upstreamPassthroughModel,
 		UpstreamResponseModel:         observedUpstreamResponseModel(c),
@@ -1045,6 +1052,8 @@ func collectOpenAIPassthroughTimeoutHeaders(h http.Header) []string {
 
 type openaiStreamingResultPassthrough struct {
 	usage            *OpenAIUsage
+	usageObserved    bool
+	clientDisconnect bool
 	firstTokenMs     *int
 	responseID       string
 	imageCount       int
@@ -1054,6 +1063,7 @@ type openaiStreamingResultPassthrough struct {
 type openaiNonStreamingResultPassthrough struct {
 	*OpenAIUsage
 	usage            *OpenAIUsage
+	usageObserved    bool
 	responseID       string
 	imageCount       int
 	imageOutputSizes []string
@@ -1881,6 +1891,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	}
 
 	usage := &OpenAIUsage{}
+	usageObserved := false
 	imageCounter := newOpenAIImageOutputCounter()
 	var firstTokenMs *int
 	responseID := ""
@@ -2000,6 +2011,8 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	resultWithUsage := func() *openaiStreamingResultPassthrough {
 		return &openaiStreamingResultPassthrough{
 			usage:            usage,
+			usageObserved:    usageObserved,
+			clientDisconnect: clientDisconnected,
 			firstTokenMs:     firstTokenMs,
 			responseID:       responseID,
 			imageCount:       imageCounter.Count(),
@@ -2185,6 +2198,13 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				firstTokenMs = &ms
 			}
 			s.parseSSEUsageBytesWithType(dataBytes, eventType, usage)
+			// 终态事件携带的 usage 只有完整且通过校验才构成"已观察到"，
+			// 供计费零成本证明；非终态事件里的渐进 usage 不算数。
+			if openAIStreamEventTypeIsTerminal(eventType) {
+				if _, ok := extractOpenAIUsageFromJSONBytes(dataBytes); ok {
+					usageObserved = true
+				}
+			}
 		}
 		if line == "" {
 			pendingSSEEventType = ""
@@ -2326,10 +2346,12 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 
 	usage := &OpenAIUsage{}
 	usageParsed := false
+	usageObserved := false
 	if len(body) > 0 {
 		if parsedUsage, ok := extractOpenAIUsageFromJSONBytes(body); ok {
 			*usage = parsedUsage
 			usageParsed = true
+			usageObserved = true
 		}
 	}
 	if !usageParsed {
@@ -2362,6 +2384,7 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	return &openaiNonStreamingResultPassthrough{
 		OpenAIUsage:      usage,
 		usage:            usage,
+		usageObserved:    usageObserved,
 		responseID:       extractOpenAIResponseIDFromJSONBytes(body),
 		imageCount:       countOpenAIResponseImageOutputsFromJSONBytes(body),
 		imageOutputSizes: collectOpenAIResponseImageOutputSizesFromJSONBytes(body),

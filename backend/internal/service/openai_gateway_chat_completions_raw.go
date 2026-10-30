@@ -61,12 +61,17 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	body []byte,
 	defaultMappedModel string,
 ) (*OpenAIForwardResult, error) {
+	if s == nil || account == nil || c == nil || c.Request == nil {
+		return nil, organizationChatLocalPreDispatchError(ctx, fmt.Errorf("organization raw Chat forwarding dependencies are unavailable"))
+	}
 	startTime := time.Now()
 
 	// 1. Parse minimal fields needed for routing/billing
 	originalModel := gjson.GetBytes(body, "model").String()
 	if originalModel == "" {
-		writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", "model is required")
+		if !isOrganizationResponsesDispatchContext(ctx) {
+			writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", "model is required")
+		}
 		return nil, fmt.Errorf("missing model in request")
 	}
 	clientStream := gjson.GetBytes(body, "stream").Bool()
@@ -104,17 +109,20 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 		upstreamBody = normalizedBody
 	}
 
-	// 4. Apply OpenAI fast policy on the CC body
-	updatedBody, policyErr := s.applyOpenAIFastPolicyToBody(ctx, account, upstreamModel, upstreamBody)
-	if policyErr != nil {
-		var blocked *OpenAIFastBlockedError
-		if errors.As(policyErr, &blocked) {
-			MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
-			writeChatCompletionsError(c, http.StatusForbidden, "permission_error", blocked.Message)
+	// 4. Apply OpenAI fast policy on the CC body. 组织冻结分发跳过本地改写：
+	// 候选 body 已在冻结时定稿，策略过滤会造成执行证据与出站 body 不一致。
+	if !isOrganizationResponsesDispatchContext(ctx) {
+		updatedBody, policyErr := s.applyOpenAIFastPolicyToBody(ctx, account, upstreamModel, upstreamBody)
+		if policyErr != nil {
+			var blocked *OpenAIFastBlockedError
+			if errors.As(policyErr, &blocked) {
+				MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
+				writeChatCompletionsError(c, http.StatusForbidden, "permission_error", blocked.Message)
+			}
+			return nil, organizationChatLocalPreDispatchError(ctx, policyErr)
 		}
-		return nil, policyErr
+		upstreamBody = updatedBody
 	}
-	upstreamBody = updatedBody
 	// Keep the final outbound tier separate from the observed response tier so
 	// usage recording can apply the selected credential's response contract.
 	serviceTier := extractOpenAIServiceTierFromBody(upstreamBody)
@@ -245,6 +253,22 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 			return s.handleChatCompletionsErrorResponse(resp, c, account, billingModel)
 		}
 		if foErr := s.failoverOpenAIUpstreamHTTPError(ctx, c, account, resp, respBody, upstreamMsg, upstreamModel); foErr != nil {
+			// 组织计费闭环：失败响应若携带完整 usage，返回带用量的 result 供执行
+			// 服务记录真实成本并换候选重试，而不是把已消耗的量记成 0。
+			if usage, usageOK := extractOpenAIUsageFromJSONBytes(respBody); usageOK {
+				return &OpenAIForwardResult{
+					RequestID:       resp.Header.Get("x-request-id"),
+					Usage:           usage,
+					UsageObserved:   true,
+					Model:           originalModel,
+					BillingModel:    billingModel,
+					UpstreamModel:   upstreamModel,
+					ReasoningEffort: reasoningEffort,
+					Stream:          clientStream,
+					ResponseHeaders: resp.Header.Clone(),
+					Duration:        time.Since(startTime),
+				}, foErr
+			}
 			return nil, foErr
 		}
 		return s.handleChatCompletionsErrorResponse(resp, c, account, billingModel)
@@ -530,8 +554,10 @@ func (s *OpenAIGatewayService) bufferRawChatCompletions(
 	observer.ObserveOpenAI(respBody, strings.TrimSpace(gjson.GetBytes(respBody, "type").String()))
 
 	var usage OpenAIUsage
+	usageObserved := false
 	if parsedUsage, ok := extractOpenAIUsageFromJSONBytes(respBody); ok {
 		usage = parsedUsage
+		usageObserved = true
 	}
 	responseModel := gjson.GetBytes(respBody, "model").String()
 	if requiresBillableGrokChatUsage(account, billingModel, upstreamModel, responseModel) && !hasBillableGrokChatUsage(usage) {
@@ -556,6 +582,7 @@ func (s *OpenAIGatewayService) bufferRawChatCompletions(
 		RequestID:                     requestID,
 		UpstreamHeaders:               resp.Header,
 		Usage:                         usage,
+		UsageObserved:                 usageObserved,
 		Model:                         originalModel,
 		BillingModel:                  billingModel,
 		UpstreamModel:                 upstreamModel,

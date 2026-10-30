@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,9 +48,11 @@ type RelayResult struct {
 	ClientToUpstreamFrames  int64
 	UpstreamToClientFrames  int64
 	DroppedDownstreamFrames int64
+	PendingRequestTurns     []int
 }
 
 type RelayTurnResult struct {
+	RequestTurn           int
 	RequestModel          string
 	ResponseModel         string
 	ResponseModelConflict bool
@@ -85,8 +88,13 @@ type RelayOptions struct {
 	AfterClientWrite                func(msgType coderws.MessageType, payload []byte, writeErr error)
 	BeforeRelayCancel               func(exit RelayExit)
 	ReadClientFrame                 func(ctx context.Context, clientConn FrameConn) (coderws.MessageType, []byte, error)
-	OnTrace                         func(event RelayTraceEvent)
-	Now                             func() time.Time
+	// FirstRequestTurn and NextRequestTurn bind the transport's request order
+	// to terminal response events. A client may submit another response.create
+	// before the prior turn completes, so completion order is not a safe ID.
+	FirstRequestTurn int
+	NextRequestTurn  func() int
+	OnTrace          func(event RelayTraceEvent)
+	Now              func() time.Time
 }
 
 type RelayTraceEvent struct {
@@ -115,6 +123,13 @@ type relayState struct {
 	turnTimingByID          map[string]*relayTurnTiming
 	activeTurn              *relayTurnTiming
 	pendingBareError        *observedUpstreamEvent
+	requestTurns            relayRequestTurnBindings
+}
+
+type relayRequestTurnBindings struct {
+	mu           sync.Mutex
+	pending      []int
+	byResponseID map[string]int
 }
 
 type relayExitSignal struct {
@@ -181,6 +196,9 @@ func Relay(
 	}
 	startAt := nowFn()
 	state := &relayState{requestModel: result.RequestModel}
+	if options.FirstRequestTurn > 0 {
+		state.requestTurns.register(options.FirstRequestTurn)
+	}
 	if isClientResponseCreateFrame(firstMessageType, firstClientMessage) {
 		firstTurnStartedAt := options.FirstTurnStartedAt
 		if firstTurnStartedAt.IsZero() {
@@ -286,7 +304,14 @@ func Relay(
 		if !clientReaderStarted.CompareAndSwap(false, true) {
 			return
 		}
-		go runClientToUpstream(relayCtx, clientConn, options.ReadClientFrame, writeClientFrameUpstream, markActivity, clientToUpstreamFrames, onTrace, exitCh)
+		go runClientToUpstream(relayCtx, clientConn, options.ReadClientFrame, writeClientFrameUpstream, markActivity, clientToUpstreamFrames, onTrace, exitCh, func() {
+			if options.NextRequestTurn == nil {
+				return
+			}
+			if turn := options.NextRequestTurn(); turn > 0 {
+				state.requestTurns.register(turn)
+			}
+		})
 	}
 	if !options.StartClientAfterFirstDownstream {
 		startClientReader()
@@ -382,6 +407,7 @@ func Relay(
 	result.ClientToUpstreamFrames = clientToUpstreamFrames.Load()
 	result.UpstreamToClientFrames = upstreamToClientFrames.Load()
 	result.DroppedDownstreamFrames = droppedDownstreamFrames.Load()
+	result.PendingRequestTurns = state.requestTurns.pendingTurns()
 	if options.FirstMessageSent && firstExit.stage == "read_client" && firstExit.graceful {
 		emitRelayTrace(onTrace, RelayTraceEvent{
 			Stage:           "relay_client_closed",
@@ -483,6 +509,7 @@ func runClientToUpstream(
 	forwardedFrames *atomic.Int64,
 	onTrace func(event RelayTraceEvent),
 	exitCh chan<- relayExitSignal,
+	onRequestSent ...func(),
 ) {
 	if readClientFrame == nil {
 		readClientFrame = func(ctx context.Context, conn FrameConn) (coderws.MessageType, []byte, error) {
@@ -502,6 +529,9 @@ func runClientToUpstream(
 			return
 		}
 		markActivity()
+		if len(onRequestSent) > 0 && onRequestSent[0] != nil {
+			onRequestSent[0]()
+		}
 		if err := writeUpstream(msgType, payload); err != nil {
 			emitRelayTrace(onTrace, RelayTraceEvent{
 				Stage:        "write_upstream_failed",
@@ -787,6 +817,7 @@ func observeUpstreamMessage(
 	}
 	var turnTiming *relayTurnTiming
 	if responseID != "" {
+		state.requestTurns.bindResponse(responseID)
 		turnTiming = openAIWSRelayGetOrInitTurnTiming(state, responseID, now)
 		if turnTiming != nil && turnTiming.firstTokenMs == nil && isTokenEvent(eventType) {
 			ms := int(now.Sub(turnTiming.startAt).Milliseconds())
@@ -892,10 +923,13 @@ func emitTurnComplete(
 		return
 	}
 	requestModel := ""
+	requestTurn := 0
 	if state != nil {
 		requestModel = state.currentRequestModel()
+		requestTurn = state.requestTurns.complete(responseID)
 	}
 	onTurnComplete(RelayTurnResult{
+		RequestTurn:           requestTurn,
 		RequestModel:          requestModel,
 		ResponseModel:         observed.responseModel,
 		ResponseModelConflict: observed.responseConflict,
@@ -907,6 +941,59 @@ func emitTurnComplete(
 		Duration:              observed.duration,
 		FirstTokenMs:          openAIWSRelayCloneIntPtr(observed.firstToken),
 	})
+}
+
+func (b *relayRequestTurnBindings) register(turn int) {
+	if b == nil || turn <= 0 {
+		return
+	}
+	b.mu.Lock()
+	b.pending = append(b.pending, turn)
+	b.mu.Unlock()
+}
+
+func (b *relayRequestTurnBindings) bindResponse(responseID string) {
+	if b == nil || strings.TrimSpace(responseID) == "" {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.byResponseID == nil {
+		b.byResponseID = make(map[string]int)
+	}
+	if _, exists := b.byResponseID[responseID]; exists || len(b.pending) == 0 {
+		return
+	}
+	b.byResponseID[responseID] = b.pending[0]
+	b.pending = b.pending[1:]
+}
+
+func (b *relayRequestTurnBindings) complete(responseID string) int {
+	if b == nil || strings.TrimSpace(responseID) == "" {
+		return 0
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if turn, exists := b.byResponseID[responseID]; exists {
+		delete(b.byResponseID, responseID)
+		return turn
+	}
+	return 0
+}
+
+func (b *relayRequestTurnBindings) pendingTurns() []int {
+	if b == nil {
+		return nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	turns := make([]int, 0, len(b.pending)+len(b.byResponseID))
+	turns = append(turns, b.pending...)
+	for _, turn := range b.byResponseID {
+		turns = append(turns, turn)
+	}
+	slices.Sort(turns)
+	return turns
 }
 
 func firstRelayResponseModel(message []byte) string {

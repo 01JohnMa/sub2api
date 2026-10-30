@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	middleware2 "github.com/MACOS-DO/sub4api/internal/server/middleware"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +20,7 @@ func TestOrganizationMessagesEntryPrecedesPersonalDispatchChecks(t *testing.T) {
 
 	t.Run("anthropic gateway", func(t *testing.T) {
 		apiKey := organizationGatewayChatOrganizationAPIKey()
-		handler := NewGatewayHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, cfg, nil)
+		handler := NewGatewayHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, cfg, nil)
 		recorder, c := organizationMessagesEntryContext(apiKey, body)
 
 		handler.Messages(c)
@@ -33,7 +33,7 @@ func TestOrganizationMessagesEntryPrecedesPersonalDispatchChecks(t *testing.T) {
 		apiKey := organizationGatewayChatOrganizationAPIKey()
 		apiKey.Group.Platform = service.PlatformOpenAI
 		apiKey.Group.AllowMessagesDispatch = false
-		handler := NewOpenAIGatewayHandler(nil, nil, nil, nil, nil, nil, nil, cfg)
+		handler := NewOpenAIGatewayHandler(nil, nil, nil, nil, nil, nil, nil, nil, cfg)
 		recorder, c := organizationMessagesEntryContext(apiKey, body)
 
 		handler.Messages(c)

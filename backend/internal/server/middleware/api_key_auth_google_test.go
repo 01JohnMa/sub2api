@@ -488,7 +488,7 @@ func TestApiKeyAuthWithSubscriptionGoogleMatchesStandardKeyGuards(t *testing.T) 
 				}
 			},
 			wantStatus: http.StatusForbidden,
-			wantText:   "分组不允许",
+			wantText:   "不再允许",
 		},
 		{
 			name: "runtime expiration",

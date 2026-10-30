@@ -679,7 +679,10 @@ const (
 	proxyQualityClientUserAgent       = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 )
 
-var ErrRPMStatusUnavailable = infraerrors.New(http.StatusNotImplemented, "RPM_STATUS_UNAVAILABLE", "RPM cache not available")
+var (
+	ErrRPMStatusUnavailable               = infraerrors.New(http.StatusNotImplemented, "RPM_STATUS_UNAVAILABLE", "RPM cache not available")
+	ErrUserDeletionTransactionUnavailable = infraerrors.ServiceUnavailable("USER_DELETION_TRANSACTION_UNAVAILABLE", "user deletion transaction is unavailable")
+)
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
@@ -725,6 +728,12 @@ type adminRechargeAffiliateAccruer interface {
 
 type userGroupRateBatchReader interface {
 	GetByUserIDs(ctx context.Context, userIDs []int64) (map[int64]map[int64]float64, error)
+}
+
+// userDeletionLocker keeps the row-lock capability separate from the broad
+// UserRepository interface while remaining mandatory for destructive calls.
+type userDeletionLocker interface {
+	LockUserForDeletion(ctx context.Context, id int64) (*User, error)
 }
 
 // NewAdminService creates a new AdminService

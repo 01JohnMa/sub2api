@@ -170,7 +170,6 @@ func TestGeminiForwardAsChatCompletions_StreamsOpenAIChunksFromGeminiSSE(t *test
 	require.Contains(t, out, "data: [DONE]")
 }
 
-func TestGeminiForwardAsChatCompletions_FunctionNamedWebSearchStaysClientSide(t *testing.T) {
 func TestGeminiForwardAsChatCompletionsOrganizationAttemptReturnsTypedLocalFailure(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -187,7 +186,7 @@ func TestGeminiForwardAsChatCompletionsOrganizationAttemptReturnsTypedLocalFailu
 	require.False(t, c.Writer.Written())
 }
 
-func TestGeminiForwardAsChatCompletionsOrganizationAttemptUsesOneProviderCall(t *testing.T) {
+func TestGeminiForwardAsChatCompletions_FunctionNamedWebSearchStaysClientSide(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	httpStub := &geminiCompatHTTPUpstreamStub{
@@ -253,6 +252,13 @@ func TestGeminiForwardAsChatCompletionsOrganizationAttemptUsesOneProviderCall(t 
 	require.Equal(t, "read_file", readFileDecl["name"])
 	require.NotContains(t, functionTool, "googleSearch")
 	require.NotContains(t, functionTool, "google_search")
+}
+
+func TestGeminiForwardAsChatCompletionsOrganizationAttemptUsesOneProviderCall(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	httpStub := &geminiCompatHTTPUpstreamStub{
+		response: &http.Response{
 			StatusCode: http.StatusServiceUnavailable,
 			Header:     http.Header{"Content-Type": []string{"application/json"}},
 			Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"overloaded"}}`)),

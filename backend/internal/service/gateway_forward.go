@@ -88,6 +88,24 @@ func sleepWithContext(ctx context.Context, d time.Duration) error {
 }
 
 // Forward 转发请求到Claude API
+// gatewayOrganizationAttemptKey 标记组织单次尝试语义：transport 级失败
+// 返回 NoHTTPResponse 的 failover（不向客户端写 502），供组织执行服务
+// 完成单次扣费与证据记录。
+type gatewayOrganizationAttemptCtxKey struct{}
+
+// ForwardOrganizationMessagesAttempt performs at most one provider attempt for
+// an organization execution. NOTE(integration-wip): 复用个人转发路径
+// （上游 1.1.8 重构后 forward 分层尚未接入 organizationAttempt 全语义），
+// transport 失败语义已按组织契约接线；其余重试/换号语义待后续接线。
+func (s *GatewayService) ForwardOrganizationMessagesAttempt(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (*ForwardResult, error) {
+	return s.Forward(context.WithValue(ctx, gatewayOrganizationAttemptCtxKey{}, true), c, account, parsed)
+}
+
+func isGatewayOrganizationAttempt(ctx context.Context) bool {
+	v, _ := ctx.Value(gatewayOrganizationAttemptCtxKey{}).(bool)
+	return v
+}
+
 func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (result *ForwardResult, err error) {
 	startTime := time.Now()
 	if parsed == nil {
@@ -966,7 +984,7 @@ func (s *GatewayService) ReplaceModelInBody(body []byte, newModel string) []byte
 
 // IsModelRestricted 检查模型是否被渠道限制
 func (s *GatewayService) IsModelRestricted(ctx context.Context, groupID int64, model string) bool {
-	if s.channelService == nil {
+	if s == nil || s.channelService == nil {
 		return false
 	}
 	return s.channelService.IsModelRestricted(ctx, groupID, model)
@@ -975,7 +993,7 @@ func (s *GatewayService) IsModelRestricted(ctx context.Context, groupID int64, m
 // ResolveChannelMappingAndRestrict 解析渠道映射。
 // 模型限制检查已移至调度阶段（checkChannelPricingRestriction），restricted 始终返回 false。
 func (s *GatewayService) ResolveChannelMappingAndRestrict(ctx context.Context, groupID *int64, model string) (ChannelMappingResult, bool) {
-	if s.channelService == nil {
+	if s == nil || s.channelService == nil {
 		return ChannelMappingResult{MappedModel: model}, false
 	}
 	return s.channelService.ResolveChannelMappingAndRestrict(ctx, groupID, model)

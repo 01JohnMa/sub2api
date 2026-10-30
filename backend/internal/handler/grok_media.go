@@ -139,7 +139,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 				return
 			}
 		}
-		imageReleaseFunc, acquired := h.acquireImageGenerationSlot(c, streamStarted)
+		imageReleaseFunc, acquired := h.acquireImageGenerationSlot(c, streamStarted, true)
 		if !acquired {
 			return
 		}

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/Wei-Shaw/sub2api/internal/domain"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/domain"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )

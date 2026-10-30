@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	"github.com/MACOS-DO/sub4api/internal/domain"
 )
 
 // CheckOrganizationNonBillablePlatformEligibility applies the organization

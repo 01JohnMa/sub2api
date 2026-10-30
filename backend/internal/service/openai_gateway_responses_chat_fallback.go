@@ -157,7 +157,7 @@ func (s *OpenAIGatewayService) bufferChatCompletionsAsResponses(
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
-	ccResp, usage, err := s.readCCUpstreamJSONResponse(c, resp, writeOpenAIResponsesFallbackError)
+	ccResp, usage, usageObserved, err := s.readCCUpstreamJSONResponse(c, resp, writeOpenAIResponsesFallbackError)
 	if err != nil {
 		return nil, err
 	}
@@ -173,6 +173,7 @@ func (s *OpenAIGatewayService) bufferChatCompletionsAsResponses(
 		RequestID:                   requestID,
 		UpstreamHeaders:             resp.Header,
 		Usage:                       usage,
+		UsageObserved:               usageObserved,
 		Model:                       originalModel,
 		BillingModel:                billingModel,
 		UpstreamModel:               upstreamModel,
@@ -293,6 +294,7 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsResponses(
 		RequestID:                   requestID,
 		UpstreamHeaders:             resp.Header,
 		Usage:                       scan.Usage,
+		UsageObserved:               scan.SawDone && scan.UsageValidated,
 		Model:                       originalModel,
 		BillingModel:                billingModel,
 		UpstreamModel:               upstreamModel,

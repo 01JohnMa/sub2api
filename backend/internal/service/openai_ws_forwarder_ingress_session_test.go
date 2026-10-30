@@ -90,6 +90,8 @@ func TestOpenAIWSDownstreamWriteContext_CancellationOwnership(t *testing.T) {
 		require.ErrorIs(t, writeCtx.Err(), context.Canceled)
 		require.ErrorIs(t, context.Cause(writeCtx), serverShutdown)
 	})
+}
+
 type openAIWSPreDispatchTestDialer struct {
 	conn       openAIWSClientConn
 	statusCode int

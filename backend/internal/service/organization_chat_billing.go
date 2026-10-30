@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
+	"github.com/MACOS-DO/sub4api/internal/pkg/openai_compat"
 	"github.com/tidwall/gjson"
 )
 
@@ -242,7 +242,7 @@ func (s *OpenAIGatewayService) PlanOrganizationChatCandidates(ctx context.Contex
 	if s.checkChannelPricingRestriction(ctx, input.APIKey.GroupID, policy.RequestedModel) {
 		return nil, ErrOrganizationChatNoCandidates
 	}
-	accounts, err := s.listSchedulableAccounts(ctx, input.APIKey.GroupID)
+	accounts, err := s.listSchedulableAccounts(ctx, input.APIKey.GroupID, PlatformOpenAI)
 	if err != nil {
 		return nil, ErrOrganizationChatNoCandidates
 	}
@@ -271,7 +271,7 @@ func (s *OpenAIGatewayService) PlanOrganizationChatCandidates(ctx context.Contex
 			break
 		}
 		account := accountValue
-		if fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, &account, policy.RequestedModel, false, OpenAIEndpointCapabilityChatCompletions); fresh != nil {
+		if fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, &account, PlatformOpenAI, policy.RequestedModel, false, OpenAIEndpointCapabilityChatCompletions); fresh != nil {
 			account = *fresh
 		} else {
 			continue
@@ -357,7 +357,7 @@ func (s *OpenAIGatewayService) RevalidateOrganizationChatCandidate(ctx context.C
 		}
 		account = latest
 	}
-	account = s.resolveFreshSchedulableOpenAIAccount(ctx, account, candidate.RequestedModel, false, OpenAIEndpointCapabilityChatCompletions)
+	account = s.resolveFreshSchedulableOpenAIAccount(ctx, account, PlatformOpenAI, candidate.RequestedModel, false, OpenAIEndpointCapabilityChatCompletions)
 	if account == nil || account.IsOpenAIPassthroughEnabled() || !openAIStickyAccountMatchesGroup(account, apiKey.GroupID) {
 		return nil, ErrOrganizationChatCandidateConflict
 	}

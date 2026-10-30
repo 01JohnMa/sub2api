@@ -32,6 +32,7 @@ type ForwardGeminiOption func(*forwardGeminiOptions)
 type forwardGeminiOptions struct {
 	groupID     int64
 	sessionHash string
+	prepared    *PreparedAntigravityGeminiPayload
 }
 
 func WithForwardGeminiSession(groupID int64, sessionHash string) ForwardGeminiOption {
@@ -150,6 +151,14 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 	// Antigravity 上游只支持流式请求，统一使用 streamGenerateContent
 	// 如果客户端请求非流式，在响应处理阶段会收集完整流式响应后返回
 	upstreamAction := "streamGenerateContent"
+	if forwardOpts.prepared != nil {
+		if forwardOpts.prepared.DispatchModel != mappedModel || len(forwardOpts.prepared.Payload) == 0 {
+			return nil, ErrOrganizationGeminiCandidateConflict
+		}
+		injectedBody = forwardOpts.prepared.CanonicalBody
+		wrappedBody = forwardOpts.prepared.Payload
+		upstreamAction = forwardOpts.prepared.UpstreamAction
+	}
 
 	// 执行带重试的请求
 	result, err := s.antigravityRetryLoop(antigravityRetryLoopParams{
@@ -199,8 +208,10 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		_ = resp.Body.Close()
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
 
-		// 模型兜底：模型不存在且开启 fallback 时，自动用 fallback 模型重试一次
-		if s.settingService != nil && s.settingService.IsModelFallbackEnabled(ctx) &&
+		// 模型兜底：模型不存在且开启 fallback 时，自动用 fallback 模型重试一次。
+		// 组织 prepared payload 已冻结内容与模型，禁止运行时变形重试。
+		if forwardOpts.prepared == nil &&
+			s.settingService != nil && s.settingService.IsModelFallbackEnabled(ctx) &&
 			isModelNotFoundError(resp.StatusCode, respBody) {
 			fallbackModel := s.settingService.GetFallbackModel(ctx, PlatformAntigravity)
 			if fallbackModel != "" && fallbackModel != mappedModel {
@@ -230,6 +241,7 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 			signatureCheckBody = unwrapped
 		}
 		if resp.StatusCode == http.StatusBadRequest &&
+			forwardOpts.prepared == nil &&
 			s.settingService != nil &&
 			s.settingService.IsSignatureRectifierEnabled(ctx) &&
 			isSignatureRelatedError(signatureCheckBody) &&
@@ -577,4 +589,43 @@ func filterEmptyPartsFromGeminiRequest(body []byte) ([]byte, error) {
 
 	payload["contents"] = filtered
 	return json.Marshal(payload)
+}
+
+
+// PreparedAntigravityGeminiPayload 是组织 reservation 冻结的精确 v1internal
+// payload：仅内存传递，快照只保留哈希与脱敏身份摘要。
+type PreparedAntigravityGeminiPayload struct {
+	Payload         []byte
+	CanonicalBody   []byte
+	DispatchModel   string
+	UpstreamAction  string
+	IdentitySummary string
+}
+
+func WithPreparedAntigravityGeminiPayload(payload PreparedAntigravityGeminiPayload) ForwardGeminiOption {
+	return func(opts *forwardGeminiOptions) { opts.prepared = &payload }
+}
+
+func (s *AntigravityGatewayService) PrepareOrganizationGeminiPayload(account *Account, dispatchModel string, action string, body []byte) (PreparedAntigravityGeminiPayload, error) {
+	if s == nil || account == nil || !organizationGeminiNativeAction(action) || len(body) == 0 {
+		return PreparedAntigravityGeminiPayload{}, ErrOrganizationGeminiUnsupportedRequest
+	}
+	mappedModel := s.getMappedModel(account, dispatchModel)
+	if mappedModel == "" {
+		return PreparedAntigravityGeminiPayload{}, ErrOrganizationGeminiCandidateConflict
+	}
+	injected, err := injectIdentityPatchToGeminiRequest(body)
+	if err != nil {
+		return PreparedAntigravityGeminiPayload{}, err
+	}
+	if cleaned, cleanErr := cleanGeminiRequest(injected); cleanErr == nil {
+		injected = cleaned
+	} else {
+		return PreparedAntigravityGeminiPayload{}, cleanErr
+	}
+	wrapped, err := s.wrapV1InternalRequest(strings.TrimSpace(account.GetCredential("project_id")), mappedModel, injected)
+	if err != nil {
+		return PreparedAntigravityGeminiPayload{}, err
+	}
+	return PreparedAntigravityGeminiPayload{Payload: wrapped, CanonicalBody: injected, DispatchModel: mappedModel, UpstreamAction: "streamGenerateContent", IdentitySummary: organizationGeminiAntigravityIdentitySummary(account, mappedModel)}, nil
 }

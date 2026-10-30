@@ -9,10 +9,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	"github.com/MACOS-DO/sub4api/internal/pkg/tlsfingerprint"
+	middleware2 "github.com/MACOS-DO/sub4api/internal/server/middleware"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -23,7 +23,7 @@ func TestOrganizationEmbeddingsCapabilityRejectionCreatesZeroCostEvidence(t *tes
 	cfg := &config.Config{RunMode: config.RunModeStandard, Log: config.LogConfig{Environment: "development"}}
 	cfg.Default.RateMultiplier = 1
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(nil, nil, nil, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(nil, nil, nil, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := organizationResponsesAuthorizedAPIKey()
 	body := []byte(`{"model":"text-embedding-3-small","input":"hello"}`)
@@ -50,10 +50,10 @@ func TestOrganizationImagesInvalidRequestCreatesZeroCostEvidence(t *testing.T) {
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		nil, nil, nil, nil, nil, nil, nil, cfg, nil, nil, billing,
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, nil, nil, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, nil, nil, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := organizationResponsesAuthorizedAPIKey()
 
@@ -177,10 +177,10 @@ func TestOrganizationImagesConcurrencyRejectionCreatesZeroCostEvidence(t *testin
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		&organizationResponsesAccountRepoStub{account: account}, nil, nil, nil, nil, nil, nil, cfg, nil, nil, billing,
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, nil, nil, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, nil, nil, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := organizationResponsesAuthorizedAPIKey()
 	apiKey.Group.AllowImageGeneration = true
@@ -238,7 +238,7 @@ func TestOrganizationImagesTrustedFailoverUsesFrozenCandidateAndSettlesOnlyFinal
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		&organizationResponsesAccountRepoStub{accounts: accounts}, nil, nil, nil, nil, nil, nil, cfg, nil, concurrency, billing,
-		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	billingCache := service.NewBillingCacheService(
 		nil, nil, nil, nil, organizationResponsesUserRPMCacheStub{}, organizationResponsesUserGroupRateRepoStub{}, cfg,
@@ -246,7 +246,7 @@ func TestOrganizationImagesTrustedFailoverUsesFrozenCandidateAndSettlesOnlyFinal
 	)
 	t.Cleanup(billingCache.Stop)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := organizationResponsesAuthorizedAPIKey()
 	apiKey.Group.AllowImageGeneration = true
@@ -298,7 +298,7 @@ func TestOrganizationImagesUnknownDispatchRecordsPendingAttempt(t *testing.T) {
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		&organizationResponsesAccountRepoStub{account: account}, nil, nil, nil, nil, nil, nil, cfg, nil, concurrency, billing,
-		nil, nil, organizationImagesUnknownUpstreamStub{}, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, organizationImagesUnknownUpstreamStub{}, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	billingCache := service.NewBillingCacheService(
 		nil, nil, nil, nil, organizationResponsesUserRPMCacheStub{}, organizationResponsesUserGroupRateRepoStub{}, cfg,
@@ -306,7 +306,7 @@ func TestOrganizationImagesUnknownDispatchRecordsPendingAttempt(t *testing.T) {
 	)
 	t.Cleanup(billingCache.Stop)
 	executionRepo := &organizationImagesPendingExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := organizationResponsesAuthorizedAPIKey()
 	apiKey.Group.AllowImageGeneration = true
@@ -352,12 +352,12 @@ func TestOrganizationEmbeddingsObservedUsageSettlesOneFrozenExecution(t *testing
 	billing := organizationEmbeddingsTestBilling(t, cfg)
 	gateway := service.NewOpenAIGatewayService(
 		&organizationResponsesAccountRepoStub{account: account}, nil, nil, nil, nil, nil, nil, cfg, nil, concurrency, billing,
-		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	billingCache := organizationEmbeddingsTestBillingCache(cfg)
 	t.Cleanup(billingCache.Stop)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := organizationResponsesAuthorizedAPIKey()
 	body := []byte(`{"model":"text-embedding-3-small","input":"hello"}`)
@@ -400,12 +400,12 @@ func TestOrganizationEmbeddingsTrustedFailoverUsesFrozenCandidatesAndFinalAttemp
 	billing := organizationEmbeddingsTestBilling(t, cfg)
 	gateway := service.NewOpenAIGatewayService(
 		&organizationResponsesAccountRepoStub{accounts: accounts}, nil, nil, nil, nil, nil, nil, cfg, nil, concurrency, billing,
-		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	billingCache := organizationEmbeddingsTestBillingCache(cfg)
 	t.Cleanup(billingCache.Stop)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := organizationResponsesAuthorizedAPIKey()
 	body := []byte(`{"model":"text-embedding-3-small","input":"hello"}`)
@@ -446,12 +446,12 @@ func TestOrganizationEmbeddingsUnknownTransportRecordsPendingEvidence(t *testing
 	billing := organizationEmbeddingsTestBilling(t, cfg)
 	gateway := service.NewOpenAIGatewayService(
 		&organizationResponsesAccountRepoStub{account: account}, nil, nil, nil, nil, nil, nil, cfg, nil, concurrency, billing,
-		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	billingCache := organizationEmbeddingsTestBillingCache(cfg)
 	t.Cleanup(billingCache.Stop)
 	executionRepo := &organizationImagesPendingExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := organizationResponsesAuthorizedAPIKey()
 	body := []byte(`{"model":"text-embedding-3-small","input":"hello"}`)

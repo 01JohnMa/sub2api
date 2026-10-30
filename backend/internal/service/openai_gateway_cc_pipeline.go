@@ -250,6 +250,9 @@ type ccStreamScanState struct {
 	// Usage 为 include_usage chunk 中最近一次出现的用量（上游可能重复发送，
 	// 总是保留最新值）；终态事件中的用量由调用方在 finalize 阶段自行覆盖。
 	Usage OpenAIUsage
+	// UsageValidated 表示流中出现过完整且通过校验的 usage chunk（配合 SawDone
+	// 构成计费零成本证明的 UsageObserved）。
+	UsageValidated bool
 	// FirstTokenMs 为首个实际输出 chunk（排除 usage-only chunk）的到达时延。
 	FirstTokenMs *int
 	// SawDone 表示上游发出了 [DONE] 哨兵。
@@ -298,6 +301,7 @@ func (s *OpenAIGatewayService) scanCCStream(
 
 		if u := extractCCStreamUsage(payload); u != nil {
 			st.Usage = *u
+			st.UsageValidated = true
 		}
 
 		var chunk apicompat.ChatCompletionsChunk
@@ -335,24 +339,25 @@ func logCCStreamMissingDoneSentinel(logPrefix, requestID string) {
 }
 
 // readCCUpstreamJSONResponse 读取并解析 CC 非流式 JSON 响应，失败时以调用方
-// 端点格式回写错误；成功时顺带提取 usage。
+// 端点格式回写错误；成功时顺带提取 usage（第四个返回值标记 usage 是否完整
+// 且通过校验，供计费零成本证明使用）。
 func (s *OpenAIGatewayService) readCCUpstreamJSONResponse(
 	c *gin.Context,
 	resp *http.Response,
 	writeError compatErrorWriter,
-) (*apicompat.ChatCompletionsResponse, OpenAIUsage, error) {
+) (*apicompat.ChatCompletionsResponse, OpenAIUsage, bool, error) {
 	respBody, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		if !errors.Is(err, ErrUpstreamResponseBodyTooLarge) {
 			writeError(c, http.StatusBadGateway, "api_error", "Failed to read upstream response")
 		}
-		return nil, OpenAIUsage{}, fmt.Errorf("read upstream body: %w", err)
+		return nil, OpenAIUsage{}, false, fmt.Errorf("read upstream body: %w", err)
 	}
 
 	var ccResp apicompat.ChatCompletionsResponse
 	if err := json.Unmarshal(respBody, &ccResp); err != nil {
 		writeError(c, http.StatusBadGateway, "api_error", "Failed to parse upstream response")
-		return nil, OpenAIUsage{}, fmt.Errorf("parse chat completions response: %w", err)
+		return nil, OpenAIUsage{}, false, fmt.Errorf("parse chat completions response: %w", err)
 	}
 	// 观察上游 CC JSON 回显的 model / service_tier（计费以回显为准）。
 	// CC JSON 无 type 字段，按 untyped payload 观察（上游约束）。
@@ -361,10 +366,12 @@ func (s *OpenAIGatewayService) readCCUpstreamJSONResponse(
 	}
 
 	usage := OpenAIUsage{}
+	usageObserved := false
 	if parsed, ok := extractOpenAIUsageFromJSONBytes(respBody); ok {
 		usage = parsed
+		usageObserved = true
 	}
-	return &ccResp, usage, nil
+	return &ccResp, usage, usageObserved, nil
 }
 
 // writeOpenAIResponsesFallbackError 以 /v1/responses 回退路径的既有错误格式回写

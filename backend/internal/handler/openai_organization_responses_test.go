@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/domain"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	"github.com/MACOS-DO/sub4api/internal/domain"
+	"github.com/MACOS-DO/sub4api/internal/pkg/openai_compat"
+	"github.com/MACOS-DO/sub4api/internal/pkg/tlsfingerprint"
+	middleware2 "github.com/MACOS-DO/sub4api/internal/server/middleware"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
@@ -286,10 +286,10 @@ func TestOrganizationResponsesPlanRejectionCreatesZeroCostFinalEvidence(t *testi
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		accountRepo, nil, nil, nil, nil, nil, nil, cfg, nil, concurrency, billing,
-		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, concurrency, nil, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, nil, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 
 	organizationID := int64(88)
@@ -340,10 +340,10 @@ func TestOrganizationResponsesCapabilityRejectionCreatesZeroCostFinalEvidence(t 
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		nil, nil, nil, nil, nil, nil, nil, cfg, nil, nil, billing,
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, nil, nil, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, nil, nil, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 
 	organizationID := int64(88)
@@ -391,10 +391,10 @@ func TestOrganizationResponsesEarlyRequestValidationCreatesZeroCostFinalEvidence
 	gateway := service.NewOpenAIGatewayService(
 		&organizationResponsesAccountRepoStub{account: account}, nil, nil, nil, nil, nil, nil, cfg, nil,
 		concurrency, billing,
-		nil, nil, &organizationResponsesHTTPUpstreamStub{}, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, &organizationResponsesHTTPUpstreamStub{}, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, concurrency, nil, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, nil, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := organizationResponsesAuthorizedAPIKey()
 
@@ -475,7 +475,7 @@ func TestOrganizationResponsesHTTPAliasesShareExecutionSnapshotsAndProviderCorre
 			billing := service.NewBillingService(cfg, nil)
 			gateway := service.NewOpenAIGatewayService(
 				accountRepo, nil, nil, nil, nil, nil, nil, cfg, nil, concurrency, billing,
-				nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil,
+				nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil,
 			)
 			executionRepo := &organizationResponsesExecutionRepoStub{}
 			billingCache := service.NewBillingCacheService(
@@ -484,7 +484,7 @@ func TestOrganizationResponsesHTTPAliasesShareExecutionSnapshotsAndProviderCorre
 				organizationResponsesUserPlatformQuotaRepoStub{},
 			)
 			t.Cleanup(billingCache.Stop)
-			handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+			handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, nil, cfg)
 			handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 
 			organizationID := int64(88)
@@ -554,7 +554,7 @@ func TestOrganizationResponsesFrozenChatFallbackUsesOneFinalOrganizationDebit(t 
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		&organizationResponsesAccountRepoStub{accounts: accounts}, nil, nil, nil, nil, nil, nil, cfg, nil, concurrency, billing,
-		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	billingCache := service.NewBillingCacheService(
 		nil, nil, nil, nil, organizationResponsesUserRPMCacheStub{}, organizationResponsesUserGroupRateRepoStub{}, cfg,
@@ -562,7 +562,7 @@ func TestOrganizationResponsesFrozenChatFallbackUsesOneFinalOrganizationDebit(t 
 	)
 	t.Cleanup(billingCache.Stop)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 
 	body := []byte(`{"model":"gpt-5.4","input":"hello","max_output_tokens":64}`)
@@ -814,7 +814,7 @@ func TestOrganizationResponsesWebSocketFreezesActiveAccountFirstThenRetriesInOrd
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		accountRepo, nil, nil, nil, nil, nil, nil, cfg, nil, nil, billing,
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	apiKey := organizationResponsesAuthorizedAPIKey()
 	apiKey.GroupID = &groupID
@@ -828,7 +828,7 @@ func TestOrganizationResponsesWebSocketFreezesActiveAccountFirstThenRetriesInOrd
 	require.Len(t, plan.Candidates, 2)
 	require.Equal(t, []int64{activeFirst.ID, defaultFirst.ID}, []int64{plan.Candidates[0].AccountID, plan.Candidates[1].AccountID})
 
-	handler := NewOpenAIGatewayHandler(gateway, nil, nil, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, nil, nil, nil, nil, nil, nil, nil, cfg)
 	coordinator := &organizationResponsesWSTurnCoordinator{
 		handler: handler, activeAccount: &activeFirst, accountChanged: make(chan struct{}),
 	}
@@ -872,7 +872,7 @@ func TestOrganizationResponsesWebSocketParentAdmissionRunsOnceAcrossTwoAttempts(
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		accountRepo, nil, nil, nil, nil, nil, nil, cfg, nil, concurrency, billing,
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	apiKey := organizationResponsesAuthorizedAPIKey()
 	apiKey.GroupID = &groupID
@@ -889,7 +889,7 @@ func TestOrganizationResponsesWebSocketParentAdmissionRunsOnceAcrossTwoAttempts(
 	require.NoError(t, err)
 	require.Len(t, plan.Candidates, 2)
 
-	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, nil, cfg)
 	state := &organizationResponsesWSTurn{readyDone: make(chan struct{})}
 	coordinator := &organizationResponsesWSTurnCoordinator{
 		handler: handler, activeAccount: &firstAccount, accountChanged: make(chan struct{}),
@@ -960,7 +960,7 @@ func TestOrganizationResponsesAdapterClassifiesTerminalOutcomes(t *testing.T) {
 	}
 	gateway := service.NewOpenAIGatewayService(
 		nil, nil, nil, nil, nil, nil, nil, cfg, nil, nil, billing,
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	newAdapter := func() (*organizationResponsesHTTPAdapter, service.OrganizationExecutionDispatchRequest) {
 		recorder := httptest.NewRecorder()

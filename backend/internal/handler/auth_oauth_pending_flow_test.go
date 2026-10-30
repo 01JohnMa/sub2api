@@ -19,6 +19,7 @@ import (
 	"github.com/MACOS-DO/sub4api/ent/pendingauthsession"
 	"github.com/MACOS-DO/sub4api/ent/redeemcode"
 	dbuser "github.com/MACOS-DO/sub4api/ent/user"
+	"github.com/MACOS-DO/sub4api/ent/schema/mixins"
 	"github.com/MACOS-DO/sub4api/internal/config"
 	"github.com/MACOS-DO/sub4api/internal/pkg/pagination"
 	"github.com/MACOS-DO/sub4api/internal/service"
@@ -2074,8 +2075,7 @@ func TestBindOIDCOAuthLoginReclaimsIdentityOwnedBySoftDeletedUser(t *testing.T) 
 		Save(ctx)
 	require.NoError(t, err)
 
-	_, err = client.User.Delete().Where(dbuser.IDEQ(oldOwner.ID)).Exec(ctx)
-	require.NoError(t, err)
+	require.NoError(t, (&oauthPendingFlowUserRepo{client: client}).Delete(ctx, oldOwner.ID))
 
 	newOwnerHash, err := handler.authService.HashPassword("secret-123")
 	require.NoError(t, err)
@@ -3225,8 +3225,26 @@ func (r *oauthPendingFlowUserRepo) UpdateUserLastActiveAt(ctx context.Context, u
 }
 
 func (r *oauthPendingFlowUserRepo) Delete(ctx context.Context, id int64) error {
+	if tx := dbent.TxFromContext(ctx); tx != nil {
+		return r.deleteWithClient(ctx, tx.Client(), id)
+	}
+
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	txCtx := dbent.NewTxContext(ctx, tx)
+	if err := r.deleteWithClient(txCtx, tx.Client(), id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *oauthPendingFlowUserRepo) deleteWithClient(ctx context.Context, client *dbent.Client, id int64) error {
 	if r.options.rejectDeleteWhileAuthIdentityExists {
-		count, err := r.client.AuthIdentity.Query().Where(authidentity.UserIDEQ(id)).Count(ctx)
+		count, err := client.AuthIdentity.Query().Where(authidentity.UserIDEQ(id)).Count(ctx)
 		if err != nil {
 			return err
 		}
@@ -3234,7 +3252,7 @@ func (r *oauthPendingFlowUserRepo) Delete(ctx context.Context, id int64) error {
 			return errors.New("cannot delete user while auth identities still exist")
 		}
 	}
-	return r.client.User.DeleteOneID(id).Exec(ctx)
+	return client.User.DeleteOneID(id).Exec(mixins.AuthorizeUserDeletion(ctx))
 }
 
 func (r *oauthPendingFlowUserRepo) GetUserAvatar(ctx context.Context, userID int64) (*service.UserAvatar, error) {

@@ -357,38 +357,33 @@ func sameInt64Set(a, b []int64) bool {
 }
 
 func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
-	// Protect admin users: cannot delete admin accounts
-	user, err := s.userRepo.GetByID(ctx, id)
+	if s.entClient == nil {
+		return ErrUserDeletionTransactionUnavailable
+	}
+
+	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		return err
 	}
-	if user.Role == "admin" {
-		return errors.New("cannot delete admin user")
-	}
+	defer func() { _ = tx.Rollback() }()
 
-	apiKeys, err := s.listUserAPIKeysForDeletion(ctx, id)
+	opCtx := dbent.NewTxContext(ctx, tx)
+	user, err := s.lockUserForDeletion(opCtx, id)
 	if err != nil {
 		return err
 	}
-
-	if s.entClient != nil {
-		tx, err := s.entClient.Tx(ctx)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = tx.Rollback() }()
-
-		opCtx := dbent.NewTxContext(ctx, tx)
-		if err := s.deleteUserWithAPIKeys(opCtx, id, apiKeys); err != nil {
-			return err
-		}
-		if err := tx.Commit(); err != nil {
-			return err
-		}
-	} else {
-		if err := s.deleteUserWithAPIKeys(ctx, id, apiKeys); err != nil {
-			return err
-		}
+	if err := validateUserDeletion(user); err != nil {
+		return err
+	}
+	apiKeys, err := s.listUserAPIKeysForDeletion(opCtx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.deleteUserWithAPIKeys(opCtx, id, apiKeys); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
 	if s.authCacheInvalidator != nil {
@@ -398,6 +393,27 @@ func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
 			}
 		}
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, id)
+	}
+	return nil
+}
+
+func (s *adminServiceImpl) lockUserForDeletion(ctx context.Context, id int64) (*User, error) {
+	locker, ok := s.userRepo.(userDeletionLocker)
+	if !ok {
+		return nil, ErrUserDeletionTransactionUnavailable
+	}
+	return locker.LockUserForDeletion(ctx, id)
+}
+
+func validateUserDeletion(user *User) error {
+	if user == nil {
+		return ErrUserNotFound
+	}
+	if user.Role == RoleAdmin {
+		return errors.New("cannot delete admin user")
+	}
+	if user.OrganizationID != nil {
+		return ErrOrganizationMembershipMustBeRemoved
 	}
 	return nil
 }

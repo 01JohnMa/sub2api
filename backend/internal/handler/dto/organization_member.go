@@ -1,6 +1,6 @@
 package dto
 
-import "github.com/Wei-Shaw/sub2api/internal/service"
+import "github.com/MACOS-DO/sub4api/internal/service"
 
 type OrganizationMember struct {
 	UserID           int64                        `json:"user_id"`

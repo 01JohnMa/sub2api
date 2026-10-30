@@ -36,7 +36,7 @@ func TestResponsesChatFallbackBufferedMarksOnlyValidatedUsageObserved(t *testing
 			result, err := (&OpenAIGatewayService{}).bufferChatCompletionsAsResponses(
 				c,
 				&http.Response{StatusCode: http.StatusOK, Header: http.Header{"x-request-id": []string{"req_1"}}, Body: io.NopCloser(bytes.NewBufferString(testCase.body))},
-				"gpt-5.4", "gpt-5.4", "gpt-5.4", nil, nil, time.Now(),
+				"gpt-5.4", nil, nil, false, nil, "gpt-5.4", "gpt-5.4", nil, nil, time.Now(),
 			)
 
 			require.NoError(t, err)
@@ -71,7 +71,7 @@ func TestResponsesChatFallbackStreamRequiresTerminalUsage(t *testing.T) {
 			result, err := (&OpenAIGatewayService{}).streamChatCompletionsAsResponses(
 				c,
 				&http.Response{StatusCode: http.StatusOK, Header: http.Header{"x-request-id": []string{"req_1"}}, Body: io.NopCloser(bytes.NewBufferString(testCase.body))},
-				"gpt-5.4", "gpt-5.4", "gpt-5.4", nil, nil, time.Now(),
+				"gpt-5.4", nil, nil, false, nil, "gpt-5.4", "gpt-5.4", nil, nil, time.Now(),
 			)
 
 			require.NoError(t, err)

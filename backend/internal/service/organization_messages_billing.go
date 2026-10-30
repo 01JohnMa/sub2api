@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
 	"github.com/tidwall/gjson"
 )
 
@@ -154,7 +154,7 @@ func organizationMessagesContentIsUnsupported(value any) bool {
 			}
 		}
 	case map[string]any:
-		blockType := strings.ToLower(strings.TrimSpace(stringValue(current["type"])))
+		blockType := strings.ToLower(strings.TrimSpace(orgStringValue(current["type"])))
 		switch blockType {
 		case "image", "document", "server_tool_use", "web_search_tool_result":
 			return true
@@ -237,14 +237,14 @@ func (s *OpenAIGatewayService) PlanOrganizationOpenAIMessagesCandidate(ctx conte
 	if normalizedModel == "" || preferredMappedModel == "" || s.checkChannelPricingRestriction(ctx, apiKey.GroupID, preferredMappedModel) {
 		return nil, ErrOrganizationMessagesNoCandidates
 	}
-	accounts, err := s.listSchedulableAccounts(ctx, apiKey.GroupID)
+	accounts, err := s.listSchedulableAccounts(ctx, apiKey.GroupID, PlatformOpenAI)
 	if err != nil {
 		return nil, ErrOrganizationMessagesNoCandidates
 	}
 	sortOrganizationMessagesAccounts(accounts)
 	for index := range accounts {
 		account := accounts[index]
-		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, &account, preferredMappedModel, false, OpenAIEndpointCapabilityChatCompletions)
+		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, &account, PlatformOpenAI, preferredMappedModel, false, OpenAIEndpointCapabilityChatCompletions)
 		if !s.organizationOpenAIMessagesAccountSupported(fresh) {
 			continue
 		}
@@ -321,7 +321,7 @@ func (s *OpenAIGatewayService) RevalidateOrganizationOpenAIMessagesCandidate(ctx
 	if err != nil || account == nil {
 		return nil, ErrOrganizationMessagesCandidateConflict
 	}
-	account = s.resolveFreshSchedulableOpenAIAccount(ctx, account, preferredMappedModel, false, OpenAIEndpointCapabilityChatCompletions)
+	account = s.resolveFreshSchedulableOpenAIAccount(ctx, account, PlatformOpenAI, preferredMappedModel, false, OpenAIEndpointCapabilityChatCompletions)
 	if !s.organizationOpenAIMessagesAccountSupported(account) || !openAIStickyAccountMatchesGroup(account, apiKey.GroupID) {
 		return nil, ErrOrganizationMessagesCandidateConflict
 	}
@@ -545,7 +545,7 @@ func sameOrganizationMessagesPricing(left, right OrganizationResponsesCandidateP
 	return bytes.Equal(leftJSON, rightJSON)
 }
 
-func stringValue(value any) string {
+func orgStringValue(value any) string {
 	if value == nil {
 		return ""
 	}

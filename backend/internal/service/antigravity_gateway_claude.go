@@ -27,7 +27,13 @@ import (
 //	      └─ retryDelay <  7s → 等待后重试 1 次
 //	          ├─ 成功 → 正常返回
 //	          └─ 失败 → 设置模型限流 + 清除粘性绑定 → 切换账号
-func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte, isStickySession bool) (*ForwardResult, error) {
+func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte, isStickySession bool, options ...ForwardOption) (*ForwardResult, error) {
+	forwardOpts := forwardOptions{}
+	for _, apply := range options {
+		if apply != nil {
+			apply(&forwardOpts)
+		}
+	}
 	beginUpstreamResponseModelObservation(c)
 	// 上游透传账号直接转发，不走 OAuth token 刷新
 	if account.Type == AccountTypeUpstream {
@@ -97,6 +103,12 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 	if err != nil {
 		return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", "Invalid request")
 	}
+	if forwardOpts.prepared != nil {
+		if forwardOpts.prepared.DispatchModel != mappedModel || len(forwardOpts.prepared.Payload) == 0 {
+			return nil, ErrOrganizationGeminiCandidateConflict
+		}
+		geminiBody = forwardOpts.prepared.Payload
+	}
 
 	// Antigravity 上游只支持流式请求，统一使用 streamGenerateContent
 	// 如果客户端请求非流式，在响应处理阶段会收集完整流式响应后转换返回
@@ -144,7 +156,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		// 优先检测 thinking block 的 signature 相关错误（400）并重试一次：
 		// Antigravity /v1internal 链路在部分场景会对 thought/thinking signature 做严格校验，
 		// 当历史消息携带的 signature 不合法时会直接 400；去除 thinking 后可继续完成请求。
-		if resp.StatusCode == http.StatusBadRequest && isSignatureRelatedError(respBody) && s.settingService.IsSignatureRectifierEnabled(ctx) {
+		if forwardOpts.prepared == nil && resp.StatusCode == http.StatusBadRequest && isSignatureRelatedError(respBody) && s.settingService.IsSignatureRectifierEnabled(ctx) {
 			upstreamMsg := strings.TrimSpace(extractAntigravityErrorMessage(respBody))
 			upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 			logBody, maxBytes := s.getLogConfig()
@@ -284,7 +296,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		}
 
 		// Budget 整流：检测 budget_tokens 约束错误并自动修正重试
-		if resp.StatusCode == http.StatusBadRequest && respBody != nil && !isSignatureRelatedError(respBody) {
+		if forwardOpts.prepared == nil && resp.StatusCode == http.StatusBadRequest && respBody != nil && !isSignatureRelatedError(respBody) {
 			errMsg := strings.TrimSpace(extractAntigravityErrorMessage(respBody))
 			if isThinkingBudgetConstraintError(errMsg) && s.settingService.IsBudgetRectifierEnabled(ctx) {
 				appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -773,4 +785,45 @@ func stripSignatureSensitiveBlocksFromClaudeRequest(req *antigravity.ClaudeReque
 	}
 
 	return changed, nil
+}
+
+
+// ForwardOption 为 Antigravity Claude 协议转发提供可选注入；组织冻结
+// payload 通过它进入转发而不落盘。
+type ForwardOption func(*forwardOptions)
+
+type forwardOptions struct {
+	prepared *PreparedAntigravityMessagesPayload
+}
+
+// PreparedAntigravityMessagesPayload 是组织 reservation 冻结的精确转换
+// payload：仅在内存中传递，快照只保留其哈希与脱敏身份摘要。
+type PreparedAntigravityMessagesPayload struct {
+	Payload         []byte
+	DispatchModel   string
+	IdentitySummary string
+}
+
+func WithPreparedAntigravityMessagesPayload(payload PreparedAntigravityMessagesPayload) ForwardOption {
+	return func(options *forwardOptions) { options.prepared = &payload }
+}
+
+func (s *AntigravityGatewayService) PrepareOrganizationMessagesPayload(ctx context.Context, account *Account, body []byte) (PreparedAntigravityMessagesPayload, error) {
+	var request antigravity.ClaudeRequest
+	if s == nil || account == nil || json.Unmarshal(body, &request) != nil || strings.TrimSpace(request.Model) == "" {
+		return PreparedAntigravityMessagesPayload{}, ErrOrganizationGeminiUnsupportedRequest
+	}
+	mappedModel := s.getMappedModel(account, request.Model)
+	if mappedModel == "" {
+		return PreparedAntigravityMessagesPayload{}, ErrOrganizationGeminiCandidateConflict
+	}
+	thinking := request.Thinking != nil && (request.Thinking.Type == "enabled" || request.Thinking.Type == "adaptive")
+	mappedModel = applyThinkingModelSuffix(mappedModel, thinking)
+	options := s.getClaudeTransformOptions(ctx)
+	options.EnableIdentityPatch = true
+	payload, err := antigravity.TransformClaudeToGeminiWithOptions(&request, strings.TrimSpace(account.GetCredential("project_id")), mappedModel, options)
+	if err != nil {
+		return PreparedAntigravityMessagesPayload{}, err
+	}
+	return PreparedAntigravityMessagesPayload{Payload: payload, DispatchModel: mappedModel, IdentitySummary: organizationGeminiAntigravityIdentitySummary(account, mappedModel)}, nil
 }

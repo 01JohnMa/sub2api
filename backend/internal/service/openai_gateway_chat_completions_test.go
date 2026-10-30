@@ -33,6 +33,10 @@ func (w *openAIChatFailingWriter) Write(p []byte) (int, error) {
 	return w.ResponseWriter.Write(p)
 }
 
+func (w *openAIChatFailingWriter) WriteString(s string) (int, error) {
+	return w.Write([]byte(s))
+}
+
 type openAIChatStreamReadErrorCloser struct {
 	payload []byte
 	err     error
@@ -88,8 +92,6 @@ func TestHandleChatStreamingResponse_ClassifiesHTTP2ReadError(t *testing.T) {
 	require.Equal(t, "Upstream HTTP/2 stream failed", message)
 	require.NotContains(t, message, "stream ID")
 	require.NotContains(t, message, "INTERNAL_ERROR")
-func (w *openAIChatFailingWriter) WriteString(s string) (int, error) {
-	return w.Write([]byte(s))
 }
 
 func TestNormalizeResponsesRequestServiceTier(t *testing.T) {

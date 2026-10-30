@@ -15,7 +15,7 @@ import (
 	"sort"
 	"strings"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
 	"github.com/shopspring/decimal"
 	"github.com/tidwall/gjson"
 )
@@ -293,7 +293,7 @@ func (s *OpenAIGatewayService) planOrganizationEmbeddingsImagesCandidates(
 	if s.checkChannelPricingRestriction(ctx, input.APIKey.GroupID, requestedModel) {
 		return nil, ErrOrganizationEmbeddingsImagesNoCandidates
 	}
-	accounts, err := s.listSchedulableAccounts(ctx, input.APIKey.GroupID)
+	accounts, err := s.listSchedulableAccounts(ctx, input.APIKey.GroupID, PlatformOpenAI)
 	if err != nil {
 		return nil, ErrOrganizationEmbeddingsImagesNoCandidates
 	}
@@ -319,7 +319,7 @@ func (s *OpenAIGatewayService) planOrganizationEmbeddingsImagesCandidates(
 		if family == OrganizationEndpointFamilyImages {
 			capability = ""
 		}
-		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, &account, requestedModel, false, capability)
+		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, &account, PlatformOpenAI, requestedModel, false, capability)
 		if fresh == nil || fresh.IsOpenAIPassthroughEnabled() {
 			continue
 		}
@@ -556,7 +556,7 @@ func (s *OpenAIGatewayService) RevalidateOrganizationEmbeddingsImagesCandidate(c
 	if candidate.EndpointFamily == OrganizationEndpointFamilyImages && candidate.ParsedImages != nil {
 		capability = ""
 	}
-	account = s.resolveFreshSchedulableOpenAIAccount(ctx, account, candidate.RequestedModel, false, capability)
+	account = s.resolveFreshSchedulableOpenAIAccount(ctx, account, PlatformOpenAI, candidate.RequestedModel, false, capability)
 	if account == nil || account.ID != candidate.AccountID || account.Type != candidate.AccountType {
 		return nil, ErrOrganizationEmbeddingsImagesCandidateConflict
 	}

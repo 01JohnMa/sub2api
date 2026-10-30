@@ -90,6 +90,11 @@ func GroupID(v int64) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldGroupID, v))
 }
 
+// OrganizationID applies equality check predicate on the "organization_id" field. It's identical to OrganizationIDEQ.
+func OrganizationID(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldOrganizationID, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldStatus, v))
@@ -468,6 +473,36 @@ func GroupIDIsNil() predicate.APIKey {
 // GroupIDNotNil applies the NotNil predicate on the "group_id" field.
 func GroupIDNotNil() predicate.APIKey {
 	return predicate.APIKey(sql.FieldNotNull(FieldGroupID))
+}
+
+// OrganizationIDEQ applies the EQ predicate on the "organization_id" field.
+func OrganizationIDEQ(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldOrganizationID, v))
+}
+
+// OrganizationIDNEQ applies the NEQ predicate on the "organization_id" field.
+func OrganizationIDNEQ(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldOrganizationID, v))
+}
+
+// OrganizationIDIn applies the In predicate on the "organization_id" field.
+func OrganizationIDIn(vs ...int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldOrganizationID, vs...))
+}
+
+// OrganizationIDNotIn applies the NotIn predicate on the "organization_id" field.
+func OrganizationIDNotIn(vs ...int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldOrganizationID, vs...))
+}
+
+// OrganizationIDIsNil applies the IsNil predicate on the "organization_id" field.
+func OrganizationIDIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldOrganizationID))
+}
+
+// OrganizationIDNotNil applies the NotNil predicate on the "organization_id" field.
+func OrganizationIDNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldOrganizationID))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.
@@ -1171,6 +1206,29 @@ func HasGroupWith(preds ...predicate.Group) predicate.APIKey {
 	})
 }
 
+// HasOrganization applies the HasEdge predicate on the "organization" edge.
+func HasOrganization() predicate.APIKey {
+	return predicate.APIKey(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, OrganizationTable, OrganizationColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasOrganizationWith applies the HasEdge predicate on the "organization" edge with a given conditions (other predicates).
+func HasOrganizationWith(preds ...predicate.Organization) predicate.APIKey {
+	return predicate.APIKey(func(s *sql.Selector) {
+		step := newOrganizationStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasUsageLogs applies the HasEdge predicate on the "usage_logs" edge.
 func HasUsageLogs() predicate.APIKey {
 	return predicate.APIKey(func(s *sql.Selector) {
@@ -1186,6 +1244,52 @@ func HasUsageLogs() predicate.APIKey {
 func HasUsageLogsWith(preds ...predicate.UsageLog) predicate.APIKey {
 	return predicate.APIKey(func(s *sql.Selector) {
 		step := newUsageLogsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasOrganizationExecutions applies the HasEdge predicate on the "organization_executions" edge.
+func HasOrganizationExecutions() predicate.APIKey {
+	return predicate.APIKey(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, OrganizationExecutionsTable, OrganizationExecutionsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasOrganizationExecutionsWith applies the HasEdge predicate on the "organization_executions" edge with a given conditions (other predicates).
+func HasOrganizationExecutionsWith(preds ...predicate.OrganizationExecution) predicate.APIKey {
+	return predicate.APIKey(func(s *sql.Selector) {
+		step := newOrganizationExecutionsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasOrganizationFinalExecutionEvidences applies the HasEdge predicate on the "organization_final_execution_evidences" edge.
+func HasOrganizationFinalExecutionEvidences() predicate.APIKey {
+	return predicate.APIKey(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, OrganizationFinalExecutionEvidencesTable, OrganizationFinalExecutionEvidencesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasOrganizationFinalExecutionEvidencesWith applies the HasEdge predicate on the "organization_final_execution_evidences" edge with a given conditions (other predicates).
+func HasOrganizationFinalExecutionEvidencesWith(preds ...predicate.OrganizationFinalExecutionEvidence) predicate.APIKey {
+	return predicate.APIKey(func(s *sql.Selector) {
+		step := newOrganizationFinalExecutionEvidencesStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

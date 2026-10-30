@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/enttest"
-	"github.com/Wei-Shaw/sub2api/ent/organizationallocation"
-	"github.com/Wei-Shaw/sub2api/internal/domain"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	dbent "github.com/MACOS-DO/sub4api/ent"
+	"github.com/MACOS-DO/sub4api/ent/enttest"
+	"github.com/MACOS-DO/sub4api/ent/organizationallocation"
+	"github.com/MACOS-DO/sub4api/internal/domain"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 

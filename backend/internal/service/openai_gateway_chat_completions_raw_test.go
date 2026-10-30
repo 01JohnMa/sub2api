@@ -245,6 +245,47 @@ func TestForwardAsChatCompletions_OpenAICompatibleRawUsageGuard(t *testing.T) {
 	}
 }
 
+func TestForwardAsRawChatCompletions_PartialStreamUsageIsUnobserved(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	for _, testCase := range []struct {
+		name  string
+		usage string
+	}{
+		{name: "missing prompt tokens", usage: `{"completion_tokens":4,"total_tokens":4}`},
+		{name: "missing completion tokens", usage: `{"prompt_tokens":9,"total_tokens":9}`},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":true}`)
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			upstreamBody := strings.Join([]string{
+				`data: {"id":"chatcmpl_1","object":"chat.completion.chunk","model":"gpt-5.4","choices":[{"index":0,"delta":{"content":"ok"}}]}`,
+				"",
+				`data: {"id":"chatcmpl_1","object":"chat.completion.chunk","model":"gpt-5.4","choices":[],"usage":` + testCase.usage + `}`,
+				"",
+				"data: [DONE]",
+				"",
+			}, "\n")
+			upstream := &httpUpstreamRecorder{resp: &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body:       io.NopCloser(strings.NewReader(upstreamBody)),
+			}}
+			svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
+
+			result, err := svc.forwardAsRawChatCompletions(context.Background(), c, rawChatCompletionsTestAccount(), body, "")
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.False(t, result.UsageObserved)
+		})
+	}
+}
+
 func TestForwardAsRawChatCompletions_PreservesMappedGPT56MaxEffort(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -301,18 +342,6 @@ func TestForwardAsRawChatCompletions_NonStreamingCapturesCacheWriteUsage(t *test
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body := []byte(`{"model":"gpt-5.6","messages":[{"role":"user","content":"hello"}],"stream":false}`)
-func TestForwardAsRawChatCompletions_PartialStreamUsageIsUnobserved(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	for _, testCase := range []struct {
-		name  string
-		usage string
-	}{
-		{name: "missing prompt tokens", usage: `{"completion_tokens":4,"total_tokens":4}`},
-		{name: "missing completion tokens", usage: `{"prompt_tokens":9,"total_tokens":9}`},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":true}`)
 			rec := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(rec)
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
@@ -329,20 +358,6 @@ func TestForwardAsRawChatCompletions_PartialStreamUsageIsUnobserved(t *testing.T
 				cfg:          rawChatCompletionsTestConfig(),
 				httpUpstream: upstream,
 			}
-			upstreamBody := strings.Join([]string{
-				`data: {"id":"chatcmpl_1","object":"chat.completion.chunk","model":"gpt-5.4","choices":[{"index":0,"delta":{"content":"ok"}}]}`,
-				"",
-				`data: {"id":"chatcmpl_1","object":"chat.completion.chunk","model":"gpt-5.4","choices":[],"usage":` + testCase.usage + `}`,
-				"",
-				"data: [DONE]",
-				"",
-			}, "\n")
-			upstream := &httpUpstreamRecorder{resp: &http.Response{
-				StatusCode: http.StatusOK,
-				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
-				Body:       io.NopCloser(strings.NewReader(upstreamBody)),
-			}}
-			svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
 
 			result, err := svc.forwardAsRawChatCompletions(context.Background(), c, rawChatCompletionsTestAccount(), body, "")
 
@@ -351,7 +366,6 @@ func TestForwardAsRawChatCompletions_PartialStreamUsageIsUnobserved(t *testing.T
 			require.Equal(t, 12, result.Usage.InputTokens)
 			require.Equal(t, 4, result.Usage.CacheReadInputTokens)
 			require.Equal(t, tt.wantWrite, result.Usage.CacheCreationInputTokens)
-			require.False(t, result.UsageObserved)
 		})
 	}
 }

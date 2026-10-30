@@ -186,6 +186,8 @@ func TestForwardEmbeddings_NonAccessFailoverKeepsLegacyShape(t *testing.T) {
 	require.Empty(t, failoverErr.ClientMessage)
 	require.Nil(t, failoverErr.ResponseHeaders)
 	require.False(t, c.Writer.Written())
+}
+
 func TestForwardEmbeddingsUsageObservationRequiresCompleteUsage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	reqBody := []byte(`{"model":"text-embedding-3-small","input":"hello"}`)

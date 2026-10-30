@@ -33,6 +33,31 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	promptCacheKey string,
 	defaultMappedModel string,
 ) (*OpenAIForwardResult, error) {
+	return s.forwardAsAnthropic(ctx, c, account, body, promptCacheKey, defaultMappedModel, false)
+}
+
+// ForwardAsAnthropicOrganizationAttempt performs at most one provider HTTP
+// request. The organization execution service owns every retry/failover attempt.
+func (s *OpenAIGatewayService) ForwardAsAnthropicOrganizationAttempt(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	promptCacheKey string,
+	defaultMappedModel string,
+) (*OpenAIForwardResult, error) {
+	return s.forwardAsAnthropic(ctx, c, account, body, promptCacheKey, defaultMappedModel, true)
+}
+
+func (s *OpenAIGatewayService) forwardAsAnthropic(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	promptCacheKey string,
+	defaultMappedModel string,
+	organizationAttempt bool,
+) (*OpenAIForwardResult, error) {
 	// 工具 Schema 清洗必须先于所有分流：下游每条路径（原生 Anthropic 直通、
 	// Chat Completions 转换、Responses 转换）都会把 tools 原样带给上游，而
 	// xAI / Moonshot 等严格校验方会因 input_schema 里的 required:null 或
@@ -81,10 +106,19 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	SetActualOpenAIUpstreamEndpoint(c, openAIResponsesUpstreamEndpoint)
 
 	startTime := time.Now()
+	preDispatchError := func(message string, err error) error {
+		if organizationAttempt {
+			return organizationGatewayChatLocalPreDispatchError(message, err)
+		}
+		return err
+	}
 
 	// 1. Parse Anthropic request
 	var anthropicReq apicompat.AnthropicRequest
 	if err := json.Unmarshal(body, &anthropicReq); err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to parse anthropic request", err)
+		}
 		return nil, fmt.Errorf("parse anthropic request: %w", err)
 	}
 	anthropicDigestReq := cloneAnthropicRequestForDigest(&anthropicReq)
@@ -154,6 +188,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	anthropicReq.Model = upstreamModel
 	responsesReq, err := apicompat.AnthropicToResponses(&anthropicReq)
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to convert anthropic request", err)
+		}
 		return nil, fmt.Errorf("convert anthropic to responses: %w", err)
 	}
 
@@ -213,13 +250,17 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	// 4. Marshal Responses request body, then apply the ChatGPT/Codex transform.
 	responsesBody, err := json.Marshal(responsesReq)
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to marshal responses request", err)
+		}
 		return nil, fmt.Errorf("marshal responses request: %w", err)
 	}
 
 	if account.UsesOpenAICodexProtocol() && account.Platform != PlatformGrok {
 		var reqBody map[string]any
 		if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
-			return nil, fmt.Errorf("unmarshal for codex transform: %w", err)
+			wrapped := fmt.Errorf("unmarshal for codex transform: %w", err)
+			return nil, preDispatchError("failed to prepare OAuth organization Messages request", wrapped)
 		}
 		codexResult := applyCodexOAuthTransformWithOptions(reqBody, codexOAuthTransformOptions{
 			SkipDefaultInstructions: true,
@@ -249,7 +290,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 			BillingModel:         billingModel,
 			UpstreamModel:        templateUpstreamModel,
 		}); err != nil {
-			return nil, err
+			return nil, preDispatchError("failed to apply organization Messages instructions policy", err)
 		}
 		ensureCodexOAuthInstructionsField(reqBody)
 		if shouldAutoInjectPromptCacheKeyForCompat(upstreamModel) {
@@ -271,7 +312,8 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		isStream = true
 		responsesBody, err = json.Marshal(reqBody)
 		if err != nil {
-			return nil, fmt.Errorf("remarshal after codex transform: %w", err)
+			wrapped := fmt.Errorf("remarshal after codex transform: %w", err)
+			return nil, preDispatchError("failed to finalize OAuth organization Messages request", wrapped)
 		}
 	}
 
@@ -284,13 +326,15 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		if trimmedKey := strings.TrimSpace(promptCacheKey); trimmedKey != "" {
 			var reqBody map[string]any
 			if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
-				return nil, fmt.Errorf("unmarshal for prompt cache key injection: %w", err)
+				wrapped := fmt.Errorf("unmarshal for prompt cache key injection: %w", err)
+				return nil, preDispatchError("failed to prepare organization Messages prompt cache key", wrapped)
 			}
 			if existing, ok := reqBody["prompt_cache_key"].(string); !ok || strings.TrimSpace(existing) == "" {
 				reqBody["prompt_cache_key"] = trimmedKey
 				updated, err := json.Marshal(reqBody)
 				if err != nil {
-					return nil, fmt.Errorf("remarshal after prompt cache key injection: %w", err)
+					wrapped := fmt.Errorf("remarshal after prompt cache key injection: %w", err)
+					return nil, preDispatchError("failed to finalize organization Messages prompt cache key", wrapped)
 				}
 				responsesBody = updated
 			}
@@ -318,6 +362,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	// on the body-level service_tier field (priority/flex).
 	updatedBody, policyErr := s.applyOpenAIFastPolicyToBody(ctx, account, upstreamModel, responsesBody)
 	if policyErr != nil {
+		if organizationAttempt {
+			return nil, preDispatchError("organization Messages fast policy rejected request", policyErr)
+		}
 		var blocked *OpenAIFastBlockedError
 		if errors.As(policyErr, &blocked) {
 			MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
@@ -348,6 +395,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	// 5. Get access token
 	token, _, err := s.getRequestCredential(ctx, c, account)
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to acquire upstream access token", err)
+		}
 		return nil, fmt.Errorf("get access token: %w", err)
 	}
 
@@ -367,6 +417,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	}
 	releaseUpstreamCtx()
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to construct upstream request", err)
+		}
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
 
@@ -426,7 +479,14 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		}
 		resp, err = s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 		if err != nil {
-			return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
+			transportErr := s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
+			if organizationAttempt {
+				var failoverErr *UpstreamFailoverError
+				if errors.As(transportErr, &failoverErr) {
+					failoverErr.NoHTTPResponse = true
+				}
+			}
+			return nil, transportErr
 		}
 		if account.Platform != PlatformGrok || attempt > 0 || resp.StatusCode != http.StatusBadRequest {
 			break
@@ -472,6 +532,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 			return s.ForwardAsAnthropic(markAgentIdentityTaskRecoveryTried(ctx), c, account, body, promptCacheKey, defaultMappedModel)
 		}
 		if previousResponseID != "" && (isOpenAICompatPreviousResponseNotFound(resp.StatusCode, upstreamMsg, respBody) || isOpenAICompatPreviousResponseUnsupported(resp.StatusCode, upstreamMsg, respBody)) {
+			if organizationAttempt {
+				return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
+			}
 			if isOpenAICompatPreviousResponseUnsupported(resp.StatusCode, upstreamMsg, respBody) {
 				s.disableOpenAICompatSessionContinuation(ctx, c, account, promptCacheKey)
 			} else {
@@ -482,7 +545,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 				zap.String("previous_response_id", truncateOpenAIWSLogValue(previousResponseID, openAIWSIDValueMaxLen)),
 				zap.String("upstream_model", upstreamModel),
 			)
-			return s.ForwardAsAnthropic(ctx, c, account, body, promptCacheKey, defaultMappedModel)
+			return s.forwardAsAnthropic(ctx, c, account, body, promptCacheKey, defaultMappedModel, false)
 		}
 		// Grok account-switched history often fails decrypt; strip encrypted
 		// reasoning once at the client-body level so failover accounts can accept

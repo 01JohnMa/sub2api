@@ -7,11 +7,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/handler"
-	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
-	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/handler"
+	"github.com/MACOS-DO/sub4api/internal/handler/admin"
+	"github.com/MACOS-DO/sub4api/internal/pkg/pagination"
+	"github.com/MACOS-DO/sub4api/internal/server/middleware"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -267,8 +267,8 @@ func TestPersonalAccountRoutesApplyOrganizationAdminBoundary(t *testing.T) {
 	}
 
 	handlers := &handler.Handlers{}
-	RegisterUserRoutes(v1, handlers, jwtAuth, organizationAuth, nil)
-	RegisterPaymentRoutes(v1, nil, nil, nil, jwtAuth, adminAuth, organizationAuth, nil)
+	RegisterUserRoutes(v1, handlers, jwtAuth, nil, organizationAuth, nil, nil)
+	RegisterPaymentRoutes(v1, nil, nil, nil, jwtAuth, adminAuth, nil, organizationAuth, nil, nil)
 
 	personalRoutes := []string{
 		"/api/v1/keys",

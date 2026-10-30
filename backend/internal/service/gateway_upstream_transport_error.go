@@ -67,6 +67,12 @@ func (s *GatewayService) handleUpstreamTransportError(ctx context.Context, c *gi
 		s.tempUnscheduleTransportError(ctx, account, safeErr)
 	}
 
+	// 组织单次尝试：transport 失败不向客户端写错误（上层执行服务负责错误
+	// 呈现与换号），返回 NoHTTPResponse 标记无上游响应、无用量证据。
+	if isGatewayOrganizationAttempt(ctx) {
+		return &UpstreamFailoverError{NoHTTPResponse: true}
+	}
+
 	return &UpstreamFailoverError{
 		StatusCode:   http.StatusBadGateway,
 		ResponseBody: gatewayTransportFailoverBody,

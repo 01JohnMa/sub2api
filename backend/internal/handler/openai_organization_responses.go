@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
+	middleware2 "github.com/MACOS-DO/sub4api/internal/server/middleware"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 	"github.com/tidwall/gjson"
@@ -426,7 +426,6 @@ func (a *organizationResponsesHTTPAdapter) resultForForward(
 		if forwardErr != nil || result.ClientDisconnect {
 			terminalOutcome = service.OrganizationExecutionTerminalOutcomeError
 		}
-		a.handler.gatewayService.ReportOpenAIAccountScheduleResult(candidate.AccountID, terminalOutcome == service.OrganizationExecutionTerminalOutcomeSuccess, result.FirstTokenMs)
 		a.lastErr = forwardErr
 		return &service.OrganizationExecutionAttemptResult{
 			Dispatched: true, TerminalOutcome: terminalOutcome,
@@ -437,7 +436,6 @@ func (a *organizationResponsesHTTPAdapter) resultForForward(
 	var failoverErr *service.UpstreamFailoverError
 	writerSizeUnchanged := a.c == nil || a.c.Writer == nil || a.c.Writer.Size() == writerSizeBefore
 	if errors.As(forwardErr, &failoverErr) && !failoverErr.NoHTTPResponse && writerSizeUnchanged {
-		a.handler.gatewayService.ReportOpenAIAccountScheduleResult(candidate.AccountID, false, nil)
 		a.handler.gatewayService.RecordOpenAIAccountSwitch()
 		a.lastFailover = failoverErr
 		a.lastErr = forwardErr
@@ -453,7 +451,6 @@ func (a *organizationResponsesHTTPAdapter) resultForForward(
 			Dispatched: false, TerminalOutcome: service.OrganizationExecutionTerminalOutcomeError, ZeroProof: a.zeroProof,
 		}, nil
 	}
-	a.handler.gatewayService.ReportOpenAIAccountScheduleResult(candidate.AccountID, false, nil)
 	a.lastErr = forwardErr
 	return &service.OrganizationExecutionAttemptResult{
 		Dispatched: true, PendingReconciliation: true, TerminalOutcome: service.OrganizationAttemptEvidenceTerminalOutcomeUnknown,

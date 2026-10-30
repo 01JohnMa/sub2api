@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
+	middleware2 "github.com/MACOS-DO/sub4api/internal/server/middleware"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
@@ -210,7 +210,7 @@ func (a *organizationOpenAIMessagesAdapter) Dispatch(ctx context.Context, reques
 	previousProviderRequestID := a.c.Request.Header.Get("X-Client-Request-ID")
 	a.c.Request.Header.Set("X-Client-Request-ID", request.ProviderRequestID)
 	promptCacheKey := a.handler.gatewayService.ExtractSessionID(a.c, candidate.ForwardBody)
-	_, promptCacheKey = resolveOpenAIMessagesMetadataSession("", promptCacheKey, a.requestedModel, candidate.ForwardBody)
+	_, promptCacheKey = resolveOpenAIMessagesMetadataSession(a.c, "", promptCacheKey, a.requestedModel, candidate.ForwardBody)
 	result, forwardErr := a.handler.gatewayService.ForwardAsAnthropicOrganizationAttempt(ctx, a.c, candidate.Account, candidate.ForwardBody, promptCacheKey, candidate.DispatchModel)
 	if previousProviderRequestID == "" {
 		a.c.Request.Header.Del("X-Client-Request-ID")

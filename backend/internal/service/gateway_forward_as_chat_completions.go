@@ -33,11 +33,38 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	body []byte,
 	parsed *ParsedRequest,
 ) (*ForwardResult, error) {
+	return s.forwardAsChatCompletions(ctx, c, account, body, parsed, false)
+}
+
+// ForwardAsChatCompletionsOrganizationAttempt performs one frozen organization
+// candidate attempt. The organization execution service owns retries so each
+// provider call has independent reservation evidence.
+func (s *GatewayService) ForwardAsChatCompletionsOrganizationAttempt(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	parsed *ParsedRequest,
+) (*ForwardResult, error) {
+	return s.forwardAsChatCompletions(ctx, c, account, body, parsed, true)
+}
+
+func (s *GatewayService) forwardAsChatCompletions(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	parsed *ParsedRequest,
+	organizationAttempt bool,
+) (*ForwardResult, error) {
 	startTime := time.Now()
 
 	// 1. Parse Chat Completions request
 	var ccReq apicompat.ChatCompletionsRequest
 	if err := json.Unmarshal(body, &ccReq); err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to parse chat completions request", err)
+		}
 		return nil, fmt.Errorf("parse chat completions request: %w", err)
 	}
 	originalModel := ccReq.Model
@@ -46,6 +73,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	// 2. Convert CC → Responses → Anthropic (chained conversion)
 	responsesReq, err := apicompat.ChatCompletionsToResponses(&ccReq)
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to convert chat completions request", err)
+		}
 		return nil, fmt.Errorf("convert chat completions to responses: %w", err)
 	}
 
@@ -92,6 +122,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	// 5. Marshal Anthropic request body
 	anthropicBody, err := json.Marshal(anthropicReq)
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to marshal anthropic request", err)
+		}
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
 
@@ -113,6 +146,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	// 8. Get access token
 	token, tokenType, err := s.GetAccessToken(ctx, account)
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to acquire upstream access token", err)
+		}
 		return nil, fmt.Errorf("get access token: %w", err)
 	}
 
@@ -127,6 +163,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	upstreamReq, forwardedBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
 	releaseUpstreamCtx()
 	if err != nil {
+		if organizationAttempt {
+			return nil, organizationGatewayChatLocalPreDispatchError("failed to construct upstream request", err)
+		}
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
 	// Bill the final Anthropic effort after conversion and account normalization.
@@ -193,6 +232,14 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	}
 
 	return result, handleErr
+}
+
+func organizationGatewayChatLocalPreDispatchError(message string, cause error) error {
+	return &OpenAILocalPreDispatchError{
+		Message:   message,
+		Cause:     cause,
+		ZeroProof: "local_policy_rejected",
+	}
 }
 
 // extractCCReasoningEffortFromBody reads reasoning effort from a Chat Completions
@@ -381,6 +428,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	var usage ClaudeUsage
 	var firstTokenMs *int
 	firstChunk := true
+	clientDisconnected := false
 
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
@@ -391,8 +439,9 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 
 	resultWithUsage := func() *ForwardResult {
 		return &ForwardResult{
-			RequestID:       requestID,
-			UpstreamHeaders: resp.Header,
+			RequestID:        requestID,
+			UpstreamHeaders:  resp.Header,
+			ClientDisconnect: clientDisconnected,
 			Usage:           usage,
 			Model:           originalModel,
 			UpstreamModel:   mappedModel,
@@ -486,6 +535,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		ccState.IncludeUsage = ccState.IncludeUsage || anthropicChatStreamHasUsage(&event, payload)
 
 		if processAnthropicEvent(&event) {
+			clientDisconnected = true
 			return resultWithUsage(), nil
 		}
 	}
@@ -497,6 +547,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 				zap.String("request_id", requestID),
 			)
 		}
+		return resultWithUsage(), fmt.Errorf("read anthropic chat stream: %w", err)
 	}
 
 	// Finalize both state machines
@@ -504,16 +555,22 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	for _, resEvt := range finalResEvents {
 		ccChunks := apicompat.ResponsesEventToChatChunks(&resEvt, ccState)
 		for _, chunk := range ccChunks {
-			writeChunk(chunk) //nolint:errcheck
+			if writeChunk(chunk) {
+				clientDisconnected = true
+			}
 		}
 	}
 	finalCCChunks := apicompat.FinalizeResponsesChatStream(ccState)
 	for _, chunk := range finalCCChunks {
-		writeChunk(chunk) //nolint:errcheck
+		if writeChunk(chunk) {
+			clientDisconnected = true
+		}
 	}
 
 	// Write [DONE] marker
-	fmt.Fprint(c.Writer, "data: [DONE]\n\n") //nolint:errcheck
+	if _, err := fmt.Fprint(c.Writer, "data: [DONE]\n\n"); err != nil {
+		clientDisconnected = true
+	}
 	c.Writer.Flush()
 
 	return resultWithUsage(), nil

@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
+	"github.com/MACOS-DO/sub4api/internal/pkg/openai_compat"
 	"github.com/shopspring/decimal"
 	"github.com/tidwall/gjson"
 )
@@ -445,7 +445,7 @@ func (s *OpenAIGatewayService) PlanOrganizationResponsesCandidates(ctx context.C
 		return nil, ErrOrganizationResponsesNoCandidates
 	}
 	needsUpstreamRestrictionCheck := s.needsUpstreamChannelRestrictionCheck(ctx, input.APIKey.GroupID)
-	accounts, err := s.listSchedulableAccounts(ctx, input.APIKey.GroupID)
+	accounts, err := s.listSchedulableAccounts(ctx, input.APIKey.GroupID, PlatformOpenAI)
 	if err != nil {
 		return nil, ErrOrganizationResponsesNoCandidates
 	}
@@ -481,7 +481,7 @@ func (s *OpenAIGatewayService) PlanOrganizationResponsesCandidates(ctx context.C
 	var maximumCost string
 	for _, accountValue := range accounts {
 		account := accountValue
-		if fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, &account, policy.RequestedModel, false, OpenAIEndpointCapabilityChatCompletions); fresh != nil {
+		if fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, &account, PlatformOpenAI, policy.RequestedModel, false, OpenAIEndpointCapabilityChatCompletions); fresh != nil {
 			account = *fresh
 		} else {
 			continue
@@ -576,7 +576,7 @@ func (s *OpenAIGatewayService) RevalidateOrganizationResponsesCandidate(ctx cont
 		}
 		account = latest
 	}
-	account = s.resolveFreshSchedulableOpenAIAccount(ctx, account, candidate.RequestedModel, false, OpenAIEndpointCapabilityChatCompletions)
+	account = s.resolveFreshSchedulableOpenAIAccount(ctx, account, PlatformOpenAI, candidate.RequestedModel, false, OpenAIEndpointCapabilityChatCompletions)
 	if account == nil || account.IsOpenAIPassthroughEnabled() {
 		return nil, ErrOrganizationResponsesCandidateConflict
 	}

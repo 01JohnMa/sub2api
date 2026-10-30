@@ -5,10 +5,10 @@ import (
 	"errors"
 	"strings"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/organization"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	dbent "github.com/MACOS-DO/sub4api/ent"
+	"github.com/MACOS-DO/sub4api/ent/organization"
+	"github.com/MACOS-DO/sub4api/internal/pkg/pagination"
+	"github.com/MACOS-DO/sub4api/internal/service"
 
 	entsql "entgo.io/ent/dialect/sql"
 )

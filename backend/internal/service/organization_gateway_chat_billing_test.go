@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	"github.com/MACOS-DO/sub4api/internal/domain"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -140,7 +140,7 @@ func TestOrganizationGatewayChatAnthropicStreamMarksClientDisconnectWithObserved
 		}, "\n"))),
 	}
 
-	result, err := (&GatewayService{}).handleCCStreamingFromAnthropic(resp, c, "claude-sonnet-4", "claude-sonnet-4", nil, time.Now(), true)
+	result, err := (&GatewayService{}).handleCCStreamingFromAnthropic(resp, c, "claude-sonnet-4", "claude-sonnet-4", nil, time.Now())
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -176,7 +176,7 @@ func TestOrganizationGatewayChatAnthropicPartialStreamReturnsReconciliationSigna
 		}, "\n"))},
 	}
 
-	result, err := (&GatewayService{}).handleCCStreamingFromAnthropic(resp, c, "claude-sonnet-4", "claude-sonnet-4", nil, time.Now(), true)
+	result, err := (&GatewayService{}).handleCCStreamingFromAnthropic(resp, c, "claude-sonnet-4", "claude-sonnet-4", nil, time.Now())
 
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	require.NotNil(t, result)

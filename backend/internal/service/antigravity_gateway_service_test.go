@@ -487,6 +487,8 @@ func TestAntigravityGatewayService_ForwardGemini_MissingProjectReturnsLocalError
 	require.Empty(t, internal500Cache.incrementCalls)
 	require.Contains(t, writer.Body.String(), "project_id")
 	require.NotContains(t, writer.Body.String(), `"project":""`)
+}
+
 type antigravitySettingValuesRepoStub struct {
 	antigravitySettingRepoStub
 	values map[string]string

@@ -131,11 +131,6 @@ func respondWithTokenPair(c *gin.Context, authService *service.AuthService, user
 		response.ErrorFrom(c, err)
 		return
 	}
-	userResponse, err := h.authenticatedUserResponse(c.Request.Context(), user)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
 
 	tokenPair, err := authService.GenerateTokenPair(c.Request.Context(), user, "")
 	if err != nil {
@@ -146,19 +141,23 @@ func respondWithTokenPair(c *gin.Context, authService *service.AuthService, user
 			response.InternalError(c, "Failed to generate token")
 			return
 		}
+		// 包级路径（passkey 等无 AuthHandler 依赖的调用方）不带组织身份；
+		// 客户端以 /api/v1/users/me 获取完整增强视图。
+		base := dto.AuthenticatedUserFromService(user, personalAccountFieldsAllowed(user, nil))
 		response.Success(c, AuthResponse{
 			AccessToken: token,
 			TokenType:   "Bearer",
-			User:        userResponse,
+			User:        &authenticatedUserResponse{AuthenticatedUser: *base},
 		})
 		return
 	}
+	base := dto.AuthenticatedUserFromService(user, personalAccountFieldsAllowed(user, nil))
 	response.Success(c, AuthResponse{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresIn:    tokenPair.ExpiresIn,
 		TokenType:    "Bearer",
-		User:         userResponse,
+		User:         &authenticatedUserResponse{AuthenticatedUser: *base},
 	})
 }
 

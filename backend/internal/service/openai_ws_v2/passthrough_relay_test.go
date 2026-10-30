@@ -757,6 +757,8 @@ func TestRelay_OnTurnComplete_UsesCurrentResponseCreateModel(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("relay did not stop after client close")
 	}
+}
+
 func TestRelay_OnTurnComplete_BindsConcurrentRequestsByIngressTurn(t *testing.T) {
 	clientConn := newPassthroughTestFrameConn([]passthroughTestFrame{{
 		msgType: coderws.MessageText,

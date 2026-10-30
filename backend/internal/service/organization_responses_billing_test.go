@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	infraerrors "github.com/MACOS-DO/sub4api/internal/pkg/errors"
+	"github.com/MACOS-DO/sub4api/internal/pkg/openai_compat"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -263,7 +263,7 @@ func TestPlanOrganizationResponsesCandidatesAppliesUpstreamChannelRestrictionPer
 		ModelPricing: []ChannelModelPricing{
 			{Platform: PlatformOpenAI, Models: []string{"gpt-5.3-codex"}},
 		},
-	}, groupPlatforms: map[int64]string{groupID: PlatformOpenAI}}, nil, nil, nil)
+	}, groupPlatforms: map[int64]string{groupID: PlatformOpenAI}}, nil, nil, nil, nil)
 	repo := &stubOpenAIAccountRepo{accounts: []Account{
 		{
 			ID: 1, Name: "restricted", Platform: PlatformOpenAI, Type: AccountTypeAPIKey,

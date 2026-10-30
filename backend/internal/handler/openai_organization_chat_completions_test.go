@@ -9,12 +9,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/domain"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/internal/config"
+	"github.com/MACOS-DO/sub4api/internal/domain"
+	"github.com/MACOS-DO/sub4api/internal/pkg/openai_compat"
+	"github.com/MACOS-DO/sub4api/internal/pkg/tlsfingerprint"
+	middleware2 "github.com/MACOS-DO/sub4api/internal/server/middleware"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +22,7 @@ import (
 func TestOrganizationChatPreDispatchRejectionCreatesChatZeroCostEvidence(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{RunMode: config.RunModeStandard}
-	handler := NewOpenAIGatewayHandler(nil, nil, nil, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(nil, nil, nil, nil, nil, nil, nil, nil, cfg)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	recorder := httptest.NewRecorder()
@@ -93,7 +93,7 @@ func TestOrganizationOpenAIChatUnknownResponsesFallbackUsesFrozenAttempts(t *tes
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		&organizationResponsesAccountRepoStub{account: account}, nil, nil, nil, nil, nil, nil, cfg, nil,
-		concurrency, billing, nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil,
+		concurrency, billing, nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	billingCache := service.NewBillingCacheService(
 		nil, nil, nil, nil, organizationResponsesUserRPMCacheStub{}, organizationResponsesUserGroupRateRepoStub{}, cfg,
@@ -101,7 +101,7 @@ func TestOrganizationOpenAIChatUnknownResponsesFallbackUsesFrozenAttempts(t *tes
 	)
 	t.Cleanup(billingCache.Stop)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := organizationResponsesAuthorizedAPIKey()
 	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"max_completion_tokens":64}`)
@@ -167,7 +167,7 @@ func TestOrganizationOpenAIChatResponsesBridgeSettlesObservedUsage(t *testing.T)
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		&organizationResponsesAccountRepoStub{account: account}, nil, nil, nil, nil, nil, nil, cfg, nil,
-		concurrency, billing, nil, nil, organizationOpenAIChatResponsesUpstreamStub{}, nil, nil, nil, nil, nil, nil, nil,
+		concurrency, billing, nil, nil, organizationOpenAIChatResponsesUpstreamStub{}, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	billingCache := service.NewBillingCacheService(
 		nil, nil, nil, nil, organizationResponsesUserRPMCacheStub{}, organizationResponsesUserGroupRateRepoStub{}, cfg,
@@ -175,7 +175,7 @@ func TestOrganizationOpenAIChatResponsesBridgeSettlesObservedUsage(t *testing.T)
 	)
 	t.Cleanup(billingCache.Stop)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := organizationResponsesAuthorizedAPIKey()
 	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"max_completion_tokens":64}`)
@@ -235,7 +235,7 @@ func TestOrganizationOpenAIChatFailoverUsageRecordsPlatformAttemptCost(t *testin
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		&organizationResponsesAccountRepoStub{accounts: accounts}, nil, nil, nil, nil, nil, nil, cfg, nil,
-		concurrency, billing, nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil,
+		concurrency, billing, nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	billingCache := service.NewBillingCacheService(
 		nil, nil, nil, nil, organizationResponsesUserRPMCacheStub{}, organizationResponsesUserGroupRateRepoStub{}, cfg,
@@ -243,7 +243,7 @@ func TestOrganizationOpenAIChatFailoverUsageRecordsPlatformAttemptCost(t *testin
 	)
 	t.Cleanup(billingCache.Stop)
 	executionRepo := &organizationResponsesExecutionRepoStub{}
-	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, cfg)
+	handler := NewOpenAIGatewayHandler(gateway, concurrency, billingCache, nil, nil, nil, nil, nil, cfg)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := organizationResponsesAuthorizedAPIKey()
 	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"max_completion_tokens":64}`)
@@ -299,7 +299,7 @@ func TestOrganizationOpenAIChatAdapterClientDisconnectSettlesUsageWithoutRetry(t
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewOpenAIGatewayService(
 		nil, nil, nil, nil, nil, nil, nil, cfg, nil, nil, billing,
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
@@ -541,12 +541,12 @@ func TestOrganizationGatewayChatAnthropicStreamFailoverWithoutUsageIsPending(t *
 	billing := service.NewBillingService(cfg, nil)
 	gateway := service.NewGatewayService(
 		&organizationGatewayChatAccountRepoStub{accounts: accounts}, nil, nil, nil, nil, nil, nil, nil, cfg, nil,
-		concurrency, billing, nil, nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		concurrency, billing, nil, nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	billingCache := service.NewBillingCacheService(nil, nil, nil, nil, organizationGatewayChatRPMCacheStub{}, organizationGatewayChatUserGroupRateRepoStub{}, cfg, organizationGatewayChatQuotaRepoStub{})
 	t.Cleanup(billingCache.Stop)
 	executionRepo := &organizationGatewayChatRecoveryRepoStub{organizationResponsesExecutionRepoStub: &organizationResponsesExecutionRepoStub{}}
-	handler := NewGatewayHandler(gateway, nil, nil, nil, concurrency, billingCache, nil, nil, nil, nil, nil, nil, cfg, nil)
+	handler := NewGatewayHandler(gateway, nil, nil, nil, nil, concurrency, billingCache, nil, nil, nil, nil, nil, nil, cfg, nil)
 	handler.SetOrganizationExecutionService(service.NewOrganizationExecutionService(executionRepo))
 	apiKey := &service.APIKey{
 		ID: 9, UserID: 7, GroupID: &groupID, OrganizationID: &organizationID, Status: service.StatusActive,

@@ -19,6 +19,20 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+const OpenAIWSUpstreamPreDispatchZeroProof = "upstream_websocket_pre_dispatch_failure"
+
+func notifyOpenAIWSUpstreamPreDispatchFailure(hooks *OpenAIWSIngressHooks, turn int, message string, cause error) error {
+	err := &OpenAILocalPreDispatchError{
+		Message:   message,
+		Cause:     cause,
+		ZeroProof: OpenAIWSUpstreamPreDispatchZeroProof,
+	}
+	if hooks != nil && hooks.AfterTurn != nil {
+		hooks.AfterTurn(turn, nil, err)
+	}
+	return err
+}
+
 type openAIWSClientFrameConn struct {
 	conn                 *coderws.Conn
 	controlCtx           context.Context
@@ -141,6 +155,17 @@ type openAIWSPassthroughUsageMeta struct {
 
 	// 仅在 client->upstream filter goroutine 中读写；Load 侧通过上方原子指针同步。
 	sessionRequestModel string
+
+	// 每 turn 的 service_tier / reasoning_evidence：请求序 turn 与完成序
+	// 可能交错（客户端可提前提交下一轮 response.create），计费归因必须
+	// 按请求序读取。
+	turnMu       sync.RWMutex
+	turnMetadata map[int]openAIWSPassthroughTurnMetadata
+}
+
+type openAIWSPassthroughTurnMetadata struct {
+	serviceTier     *string
+	reasoningEffort *string
 }
 
 func newOpenAIWSPassthroughUsageMeta(initialRequestModel string, firstFrame []byte) *openAIWSPassthroughUsageMeta {
@@ -153,13 +178,18 @@ func newOpenAIWSPassthroughUsageMeta(initialRequestModel string, firstFrame []by
 	return meta
 }
 
-func (m *openAIWSPassthroughUsageMeta) initFromFirstFrame(policyOutput []byte, mappedModel string) {
+func (m *openAIWSPassthroughUsageMeta) initFromFirstFrame(policyOutput []byte, mappedModel string, requestTurn ...int) {
 	if m == nil {
 		return
 	}
 	m.serviceTier.Store(extractOpenAIServiceTierFromBody(policyOutput))
 	m.reasoningEffort.Store(extractOpenAIReasoningEffortFromBody(policyOutput, mappedModel, m.sessionRequestModel))
 	m.storeTurnModels(m.sessionRequestModel, policyOutput)
+	turn := 1
+	if len(requestTurn) > 0 && requestTurn[0] > 0 {
+		turn = requestTurn[0]
+	}
+	m.storeTurnMetadata(turn, policyOutput, m.sessionRequestModel)
 }
 
 func (m *openAIWSPassthroughUsageMeta) captureRequestedReasoningEffort(originalBody []byte, modelCandidates ...string) {
@@ -189,13 +219,56 @@ func (m *openAIWSPassthroughUsageMeta) requestModelForFrame(payload []byte) stri
 	return m.sessionRequestModel
 }
 
-func (m *openAIWSPassthroughUsageMeta) updateFromResponseCreate(policyOutput []byte, mappedModel string, requestModelForFrame string) {
+func (m *openAIWSPassthroughUsageMeta) updateFromResponseCreate(policyOutput []byte, mappedModel string, requestModelForFrame string, requestTurn ...int) {
 	if m == nil {
 		return
 	}
 	m.serviceTier.Store(extractOpenAIServiceTierFromBody(policyOutput))
 	m.reasoningEffort.Store(extractOpenAIReasoningEffortFromBody(policyOutput, mappedModel, requestModelForFrame))
 	m.storeTurnModels(requestModelForFrame, policyOutput)
+	turn := 0
+	if len(requestTurn) > 0 {
+		turn = requestTurn[0]
+	}
+	if turn > 0 {
+		m.storeTurnMetadata(turn, policyOutput, requestModelForFrame)
+	}
+}
+
+func (m *openAIWSPassthroughUsageMeta) storeTurnMetadata(turn int, policyOutput []byte, requestModel string) {
+	if m == nil || turn <= 0 {
+		return
+	}
+	tier := extractOpenAIServiceTierFromBody(policyOutput)
+	reasoning := extractOpenAIReasoningEffortFromBody(policyOutput, requestModel, requestModel)
+	m.turnMu.Lock()
+	if m.turnMetadata == nil {
+		m.turnMetadata = make(map[int]openAIWSPassthroughTurnMetadata)
+	}
+	m.turnMetadata[turn] = openAIWSPassthroughTurnMetadata{serviceTier: cloneStringPointer(tier), reasoningEffort: cloneStringPointer(reasoning)}
+	m.turnMu.Unlock()
+}
+
+func (m *openAIWSPassthroughUsageMeta) takeMetadataForTurn(turn int) (serviceTier, reasoningEffort *string) {
+	if m == nil || turn <= 0 {
+		return nil, nil
+	}
+	m.turnMu.Lock()
+	metadata, ok := m.turnMetadata[turn]
+	delete(m.turnMetadata, turn)
+	m.turnMu.Unlock()
+	if !ok {
+		return nil, nil
+	}
+	return metadata.serviceTier, metadata.reasoningEffort
+}
+
+func cloneStringPointer(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	copied := *value
+	return &copied
 }
 
 func (m *openAIWSPassthroughUsageMeta) storeTurnModels(requestModel string, upstreamPayload []byte) {
@@ -806,13 +879,23 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	// 因此使用 atomic.Pointer[string] 在 filter（runClientToUpstream
 	// goroutine）和 OnTurnComplete / final result（runUpstreamToClient
 	// goroutine）之间同步当前 turn 的 usage metadata。
-	usageMeta.initFromFirstFrame(firstClientMessage, capturedSessionModel)
+	initialTurn := 1
+	if hooks != nil && hooks.InitialTurn > 0 {
+		initialTurn = hooks.InitialTurn
+	}
+	receivedTurns := atomic.Int32{}
+	receivedTurns.Store(int32(initialTurn))
+	acceptedTurnIDs := make(chan int, 16)
+	// 注意：BeforeRequest 不在入口对首个 turn 触发——main 线契约是所有
+	// response.create（含带 previous_response_id 的后续 turn）统一走 filter
+	// 循环里的 BeforeRequest + BeforeTurn，入口重复触发会造成 hook 双发。
+	usageMeta.initFromFirstFrame(firstClientMessage, capturedSessionModel, initialTurn)
 	usageMeta.captureRequestedReasoningEffort(originalFirstClientMessage, capturedSessionModel)
 	_, initialUpstreamModel := usageMeta.turnModels(initialRequestModel)
 	SetOpsUpstreamModel(c, initialUpstreamModel)
 	wsURL, err := s.buildOpenAIResponsesWSURL(account)
 	if err != nil {
-		return fmt.Errorf("build ws url: %w", err)
+		return notifyOpenAIWSUpstreamPreDispatchFailure(hooks, initialTurn, "failed to build upstream websocket URL", err)
 	}
 	wsHost := "-"
 	wsPath := "-"
@@ -864,7 +947,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 
 	dialer := s.getOpenAIWSPassthroughDialer()
 	if dialer == nil {
-		return errors.New("openai ws passthrough dialer is nil")
+		return notifyOpenAIWSUpstreamPreDispatchFailure(hooks, initialTurn, "upstream websocket dialer is unavailable", nil)
 	}
 
 	observeHandshake := s.codexTicketHandshakeObserver(ctx, ticket)
@@ -911,7 +994,12 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			s.persistOpenAIWSRateLimitSignal(ctx, account, handshakeHeaders, nil, "rate_limit_exceeded", "rate_limit_error", strings.TrimSpace(err.Error()), capturedSessionModel)
 			return s.newOpenAIWSRateLimitFailoverError(account, handshakeHeaders, nil, err.Error())
 		}
-		return s.mapOpenAIWSPassthroughDialError(err, statusCode, handshakeHeaders)
+		return notifyOpenAIWSUpstreamPreDispatchFailure(
+			hooks,
+			initialTurn,
+			"upstream websocket handshake failed before dispatch",
+			s.mapOpenAIWSPassthroughDialError(err, statusCode, handshakeHeaders),
+		)
 	}
 	defer func() {
 		_ = upstreamConn.Close()
@@ -925,7 +1013,12 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 
 	upstreamFrameConn, ok := upstreamConn.(openaiwsv2.FrameConn)
 	if !ok {
-		return errors.New("openai ws passthrough upstream connection does not support frame relay")
+		return notifyOpenAIWSUpstreamPreDispatchFailure(
+			hooks,
+			initialTurn,
+			"upstream websocket connection does not support frame relay",
+			nil,
+		)
 	}
 	relayUpstreamFrameConn := &openAIWSPassthroughFirstOutputFrameConn{
 		inner:             upstreamFrameConn,
@@ -1046,10 +1139,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				}
 				usageMeta.captureRequestedReasoningEffort(originalResponseCreate)
 			}
-			turnNo := int(completedTurns.Load()) + 1
-			if turnNo < 2 {
-				turnNo = 2
-			}
+			turnNo := int(receivedTurns.Add(1))
 			requestModelForThisFrame := ""
 			if isResponseCreate {
 				requestModelForThisFrame = usageMeta.requestModelForFrame(payload)
@@ -1118,7 +1208,8 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			//     覆盖（Store(nil)），因为 OpenAI 上游对该帧实际不传
 			//     service_tier 时按 default 处理，billing 应如实反映。
 			if policyErr == nil && blocked == nil && isResponseCreate {
-				usageMeta.updateFromResponseCreate(out, model, requestModelForThisFrame)
+				usageMeta.updateFromResponseCreate(out, model, requestModelForThisFrame, turnNo)
+				acceptedTurnIDs <- turnNo
 				_, actualModel := usageMeta.turnModels(requestModelForThisFrame)
 				SetOpsUpstreamModel(c, actualModel)
 				responseCreateAtCopy := responseCreateAt
@@ -1197,6 +1288,10 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			FirstMessageSent:                upstreamFirstMessageSent,
 			StartClientAfterFirstDownstream: true,
 			ReadClientFrame:                 readNextClientFrame,
+			FirstRequestTurn:                initialTurn,
+			NextRequestTurn: func() int {
+				return <-acceptedTurnIDs
+			},
 			OnUsageParseFailure: func(eventType string, usageRaw string) {
 				logOpenAIWSV2Passthrough(
 					"usage_parse_failed event_type=%s usage_raw=%s",
@@ -1205,7 +1300,13 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				)
 			},
 			OnTurnComplete: func(turn openaiwsv2.RelayTurnResult) {
-				turnNo := int(completedTurns.Add(1))
+				turnNo := turn.RequestTurn
+				if turnNo <= 0 {
+					turnNo = int(completedTurns.Add(1))
+				} else {
+					completedTurns.Add(1)
+				}
+				turnServiceTier, turnReasoningEffort := usageMeta.takeMetadataForTurn(turnNo)
 				if hooks != nil && hooks.TurnStarted != nil && !turn.StartedAt.IsZero() {
 					hooks.TurnStarted(turnNo, turn.StartedAt)
 				}
@@ -1224,8 +1325,8 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					UpstreamResponseModel:         turn.ResponseModel,
 					UpstreamResponseModelConflict: turn.ResponseModelConflict,
 					UpstreamResponseServiceTier:   normalizeObservedOpenAIServiceTier(turn.ResponseServiceTier),
-					ServiceTier:                   usageMeta.serviceTier.Load(),
-					ReasoningEffort:               usageMeta.reasoningEffort.Load(),
+					ServiceTier:                   turnServiceTier,
+					ReasoningEffort:               turnReasoningEffort,
 					RequestedReasoningEffort:      usageMeta.requestedReasoningEffort.Load(),
 					Stream:                        true,
 					OpenAIWSMode:                  true,
@@ -1395,6 +1496,14 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				hooks.TurnStarted(1, time.Now().Add(-result.Duration))
 			}
 			hooks.AfterTurn(1, result, nil)
+		}
+		// 已接受但未收到 terminal 事件的 turn：按零用量收尾，保证组织
+		// ingress 的每个 BeforeRequest 都有对应 AfterTurn 终态。
+		for _, turnNo := range relayResult.PendingRequestTurns {
+			if turnNo <= initialTurn || hooks == nil || hooks.AfterTurn == nil {
+				continue
+			}
+			hooks.AfterTurn(turnNo, nil, nil)
 		}
 		return nil
 	}

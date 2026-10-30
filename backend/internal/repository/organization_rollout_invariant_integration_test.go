@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/ent/organizationallocation"
-	"github.com/Wei-Shaw/sub2api/internal/domain"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/MACOS-DO/sub4api/ent/organizationallocation"
+	"github.com/MACOS-DO/sub4api/internal/domain"
+	"github.com/MACOS-DO/sub4api/internal/service"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"

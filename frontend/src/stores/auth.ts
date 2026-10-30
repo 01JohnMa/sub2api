@@ -96,6 +96,10 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value?.role === 'admin'
   })
 
+  const isOrganizationAdmin = computed(() => {
+    return user.value?.organization_role === 'organization_admin' && user.value.organization?.status === 'active'
+  })
+
   const isSimpleMode = computed(() => runMode.value === 'simple')
   const hasPendingAuthSession = computed(() => pendingAuthSession.value !== null)
 
@@ -311,7 +315,8 @@ export const useAuthStore = defineStore('auth', () => {
       runMode.value = response.user.run_mode
     }
     const { run_mode: _run_mode, ...userData } = response.user
-    user.value = userData
+    // /auth/me 等接口对个人字段是保守可选类型；正常登录用户后端总会带回余额。
+    user.value = userData as User
 
     // Persist to localStorage
     localStorage.setItem(AUTH_TOKEN_KEY, response.access_token)
@@ -443,12 +448,12 @@ export const useAuthStore = defineStore('auth', () => {
         runMode.value = response.data.run_mode
       }
       const { run_mode: _run_mode, ...userData } = response.data
-      user.value = userData
+      user.value = userData as User
 
       // Update localStorage
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
 
-      return userData
+      return userData as User
     } catch (error) {
       // If refresh fails with 401, clear auth state
       if ((error as { status?: number }).status === 401) {
@@ -498,6 +503,7 @@ export const useAuthStore = defineStore('auth', () => {
     // Computed
     isAuthenticated,
     isAdmin,
+    isOrganizationAdmin,
     isSimpleMode,
     hasPendingAuthSession,
 

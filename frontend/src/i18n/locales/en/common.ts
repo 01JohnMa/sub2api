@@ -1,6 +1,7 @@
 export default {
   common: {
     changeLanguage: 'Change language',
+    continue: 'Continue',
     loading: 'Loading...',
     submitting: 'Submitting...',
     justNow: 'just now',

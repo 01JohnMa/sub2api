@@ -1,6 +1,7 @@
 export default {
   common: {
     changeLanguage: '切换语言',
+    continue: '继续',
     loading: '加载中...',
     submitting: '提交中...',
     justNow: '刚刚',

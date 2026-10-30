@@ -52,6 +52,11 @@ vi.mock('@/stores/adminSettings', () => ({
   useAdminSettingsStore: () => ({ customMenuItems: [] })
 }))
 
+// featureFlags 经 '@/stores/app' 直连取公共设置，需单独 mock 以免触达真实 Pinia
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => appStore
+}))
+
 function createUser(overrides: Partial<User> = {}): User {
   return {
     id: 7,
@@ -95,7 +100,8 @@ function mountHeader() {
 
 async function openUserMenu() {
   const wrapper = mountHeader()
-  await wrapper.get('[aria-label="User Menu"]').trigger('click')
+  // i18n mock 的 t() 返回 key 本身，main 版按钮 aria-label 绑定 t('common.userMenu')
+  await wrapper.get('[aria-label="common.userMenu"]').trigger('click')
   await nextTick()
   return wrapper
 }

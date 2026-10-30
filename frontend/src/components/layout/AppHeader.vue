@@ -54,11 +54,11 @@
         <LocaleSwitcher />
 
         <!-- Subscription Progress (for users with active subscriptions; not mounted at all when the feature is off) -->
-        <SubscriptionProgressMini v-if="user && subscriptionFeatureEnabled" />
+        <SubscriptionProgressMini v-if="user && subscriptionFeatureEnabled && showPersonalAccountControls" />
 
-        <!-- Balance Display -->
+        <!-- Balance Display（组织管理员隐藏个人余额/订阅等个人账户控件） -->
         <div
-          v-if="user"
+          v-if="user && showPersonalAccountControls"
           class="group relative hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 dark:bg-primary-900/20 sm:flex"
         >
           <svg
@@ -142,7 +142,7 @@
               </div>
 
               <!-- Balance (mobile only) -->
-              <div class="border-b border-gray-100 px-4 py-2 dark:border-dark-700 sm:hidden">
+              <div v-if="showPersonalAccountControls" class="border-b border-gray-100 px-4 py-2 dark:border-dark-700 sm:hidden">
                 <div class="text-xs text-gray-500 dark:text-dark-400">
                   {{ t('common.balance') }}
                 </div>
@@ -155,12 +155,12 @@
               </div>
 
               <div class="py-1">
-                <router-link to="/profile" @click="closeDropdown" class="dropdown-item">
+                <router-link v-if="showPersonalAccountControls" to="/profile" @click="closeDropdown" class="dropdown-item">
                   <Icon name="user" size="sm" />
                   {{ t('nav.profile') }}
                 </router-link>
 
-                <router-link to="/keys" @click="closeDropdown" class="dropdown-item">
+                <router-link v-if="showPersonalAccountControls" to="/keys" @click="closeDropdown" class="dropdown-item">
                   <Icon name="key" size="sm" />
                   {{ t('nav.apiKeys') }}
                 </router-link>
@@ -288,6 +288,11 @@ const balanceAvailableText = computed(() => t('common.availableBalance') === 'co
 const balanceFrozenText = computed(() => t('common.frozenBalance') === 'common.frozenBalance' ? '冻结金额' : t('common.frozenBalance'))
 const balanceTotalText = computed(() => t('common.totalBalance') === 'common.totalBalance' ? '总余额' : t('common.totalBalance'))
 const balanceFrozenLabel = computed(() => `${balanceFrozenText.value} ${formatHeaderMoney(frozenBalance.value)}`)
+
+// 组织管理员走组织工作台，隐藏个人账户控件（平台管理员始终保留个人视图）
+const showPersonalAccountControls = computed(() => {
+  return !!user.value && (!authStore.isOrganizationAdmin || authStore.isAdmin)
+})
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {

@@ -39,6 +39,11 @@ vi.mock('@/stores', () => ({
   useAppStore: () => appStore,
 }))
 
+// featureFlags 经 '@/stores/app' 直连取公共设置，需单独 mock 以免触达真实 Pinia
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => appStore,
+}))
+
 function mountHome(locale: 'en' | 'zh' = 'en') {
   const i18n = createI18n({
     legacy: false,
@@ -115,17 +120,17 @@ describe('HomeView', () => {
   it('updates all built-in landing-page copy when the locale changes', async () => {
     const { wrapper, i18n } = mountHome('zh')
 
-    expect(wrapper.text()).toContain('正宗海岛中转站')
-    expect(wrapper.text()).toContain('真用量看板')
-    expect(wrapper.get('pixel-coconut-mark-stub').attributes('label')).toBe('coococode 像素椰子标志')
+    expect(wrapper.text()).toContain('订阅转 API')
+    expect(wrapper.text()).toContain('按量计费')
+    expect(wrapper.text()).toContain('已支持的 AI 模型')
 
     i18n.global.locale.value = 'en'
     await nextTick()
 
-    expect(wrapper.text()).toContain('The Genuine Island Relay')
-    expect(wrapper.text()).toContain('Real Usage Dashboard')
-    expect(wrapper.get('pixel-coconut-mark-stub').attributes('label')).toBe('coococode pixel coconut mark')
-    expect(wrapper.text()).not.toContain('正宗海岛中转站')
-    expect(wrapper.text()).not.toContain('真用量看板')
+    expect(wrapper.text()).toContain('Subscription to API')
+    expect(wrapper.text()).toContain('Pay As You Go')
+    expect(wrapper.text()).toContain('Supported AI Models')
+    expect(wrapper.text()).not.toContain('订阅转 API')
+    expect(wrapper.text()).not.toContain('按量计费')
   })
 })

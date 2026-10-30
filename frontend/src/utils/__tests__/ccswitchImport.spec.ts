@@ -165,3 +165,28 @@ describe('CC Switch usage script', () => {
     }
   })
 })
+
+describe('ccswitchImport codexModel override', () => {
+  const input = {
+    baseUrl: 'https://api.example.com',
+    platform: 'openai' as GroupPlatform,
+    clientType: 'claude' as const,
+    providerName: 'Sub2API',
+    apiKey: 'sk-test-key',
+    usageScript: 'return true'
+  }
+
+  it('uses the caller-resolved model instead of the built-in constant', () => {
+    const params = paramsFromDeeplink(
+      buildCcSwitchImportDeeplink({ ...input, codexModel: 'gpt-6.1-sol' })
+    )
+    expect(params.get('model')).toBe('gpt-6.1-sol')
+  })
+
+  it('falls back to the built-in constant when no override is resolved', () => {
+    const params = paramsFromDeeplink(
+      buildCcSwitchImportDeeplink({ ...input, codexModel: '' })
+    )
+    expect(params.get('model')).toBe(OPENAI_CC_SWITCH_CODEX_MODEL)
+  })
+})

@@ -2627,9 +2627,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	if requestPlatform == service.PlatformGrok {
 		requiredTransport = service.OpenAIUpstreamTransportHTTPSSE
 	}
-	// 组织请求的额度校验走组织 allocation，不走个人 billing eligibility。
-	// NOTE(review)：org 场景下上游新增的 balance 在途预留仍会执行，后续需
-	// 将 organization WS 纳入 inflight 豁免面。
+	// 组织请求的额度校验走组织 allocation，不走个人 billing eligibility；
+	// 下方个人余额在途预留同样对组织 WS 豁免（组织资金占用由执行服务闭环）。
 	if !organizationRequest {
 		if err := h.billingCacheService.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 			reqLog.Info("openai.websocket_billing_eligibility_check_failed", zap.Error(err))
@@ -2640,11 +2639,17 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 
 	// 余额模式在途预留（会话级）：按首帧估算一次，会话期间续期；每轮计费任务接管引用，
 	// 会话结束且所有轮次扣减落地后释放。
-	inflightCtx, inflightDone, inflightErr := reserveInflightBalanceCtx(ctx, h.billingCacheService, h.gatewayService, apiKey, subscription, tokenInflightEstimate(reqModel, firstMessage))
-	if inflightErr != nil {
-		reqLog.Info("openai.websocket_inflight_reservation_rejected", zap.Error(inflightErr))
-		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "billing check failed")
-		return
+	// 组织请求的资金占用由组织执行服务的预留/结算闭环负责，个人余额在途预留对组织 WS 豁免。
+	inflightCtx := ctx
+	inflightDone := func() {}
+	if !organizationRequest {
+		var inflightErr error
+		inflightCtx, inflightDone, inflightErr = reserveInflightBalanceCtx(ctx, h.billingCacheService, h.gatewayService, apiKey, subscription, tokenInflightEstimate(reqModel, firstMessage))
+		if inflightErr != nil {
+			reqLog.Info("openai.websocket_inflight_reservation_rejected", zap.Error(inflightErr))
+			closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "billing check failed")
+			return
+		}
 	}
 	defer inflightDone()
 	ctx = inflightCtx

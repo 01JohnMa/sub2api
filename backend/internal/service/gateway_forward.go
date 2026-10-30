@@ -89,14 +89,13 @@ func sleepWithContext(ctx context.Context, d time.Duration) error {
 
 // Forward 转发请求到Claude API
 // gatewayOrganizationAttemptKey 标记组织单次尝试语义：transport 级失败
-// 返回 NoHTTPResponse 的 failover（不向客户端写 502），供组织执行服务
-// 完成单次扣费与证据记录。
+// 返回 NoHTTPResponse 的 failover（不向客户端写 502），且关闭进程内重试，
+// 供组织执行服务完成单次扣费、证据记录与换候选。
 type gatewayOrganizationAttemptCtxKey struct{}
 
 // ForwardOrganizationMessagesAttempt performs at most one provider attempt for
-// an organization execution. NOTE(integration-wip): 复用个人转发路径
-// （上游 1.1.8 重构后 forward 分层尚未接入 organizationAttempt 全语义），
-// transport 失败语义已按组织契约接线；其余重试/换号语义待后续接线。
+// an organization execution：一次预留至多一次上游 HTTP 尝试（签名矫正等
+// 进程内重试关闭），失败以类型化 failover 交还执行服务换候选。
 func (s *GatewayService) ForwardOrganizationMessagesAttempt(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (*ForwardResult, error) {
 	return s.Forward(context.WithValue(ctx, gatewayOrganizationAttemptCtxKey{}, true), c, account, parsed)
 }
@@ -402,10 +401,17 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	}
 
 	// 重试循环
+	// 组织单次尝试契约：一次预留至多一次上游 HTTP 尝试；签名矫正/临时错误等
+	// 进程内重试对组织请求关闭，失败以类型化 failover 交还执行服务换候选。
+	organizationAttempt := isGatewayOrganizationAttempt(ctx)
+	attemptBudget := maxRetryAttempts
+	if organizationAttempt {
+		attemptBudget = 1
+	}
 	var resp *http.Response
 	lastWireBody := body
 	retryStart := time.Now()
-	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
+	for attempt := 1; attempt <= attemptBudget; attempt++ {
 		// 构建上游请求（每次重试需要重新构建，因为请求体需要重新读取）
 		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
 		upstreamReq, wireBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, body, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)

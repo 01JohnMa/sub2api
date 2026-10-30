@@ -2023,9 +2023,31 @@ const importToCcswitch = (row: ApiKey) => {
   executeCcsImport(row, platform === 'gemini' ? 'gemini' : 'claude')
 }
 
-const executeCcsImport = (row: ApiKey, clientType: CcSwitchClientType) => {
+// 导出 CC-Switch 配置时，按该 key 实际能用的模型来写 model，避免写死一个网关里不存在的模型名
+const resolveCcSwitchCodexModel = async (baseUrl: string, apiKey: string): Promise<string> => {
+  const FALLBACK_MODELS = ['gpt-6.1-sol', 'gpt-6-luna', 'gpt-6-astra']
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/v1/models`, {
+      headers: { Authorization: `Bearer ${apiKey}` }
+    })
+    if (res.ok) {
+      const payload = await res.json()
+      const ids: string[] = (payload?.data ?? [])
+        .map((item: any) => item?.id)
+        .filter((id: any) => typeof id === 'string')
+      const candidate = ids.find((id) => /^gpt-/.test(id) && !/image/i.test(id))
+      if (candidate) return candidate
+    }
+  } catch {
+    // 取不到模型列表时退回静态候选
+  }
+  return FALLBACK_MODELS[0] || ''
+}
+
+const executeCcsImport = async (row: ApiKey, clientType: CcSwitchClientType) => {
   const baseUrl = publicSettings.value?.api_base_url || window.location.origin
   const platform = row.group?.platform || 'anthropic'
+  const codexModel = platform === 'openai' ? await resolveCcSwitchCodexModel(baseUrl, row.key) : ''
 
   const usageScript = CC_SWITCH_USAGE_SCRIPT
   const providerName = (publicSettings.value?.site_name || 'sub2api').trim() || 'sub2api'
@@ -2033,6 +2055,7 @@ const executeCcsImport = (row: ApiKey, clientType: CcSwitchClientType) => {
     baseUrl,
     platform,
     clientType,
+    codexModel,
     providerName,
     apiKey: row.key,
     usageScript

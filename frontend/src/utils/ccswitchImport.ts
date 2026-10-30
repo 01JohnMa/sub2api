@@ -19,6 +19,8 @@ export interface CcSwitchImportDeeplinkInput {
   providerName: string
   apiKey: string
   usageScript: string
+  /** 可选：调用方按该 key 实际可用的模型解析出的 Codex model，缺省时退回内置常量 */
+  codexModel?: string
 }
 
 /**
@@ -58,7 +60,8 @@ function withoutTrailingSlashes(baseUrl: string): string {
 export function resolveCcSwitchImportConfig(
   platform: GroupPlatform | undefined | null,
   clientType: CcSwitchClientType,
-  baseUrl: string
+  baseUrl: string,
+  codexModel?: string
 ): CcSwitchImportConfig {
   switch (platform || 'anthropic') {
     case 'antigravity':
@@ -72,7 +75,7 @@ export function resolveCcSwitchImportConfig(
         // CC Switch's Codex provider appends the OpenAI-compatible path itself.
         // Passing /v1 here can make the client request /v1/v1/....
         endpoint: withoutTrailingSlashes(baseUrl),
-        model: OPENAI_CC_SWITCH_CODEX_MODEL
+        model: codexModel || OPENAI_CC_SWITCH_CODEX_MODEL
       }
     case 'gemini':
       return {
@@ -94,7 +97,7 @@ export function resolveCcSwitchImportConfig(
 }
 
 export function buildCcSwitchImportDeeplink(input: CcSwitchImportDeeplinkInput): string {
-  const config = resolveCcSwitchImportConfig(input.platform, input.clientType, input.baseUrl)
+  const config = resolveCcSwitchImportConfig(input.platform, input.clientType, input.baseUrl, input.codexModel)
   const entries: [string, string][] = [
     ['resource', 'provider'],
     ['app', config.app],

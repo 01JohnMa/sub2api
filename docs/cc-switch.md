@@ -24,7 +24,9 @@ CC Switch 是一个开源桌面工具（[GitHub](https://github.com/farion1231/c
 2. 点击右上角 **+** 添加供应商，选择自定义添加（coococode 无内置预设，需手动填写）
 3. 填写配置：
    - **名称**：`coococode`
-   - **API 地址**：`https://coococode.com`
+   - **API 地址**：按使用的模型二选一：
+     - 国外模型（Claude / GPT 等系列）：`https://api.coococode.com`
+     - 智谱 GLM 系列（glm-5.3 等）：`https://glm.coococode.com:8443`（端口必须带上）
    - **API Key**：第 2 步复制的密钥
 4. 保存后，在主界面点击该供应商右侧的「启用」，显示「使用中」即切换成功
 5. 验证：终端运行 `claude`，能正常对话即接入完成
@@ -32,18 +34,21 @@ CC Switch 是一个开源桌面工具（[GitHub](https://github.com/farion1231/c
 > 不用 CC Switch 时，等价的环境变量配置：
 >
 > ```bash
-> export ANTHROPIC_BASE_URL=https://coococode.com
+> export ANTHROPIC_BASE_URL=https://api.coococode.com
 > export ANTHROPIC_AUTH_TOKEN=sk-你的密钥
 > ```
+>
+> 用智谱 GLM 模型时，`ANTHROPIC_BASE_URL` 改为 `https://glm.coococode.com:8443`。
 
 ## 4. 配置 Codex
 
 1. CC Switch 顶部应用切换栏选择 **Codex**，点击右上角 **+** 添加供应商
 2. 填写配置：
    - **名称**：`coococode`
-   - **API 地址**：`https://coococode.com/v1`（注意带 `/v1`）
+   - **API 地址**：`https://api.coococode.com/v1`（注意带 `/v1`）
    - **API Key**：同一个密钥即可
 3. 启用后，终端运行 `codex`，能正常对话即接入完成
+4. GPT 模型推荐使用 `gpt-6.1-sol` 和 `gpt-6.1-terra`
 
 ## 5. 常见问题
 

@@ -59,6 +59,23 @@ Stop and do not enable organization statistics when:
 - the release requires reservation, ledger, final evidence, or reconciliation to complete a normal request;
 - any secret or request body appears in evidence.
 
-## 6. Deferred Work
+## 6. Preconditions Verified (2026-10-30)
+
+Task 5.5 的工程前置已在 `integration/org-tenancy`（合并回 main）逐项核验：
+
+1. **加性 schema**：`users.organization_id`、`api_keys.organization_id` 均为
+   `Nullable: true`（`backend/ent/migrate/schema.go`）；存量用户/Key 保持
+   `organization_id IS NULL`，个人路径行为不变。
+2. **默认关闭 + 双闸门**：组织计费能力由
+   `cfg.Gateway.OrganizationSpending.Enabled && 非生产环境` 双重控制
+   （`organization_spending_capability.go`）——生产环境即使配置打开也被强制
+   关闭；组织 Key 在生产上对所有计费端点 fail-closed。
+3. **个人路径回归**：`go test ./...` 52/52 包通过、前端 2,758/2,758 测试
+   通过；任务 2.4（并发归属快照）与 5.2（前端四件套）已补齐。
+4. **启用组织统计**（部署时执行）：非生产环境先以
+   `Gateway.OrganizationSpending.Enabled=true` + 按 family/shape 的 rollout
+   map 灰度；生产环境启用需代码层解除环境闸门后再走相同灰度。
+
+## 7. Deferred Work
 
 Organization funding, member allocation, independent spending, reservation, attempt/provider evidence, final execution evidence, ledger, settlement, pending reconciliation, and archive balance freeze require a separate reviewed OpenSpec change and separate rollout contract.

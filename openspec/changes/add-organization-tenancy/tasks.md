@@ -12,7 +12,7 @@
 - [x] 2.1 Resolve the current organization from server-side API Key/User state after existing authentication; ignore client-supplied organization values.
 - [x] 2.2 Keep personal behavior unchanged when the resolved organization is NULL.
 - [x] 2.3 Define the disabled-organization read/access response without introducing organization funding or billing behavior.
-- [ ] 2.4 Test membership change versus concurrent request attribution: old accepted requests retain their captured organization, new requests use committed state.
+- [x] 2.4 Test membership change versus concurrent request attribution: old accepted requests retain their captured organization, new requests use committed state.
 
 ## 3. Reuse Existing Telemetry And Reports
 
@@ -31,10 +31,10 @@
 ## 5. Verification And Rollout
 
 - [x] 5.1 Run targeted backend schema, auth, telemetry, reporting, handler, and two-organization integration tests.
-- [ ] 5.2 Run frontend lint, typecheck, unit tests, and build using existing repository scripts when frontend files are changed.
+- [x] 5.2 Run frontend lint, typecheck, unit tests, and build using existing repository scripts when frontend files are changed.
 - [x] 5.3 Run `openspec status --change add-organization-tenancy --json` and strict validation.
 - [x] 5.4 Review the final diff and verify no organization allocation, reservation, ledger, final-evidence, pending-reconciliation, or independent billing requirement remains in this change.
-- [ ] 5.5 Roll out nullable schema and compatible code first; enable organization statistics only after personal-path regression checks pass.
+- [x] 5.5 Roll out nullable schema and compatible code first; enable organization statistics only after personal-path regression checks pass.
 
 ## Deferred To A Separate Change
 

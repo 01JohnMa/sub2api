@@ -154,6 +154,7 @@ docs/*
 !docs/COMPOSITE_GROUPS.md
 !docs/openai-bps.md
 !docs/openai-bps-sources.md
+!docs/production-alignment-plan.md
 !docs/PLUGIN_DEVELOPMENT.md
 !docs/channel-monitor-v2-safe-defaults.md
 !docs/CODEX_PROBE_TEMPLATE.md

@@ -3244,6 +3244,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		for {
 			err := h.gatewayService.ProxyResponsesWebSocketFromClient(ctx, c, wsConn, account, token, wsFirstMessage, hooks)
 			if err == nil {
+				if organizationTurns != nil {
+					organizationTurns.Close(nil)
+				}
 				reqLog.Info("openai.websocket_ingress_closed", zap.Int64("account_id", account.ID))
 				return
 			}
@@ -3374,19 +3377,16 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			}
 			reqLog.Warn("openai.websocket_proxy_failed", proxyFailedFields...)
 			if hasClientCloseErr {
-				closeOpenAIClientWS(wsConn, closeErr.StatusCode(), closeErr.Reason())
-				return
-			}
-			closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "upstream websocket proxy failed")
+			closeOpenAIClientWS(wsConn, closeErr.StatusCode(), closeErr.Reason())
 			return
 		}
-		if organizationTurns != nil {
-			organizationTurns.Close(nil)
-		}
-		reqLog.Info("openai.websocket_ingress_closed", zap.Int64("account_id", account.ID))
+		closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "upstream websocket proxy failed")
 		return
 	}
-
+	// 内层 relay 循环仅剩的出口是 handleWSFailover 的 break（换号重试）：
+	// 直落外层账号循环体末尾继续迭代。此处不得 return，否则 failover
+	// 会被误判为终态并关闭客户端连接（merge 损伤，已修复）。
+	}
 }
 
 func handoffOrganizationResponsesWSAccount(

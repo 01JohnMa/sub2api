@@ -798,12 +798,6 @@ func parseZhipuTokenTiers(data gjson.Result) []CNQuotaTier {
 	}
 	// CREDIT_LIMIT 按 unit 分类的候选槽位：仅当响应无任何 TOKENS_LIMIT 条目时降级启用，
 	// 不与 TOKENS_LIMIT 竞争正位（团队版 type=2 响应即纯 CREDIT_LIMIT + 显式 unit 形态）。
-	var (
-		credit5h        entry
-		credit5hSet     bool
-		creditWeekly    entry
-		creditWeeklySet bool
-	)
 	var creditFallback []entry
 	hasTokensLimit := false
 
@@ -837,20 +831,9 @@ func parseZhipuTokenTiers(data gjson.Result) []CNQuotaTier {
 			hasTokensLimit = true
 			classify(e.unit, e)
 		} else {
-			// CREDIT_LIMIT：有显式 unit 的按 unit 记入候选槽位（首条优先），
-			// unit 缺失的留给 reset 启发式兜底。
-			switch classifyZhipuWindowUnit(item.Get("unit").Int()) {
-			case cnZhipuWindow5h:
-				if !credit5hSet {
-					credit5h, credit5hSet = e, true
-				}
-			case cnZhipuWindowWeekly:
-				if !creditWeeklySet {
-					creditWeekly, creditWeeklySet = e, true
-				}
-			default:
-				creditFallback = append(creditFallback, e)
-			}
+			// CREDIT_LIMIT：一律进候选池，由下方降级分支按显式 unit 优先分类，
+			// unit 缺失的条目才走 reset 时间启发式（上游 0.2.17 的修正语义）。
+			creditFallback = append(creditFallback, e)
 		}
 		return true
 	})

@@ -48,7 +48,7 @@ CC Switch 是一个开源桌面工具（[GitHub](https://github.com/farion1231/c
    - **API 地址**：`https://api.coococode.com/v1`（注意带 `/v1`）
    - **API Key**：同一个密钥即可
 3. 启用后，终端运行 `codex`，能正常对话即接入完成
-4. GPT 模型推荐使用 `gpt-6.1-sol` 和 `gpt-6.1-terra`
+4. GPT 模型推荐 `gpt-6.1-sol`（近 24h 实测成功率 97.7%）
 
 ## 5. 常见问题
 

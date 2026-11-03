@@ -21,6 +21,6 @@
 快速自查两项：
 
 - Claude Code 的 API 地址按模型填：国外模型（Claude / GPT 等）为 `https://api.coococode.com`（不带 `/v1`）；智谱 GLM 模型为 `https://glm.coococode.com:8443`（端口必须带上）
-- Codex 的 API 地址应为 `https://api.coococode.com/v1`（带 `/v1`），GPT 模型推荐 `gpt-6.1-sol` / `gpt-6.1-terra`
+- Codex 的 API 地址应为 `https://api.coococode.com/v1`（带 `/v1`），GPT 模型推荐 `gpt-6.1-sol`
 
 按教程配置后仍失败的，把报错信息发到群里并 @ 智能助手，助手会转达管理员排查。

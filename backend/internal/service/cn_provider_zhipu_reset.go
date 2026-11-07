@@ -29,8 +29,11 @@ import (
 // 鉴权头与额度探测一致：Authorization 直接放 API Key，不加 Bearer 前缀。
 // 每张卡独立有效期；用周卡会同时重置 5h 窗口。默认与官网一致，选最早到期的卡。
 //
-// 支持范围：只支持国内站（open.bigmodel.cn）个人版。国际站（z.ai）是否提供同一套
-// 接口未经验证，团队版需要额外的组织/项目上下文，两者都直接拒绝、不发上游请求。
+// 支持范围：只支持国内站（open.bigmodel.cn）。国际站（z.ai）是否提供同一套接口未经验证，
+// 直接拒绝、不发上游请求。团队版（凭证带 zhipu_organization）按团队契约走：
+//   - list 用 ?targetType=TEAM，并带 bigmodel-organization / bigmodel-project 两个请求头；
+//   - use 的 body 只发 {targetType:"TEAM", resetType}：团队端点收到 recordId 或 grantType
+//     会回 400（「指定的重置次数不可用」/「不支持的券来源类型」），由上游自动挑最早到期的卡。
 //
 // 用卡是「消耗型」操作：卡一旦用掉，后续的快照刷新与账号状态恢复必须跑完，
 // 不能因为发起请求的客户端断开而中止。所以 use → 刷新卡列表 → 强制重探额度
@@ -42,7 +45,9 @@ const (
 	ZhipuResetTypeFiveHour = "FIVE_HOUR"
 
 	zhipuResetTargetPersonal = "PERSONAL"
-	zhipuResetListPath       = "/api/biz/customer-package-reset/list?targetType=" + zhipuResetTargetPersonal
+	zhipuResetTargetTeam     = "TEAM"
+	// zhipuResetListBasePath 按账号拼 targetType：个人版与团队版是两个独立端点。
+	zhipuResetListBasePath = "/api/biz/customer-package-reset/list?targetType="
 	zhipuResetUsePath        = "/api/biz/customer-package-reset/use"
 	// zhipuResetSupportedHost 是唯一支持重置卡的额度主机（国内站）。
 	zhipuResetSupportedHost = "https://open.bigmodel.cn"
@@ -230,6 +235,11 @@ func (s *CNProviderQuotaService) UseZhipuResetCard(ctx context.Context, accountI
 	if err := validateZhipuResetAccount(account); err != nil {
 		return nil, err
 	}
+	if zhipuResetIsTeam(account) {
+		// 团队端点不接受 recordId，上游固定挑最早到期那张；本地按同一规则选，
+		// 保证「前端选中/日志记录/上游实际消耗」三者一致，并让并发用卡合并到同一个 key。
+		req.RecordID = 0
+	}
 
 	key := fmt.Sprintf("zhipu_reset_use:%d:%s:%d", account.ID, resetType, req.RecordID)
 	resultCh := s.flight.DoChan(key, func() (any, error) {
@@ -302,13 +312,17 @@ func (s *CNProviderQuotaService) useZhipuResetCard(ctx context.Context, account 
 	result.RecordID = card.RecordID
 	result.ExpireTime = card.ExpireTime
 
-	payload, err := json.Marshal(map[string]any{
-		"targetType": zhipuResetTargetPersonal,
+	payloadFields := map[string]any{
+		"targetType": zhipuResetTargetTypeFor(account),
 		"resetType":  resetType,
-		"recordId":   card.RecordID,
-		"grantType":  card.GrantType,
 		"requestId":  uuid.NewString(),
-	})
+	}
+	if !zhipuResetIsTeam(account) {
+		// 个人版端点要求显式 recordId + grantType。
+		payloadFields["recordId"] = card.RecordID
+		payloadFields["grantType"] = card.GrantType
+	}
+	payload, err := json.Marshal(payloadFields)
 	if err != nil {
 		return nil, infraerrors.Newf(http.StatusInternalServerError, "CN_QUOTA_REQUEST_BUILD_FAILED", "build request body: %v", err)
 	}
@@ -364,7 +378,7 @@ func (s *CNProviderQuotaService) useZhipuResetCard(ctx context.Context, account 
 // listAndPersistZhipuResetCards 请求 list 并在成功时落快照。
 // 返回值：err 为配置/校验级错误（URL 被策略拒绝、缺 API Key 等），failure 为上游失败。
 func (s *CNProviderQuotaService) listAndPersistZhipuResetCards(ctx context.Context, account *Account) (*ZhipuResetCards, *zhipuResetFailure, error) {
-	status, body, failure, err := s.doZhipuResetRequest(ctx, account, http.MethodGet, zhipuResetListPath, nil)
+	status, body, failure, err := s.doZhipuResetRequest(ctx, account, http.MethodGet, zhipuResetListPathFor(account), nil)
 	if err != nil || failure != nil {
 		return nil, failure, err
 	}
@@ -409,6 +423,12 @@ func (s *CNProviderQuotaService) doZhipuResetRequest(ctx context.Context, accoun
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept-Language", "en-US,en")
+	// 团队版必须带组织与项目请求头（智谱只认请求头，不认 query 参数）。
+	// 放在 header overrides 之前，账号级覆写仍可覆盖。
+	if zhipuResetIsTeam(account) {
+		req.Header.Set("bigmodel-organization", strings.TrimSpace(account.GetCredential("zhipu_organization")))
+		req.Header.Set("bigmodel-project", strings.TrimSpace(account.GetCredential("zhipu_project")))
+	}
 	account.ApplyHeaderOverrides(req.Header)
 
 	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, maxInt(account.Concurrency, 1))
@@ -734,10 +754,33 @@ func validateZhipuResetAccount(account *Account) error {
 	if zhipuQuotaHost(account.GetOpenAIBaseURL()) != zhipuResetSupportedHost {
 		return infraerrors.New(http.StatusBadRequest, ZhipuResetErrRegionUnsupported, "reset cards are only supported for zhipu accounts on open.bigmodel.cn")
 	}
-	if strings.TrimSpace(account.GetCredential("zhipu_organization")) != "" {
-		return infraerrors.New(http.StatusBadRequest, ZhipuResetErrTeamUnsupported, "reset cards are not supported for zhipu team coding plan accounts yet")
+	if zhipuResetIsTeam(account) && strings.TrimSpace(account.GetCredential("zhipu_project")) == "" {
+		// 团队端点必须同时带组织与项目两个请求头，缺项目 id 时上游会回 400，提前给出明确错误。
+		return infraerrors.New(http.StatusBadRequest, ZhipuResetErrTeamUnsupported, "zhipu team account is missing zhipu_project credential; reset cards need both organization and project")
 	}
 	return nil
+}
+
+// zhipuResetTargetTypeFor 返回该账号适用的重置卡 targetType：
+// 凭证带 zhipu_organization 即团队版（走 TEAM），否则个人版（PERSONAL）。
+func zhipuResetTargetTypeFor(account *Account) string {
+	if zhipuResetIsTeam(account) {
+		return zhipuResetTargetTeam
+	}
+	return zhipuResetTargetPersonal
+}
+
+// zhipuResetIsTeam 判断是否团队版 coding plan 账号。
+func zhipuResetIsTeam(account *Account) bool {
+	if account == nil {
+		return false
+	}
+	return strings.TrimSpace(account.GetCredential("zhipu_organization")) != ""
+}
+
+// zhipuResetListPathFor 按账号拼 list 路径（个人版/团队版 targetType 不同）。
+func zhipuResetListPathFor(account *Account) string {
+	return zhipuResetListBasePath + zhipuResetTargetTypeFor(account)
 }
 
 // RefreshUsageAfterReset 用卡后强制重新探测额度并落快照。

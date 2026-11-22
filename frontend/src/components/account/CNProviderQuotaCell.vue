@@ -4,7 +4,7 @@
     data-test="cn-provider-quota"
     class="min-w-[220px] space-y-1"
   >
-    <!-- Tier rows: 5h + weekly utilization bars (snapshot renders on mount).
+    <!-- Tier rows: 5h + weekly utilization bars from the current snapshot/probe.
          复用账号页 UsageProgressBar：同阈值配色、同倒计时格式。 -->
     <div v-if="data?.success && data.tiers?.length" class="space-y-1">
       <UsageProgressBar
@@ -130,7 +130,8 @@ const visible = computed(() => cnQuotaCellVisible(props.account))
 
 const loading = ref(false)
 const error = ref<string | null>(null)
-const data = ref<CNProviderQuotaProbeResult | null>(null)
+const probeData = ref<CNProviderQuotaProbeResult | null>(null)
+let probeGeneration = 0
 
 const resetCardsSupported = computed(() =>
   zhipuResetCardsSupported(props.account.platform, props.account.credentials)
@@ -182,6 +183,18 @@ const snapshotData = computed<CNProviderQuotaProbeResult | null>(() => {
   return { success: true, tiers } as CNProviderQuotaProbeResult
 })
 
+const data = computed(() => probeData.value ?? snapshotData.value)
+
+// A list refresh replaces account.extra even when its quota snapshot is
+// unchanged. Keep a manual probe until the quota values or snapshot version
+// actually change, rather than reverting it on unrelated account updates.
+watch(
+  [snapshotData, () => readExtraString(`${props.account.platform}_usage_updated_at`)],
+  (next, previous) => {
+    if (JSON.stringify(next) !== JSON.stringify(previous)) probeData.value = null
+  }
+)
+
 // 智谱周额度重置按钮显隐（与官网「用量重置额度」卡片同源：有 available=true 的
 // 周重置次数才显示）。优先用本次会话的实时探测结果；尚未探测时回落持久化快照。
 const snapshotResetAvailable = computed(() =>
@@ -201,7 +214,6 @@ const resetTooltip = computed(() => {
   const base = t('admin.accounts.cnProviders.resetTooltip')
   return expire ? `${base}（${t('admin.accounts.cnProviders.resetExpire')}: ${expire}）` : base
 })
-
 // 快照是否过期（无更新时间或超过 staleness 窗口）→ 挂载时需要自动探测。
 const snapshotIsStale = computed(() => {
   const updatedAt = readExtraString(`${props.account.platform}_usage_updated_at`)
@@ -214,7 +226,6 @@ const snapshotIsStale = computed(() => {
 // 避免静默失败导致单元格空白无提示）。
 onMounted(() => {
   if (!visible.value) return
-  data.value = snapshotData.value
   if (!snapshotIsStale.value) return
   // 模块级去抖：列表页每行一个实例，翻页/筛选/刷新会重复挂载；同一账号
   // 短时间内已自动探测过则跳过，避免对上游形成探测风暴。
@@ -266,30 +277,33 @@ const refreshResetCards = async (): Promise<string | null> => {
 // 并行、互不影响；挂载时的自动探测只刷新额度。
 const handleProbe = async (withResetCards = false) => {
   if (loading.value) return
+  const generation = ++probeGeneration
+  const accountID = props.account.id
   loading.value = true
   error.value = null
   const cardsRequest = withResetCards && resetCardsSupported.value ? refreshResetCards() : null
   try {
-    const result = await adminAPI.cnProviders.queryQuota(props.account.id)
+    const result = await adminAPI.cnProviders.queryQuota(accountID)
+    if (generation !== probeGeneration) return
     // 失败时保留已渲染的快照条形图（仅显示错误行），成功才覆盖。
     if (result.success) {
-      data.value = result
+      probeData.value = result
     } else {
       error.value = result.error || t('common.error')
     }
   } catch (e) {
-    error.value = extractErrorMessage(e)
+    if (generation === probeGeneration) error.value = extractErrorMessage(e)
   } finally {
     const cardsError = await cardsRequest
     if (cardsError && !error.value) error.value = cardsError
-    loading.value = false
+    if (generation === probeGeneration) loading.value = false
   }
 }
 
 // 用卡成功：后端已刷新卡列表、强制重探额度并恢复账号状态，直接用响应刷新展示。
 const handleResetCardUsed = (result: ZhipuResetCardUseResult) => {
   if (result.cards) resetCards.value = result.cards
-  if (result.probe?.success) data.value = result.probe
+  if (result.probe?.success) probeData.value = result.probe
 }
 
 watch(
@@ -313,7 +327,7 @@ const handleReset = async () => {
     if (result.success) {
       // 后端已带回刷新后的用量快照（reset_available 同步更新，按钮随即隐藏）。
       if (result.probe?.success) {
-        data.value = result.probe
+        probeData.value = result.probe
       } else {
         await handleProbe()
       }
@@ -327,9 +341,10 @@ const handleReset = async () => {
   }
 }
 watch(
-  () => props.account.id,
+  [() => props.account.id, () => props.account.platform],
   () => {
-    data.value = null
+    probeGeneration++
+    probeData.value = null
     error.value = null
     loading.value = false
     resetCards.value = null

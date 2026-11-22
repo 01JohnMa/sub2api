@@ -294,7 +294,7 @@ func TestParseZhipuTokenTiers_IgnoresNonTokenEntries(t *testing.T) {
 // TestParseZhipuTokenTiers_CreditLimitUnitClassification 团队版（type=2）响应为纯
 // CREDIT_LIMIT + 显式 unit 形态（2026-09-15 官网抓包），周期末尾周窗口 reset 早于 5h，
 // unit 分类必须胜出，不能走 reset 升序启发式标反窗口。
-func TestParseZhipuTokenTiers_CreditLimitUnitClassification(t *testing.T) {
+func TestParseZhipuTokenTiers_CreditLimitUnitClassificationTeamPlan(t *testing.T) {
 	t.Parallel()
 	data := gjson.Parse(`{
 		"limits": [

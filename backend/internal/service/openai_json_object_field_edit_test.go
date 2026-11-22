@@ -133,7 +133,29 @@ func TestEnsureDeepSeekChatReasoningPlaceholdersLargeConversation(t *testing.T) 
 	got := ensureDeepSeekChatReasoningPlaceholders(openaiPlatformDeepSeekAccount(), body)
 	_, indexes, values := assistantEdits(body, "reasoning_content", func(int) string { return deepSeekChatReasoningPlaceholderText })
 	require.Len(t, indexes, 200)
-	require.Equal(t, string(setStringFieldBySJSONLoop(t, body, "messages", "reasoning_content", indexes, values)), string(got))
+	want := setStringFieldBySJSONLoop(t, body, "messages", "reasoning_content", indexes, values)
+	// ccs 定制：DeepSeek v4 把 thinking 回传字段改名（reasoning_content <-> reasoning_text），
+	// 实现会对 assistant 消息做双向镜像补齐（与 openai_gateway_responses_chat_fallback.go 一致），
+	// 参考实现也要带上同样的镜像，否则断言的是上游行为而非定制行为。
+	for i, msg := range gjson.GetBytes(want, "messages").Array() {
+		if strings.TrimSpace(msg.Get("role").String()) != "assistant" {
+			continue
+		}
+		rc := msg.Get("reasoning_content").String()
+		rt := msg.Get("reasoning_text").String()
+		field, v := "", ""
+		if rc != "" && rt == "" {
+			field, v = "reasoning_text", rc
+		} else if rt != "" && rc == "" {
+			field, v = "reasoning_content", rt
+		}
+		if field != "" {
+			next, err := sjson.SetBytes(want, "messages."+strconv.Itoa(i)+"."+field, v)
+			require.NoError(t, err)
+			want = next
+		}
+	}
+	require.Equal(t, string(want), string(got))
 }
 
 func TestNormalizeOllamaCloudChatCompletionsRequestMatchesSJSON(t *testing.T) {

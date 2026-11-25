@@ -1064,6 +1064,9 @@ type GatewayConfig struct {
 	GrokResponseHeaderTimeout int `mapstructure:"grok_response_header_timeout"`
 	// OpenAIFirstOutputTimeoutSeconds: native HTTP Responses 首个语义输出超时（秒），0表示禁用。
 	OpenAIFirstOutputTimeoutSeconds int `mapstructure:"openai_first_output_timeout_seconds"`
+
+	// ZhipuFallbackFirstOutputTimeoutSeconds: 智谱回退请求首语义输出超时（秒），0 表示禁用。
+	ZhipuFallbackFirstOutputTimeoutSeconds int `mapstructure:"zhipu_fallback_first_output_timeout_seconds"`
 	// OpenAIHighEffortFirstOutputTimeoutSeconds: high/xhigh/max 推理的首个语义输出超时（秒）。
 	// 0 表示回退到 OpenAIFirstOutputTimeoutSeconds。
 	OpenAIHighEffortFirstOutputTimeoutSeconds int `mapstructure:"openai_high_effort_first_output_timeout_seconds"`
@@ -1220,6 +1223,10 @@ type GatewayConfig struct {
 	// CNProviders: 国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）的余额检测配置。
 	// 仅作用于 payg（按量付费）账号：周期探测余额，低于阈值则临时停调。
 	CNProviders GatewayCNProvidersConfig `mapstructure:"cn_providers"`
+
+	// ZhipuDeepSeekFallback: 智谱 -> DeepSeek 本地模型路由（单 Key 灰度，默认关闭）。
+	// 此处只承载配置与启动期校验；运行期是否生效由调用方判定。
+	ZhipuDeepSeekFallback GatewayZhipuDeepSeekFallbackConfig `mapstructure:"zhipu_deepseek_fallback"`
 }
 
 // GatewayGrokConfig holds Grok-specific gateway scheduling knobs.
@@ -1262,6 +1269,22 @@ type GatewayCNProvidersConfig struct {
 	BalanceCheckEnabled         bool    `mapstructure:"balance_check_enabled"`
 	BalanceThreshold            float64 `mapstructure:"balance_threshold"`
 	BalanceCheckIntervalMinutes int     `mapstructure:"balance_check_interval_minutes"`
+}
+
+// GatewayZhipuDeepSeekFallbackConfig 智谱 -> DeepSeek 本地模型路由（单 Key 灰度）配置。
+//
+// 默认关闭：零值即 opt-out。启用时 Config.Validate 要求其余字段完整有效。
+//   - enabled: 是否启用
+//   - source_group_id: 来源（智谱）分组 ID，正数，且不能与目标分组相同
+//   - source_key_id: 来源分组内单个个人灰度 Key 的 ID，正数
+//   - target_group_id: 目标（DeepSeek）分组 ID，正数
+//   - target_model: 目标 DeepSeek 模型名，非空、deepseek- 前缀、不含首尾空格
+type GatewayZhipuDeepSeekFallbackConfig struct {
+	Enabled       bool   `mapstructure:"enabled"`
+	SourceGroupID int64  `mapstructure:"source_group_id"`
+	SourceKeyID   int64  `mapstructure:"source_key_id"`
+	TargetGroupID int64  `mapstructure:"target_group_id"`
+	TargetModel   string `mapstructure:"target_model"`
 }
 
 type GatewayLiveConfig struct {
@@ -2521,6 +2544,7 @@ func setDefaults() {
 	viper.SetDefault("gateway.disable_openai_transport_error_cooldown", false)
 	viper.SetDefault("gateway.grok_response_header_timeout", 120)
 	viper.SetDefault("gateway.openai_first_output_timeout_seconds", 0)
+	viper.SetDefault("gateway.zhipu_fallback_first_output_timeout_seconds", 120)
 	viper.SetDefault("gateway.openai_high_effort_first_output_timeout_seconds", 0)
 	viper.SetDefault("gateway.log_upstream_error_body", true)
 	viper.SetDefault("gateway.log_upstream_error_body_max_bytes", 2048)
@@ -2616,6 +2640,14 @@ func setDefaults() {
 	viper.SetDefault("gateway.cn_providers.balance_check_enabled", true)
 	viper.SetDefault("gateway.cn_providers.balance_threshold", 0.5)
 	viper.SetDefault("gateway.cn_providers.balance_check_interval_minutes", 10)
+	// 智谱 -> DeepSeek 本地模型路由：默认关闭。注册零值默认是为了让这些键可由环境变量
+	// 覆盖：viper.Unmarshal 只解码 AllKeys() 中的键，而 AutomaticEnv 不会向其新增键
+	// （见 setEnvReachableDefaults）。
+	viper.SetDefault("gateway.zhipu_deepseek_fallback.enabled", false)
+	viper.SetDefault("gateway.zhipu_deepseek_fallback.source_group_id", int64(0))
+	viper.SetDefault("gateway.zhipu_deepseek_fallback.source_key_id", int64(0))
+	viper.SetDefault("gateway.zhipu_deepseek_fallback.target_group_id", int64(0))
+	viper.SetDefault("gateway.zhipu_deepseek_fallback.target_model", "")
 	viper.SetDefault("gateway.image_concurrency.enabled", false)
 	viper.SetDefault("gateway.image_concurrency.max_concurrent_requests", 0)
 	viper.SetDefault("gateway.image_concurrency.overflow_mode", ImageConcurrencyOverflowModeReject)
@@ -3496,6 +3528,10 @@ func (c *Config) Validate() error {
 		(c.Gateway.OpenAIFirstOutputTimeoutSeconds > 0 && c.Gateway.OpenAIFirstOutputTimeoutSeconds < 30) {
 		return fmt.Errorf("gateway.openai_first_output_timeout_seconds must be 0 or between 30-600 seconds")
 	}
+	if c.Gateway.ZhipuFallbackFirstOutputTimeoutSeconds < 0 || c.Gateway.ZhipuFallbackFirstOutputTimeoutSeconds > 600 ||
+		(c.Gateway.ZhipuFallbackFirstOutputTimeoutSeconds > 0 && c.Gateway.ZhipuFallbackFirstOutputTimeoutSeconds < 30) {
+		return fmt.Errorf("gateway.zhipu_fallback_first_output_timeout_seconds must be 0 or between 30-600 seconds")
+	}
 	if c.Gateway.OpenAIHighEffortFirstOutputTimeoutSeconds < 0 || c.Gateway.OpenAIHighEffortFirstOutputTimeoutSeconds > 1800 ||
 		(c.Gateway.OpenAIHighEffortFirstOutputTimeoutSeconds > 0 && c.Gateway.OpenAIHighEffortFirstOutputTimeoutSeconds < 30) {
 		return fmt.Errorf("gateway.openai_high_effort_first_output_timeout_seconds must be 0 or between 30-1800 seconds")
@@ -3903,6 +3939,25 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.Grok.FreeQuotaStatsCacheSeconds < 0 {
 		return fmt.Errorf("gateway.grok.free_quota_stats_cache_seconds must be non-negative")
+	}
+	if c.Gateway.ZhipuDeepSeekFallback.Enabled {
+		fallback := c.Gateway.ZhipuDeepSeekFallback
+		if fallback.SourceGroupID <= 0 {
+			return fmt.Errorf("gateway.zhipu_deepseek_fallback.source_group_id must be positive")
+		}
+		if fallback.TargetGroupID <= 0 {
+			return fmt.Errorf("gateway.zhipu_deepseek_fallback.target_group_id must be positive")
+		}
+		if fallback.SourceGroupID == fallback.TargetGroupID {
+			return fmt.Errorf("gateway.zhipu_deepseek_fallback.source_group_id and target_group_id must differ")
+		}
+		if fallback.SourceKeyID < 0 {
+			return fmt.Errorf("gateway.zhipu_deepseek_fallback.source_key_id must be zero or positive")
+		}
+		if model := fallback.TargetModel; model != strings.TrimSpace(model) ||
+			!strings.HasPrefix(model, "deepseek-") || strings.TrimPrefix(model, "deepseek-") == "" {
+			return fmt.Errorf("gateway.zhipu_deepseek_fallback.target_model must be a non-empty deepseek- model name without leading or trailing spaces")
+		}
 	}
 	if err := ValidateDingTalkConfig(c.DingTalk); err != nil {
 		return fmt.Errorf("dingtalk_connect: %w", err)

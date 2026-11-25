@@ -115,8 +115,17 @@ func isClientCanceledTransportError(ctx context.Context, err error) bool {
 //
 // passthrough tags the Ops error event for the OpenAI passthrough forward path.
 func (s *OpenAIGatewayService) handleOpenAIUpstreamTransportError(ctx context.Context, c *gin.Context, account *Account, err error, passthrough bool) error {
-	if isClientCanceledTransportError(ctx, err) {
+	if isClientCanceledTransportError(ctx, err) || errors.Is(err, errZhipuFallbackPreludeIdle) {
 		return err
+	}
+	var prelude *zhipuFallbackPreludeError
+	if errors.As(err, &prelude) {
+		if prelude.timeout > 0 {
+			return s.newOpenAIFirstOutputTimeoutError(ctx, c, account, opsUpstreamProxyID(account), opsUpstreamProxyName(account),
+				prelude.started, "glm-5.3", "", prelude.timeout, prelude.phase, prelude.headers)
+		}
+		return s.newOpenAIStreamFailoverErrorWithModel(c, account, passthrough, prelude.headers.Get("x-request-id"),
+			prelude.payload, extractOpenAISSEErrorMessage(prelude.payload), "glm-5.3", prelude.headers)
 	}
 	safeErr := sanitizeUpstreamErrorMessage(err.Error())
 	setOpsUpstreamError(c, 0, safeErr, "")

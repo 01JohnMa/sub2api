@@ -498,6 +498,23 @@ gateway:
     # Stats cache for free-tier soft gate. Hot path never waits on DB: misses
     # fail open and refresh in the background. Prefer >= 60s in production.
     free_quota_stats_cache_seconds: 60
+  # Local Zhipu -> DeepSeek model routing (single-key gray rollout). Disabled by default;
+  # the zero value is a full opt-out.
+  # 智谱 -> DeepSeek 本地模型路由（单 Key 灰度）。默认关闭，零值即不启用。
+  # When enabled, startup validation requires distinct positive source/target group IDs,
+  # a positive source key ID, and a non-empty deepseek- model name with no leading or
+  # trailing spaces.
+  # Env: GATEWAY_ZHIPU_DEEPSEEK_FALLBACK_ENABLED=true
+  #      GATEWAY_ZHIPU_DEEPSEEK_FALLBACK_SOURCE_GROUP_ID=<source group id>
+  #      GATEWAY_ZHIPU_DEEPSEEK_FALLBACK_SOURCE_KEY_ID=<single gray key id>
+  #      GATEWAY_ZHIPU_DEEPSEEK_FALLBACK_TARGET_GROUP_ID=<target group id>
+  #      GATEWAY_ZHIPU_DEEPSEEK_FALLBACK_TARGET_MODEL=deepseek-chat
+  zhipu_deepseek_fallback:
+    enabled: false
+    source_group_id: 0
+    source_key_id: 0
+    target_group_id: 0
+    target_model: ""
   # HTTP upstream connection pool settings (HTTP/2 + multi-proxy scenario defaults)
   # HTTP 上游连接池配置（HTTP/2 + 多代理场景默认值）
   # Max idle connections across all hosts

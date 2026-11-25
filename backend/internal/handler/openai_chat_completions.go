@@ -156,7 +156,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		h.handleStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
-	defer inflightRelease()
+	defer func() { inflightRelease() }()
 
 	sessionHash := h.gatewayService.GenerateSessionHash(c, body)
 	promptCacheKey := h.gatewayService.ExtractSessionID(c, body)
@@ -171,7 +171,34 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 
 	// 分组利润控制：chat completions 文本入口请求级装门并固定 pricingAt。
 	ccPricingCtx, pricingAt := h.gatewayService.WithOpenAIRequestPricingContext(c.Request.Context(), apiKey.GroupID)
+	fallback := h.zhipuFallback(apiKey, subscription, reqModel, body)
+	if fallback != nil {
+		ccPricingCtx = service.WithZhipuFallbackFirstOutput(ccPricingCtx)
+	}
 	c.Request = c.Request.WithContext(ccPricingCtx)
+	tryModelFallback := func(err *service.UpstreamFailoverError) bool {
+		key, mapping, platform, release := h.tryZhipuFallback(c, fallback, apiKey, body, service.ContentModerationProtocolOpenAIChat, sessionHash, false, err, inflightRelease, reqLog)
+		if key == nil {
+			return false
+		}
+		apiKey, channelMapping, inflightRelease = key, mapping, release
+		forwardModel, requestPlatform = mapping.MappedModel, platform
+		switchCount = maxAccountSwitches
+		return true
+	}
+	tryStickyFallback := func() bool {
+		key, mapping, platform, release := h.tryZhipuFallback(c, fallback, apiKey, body, service.ContentModerationProtocolOpenAIChat, sessionHash, true, nil, inflightRelease, reqLog)
+		if key == nil {
+			return false
+		}
+		apiKey, channelMapping, inflightRelease = key, mapping, release
+		forwardModel, requestPlatform = mapping.MappedModel, platform
+		switchCount = maxAccountSwitches
+		return true
+	}
+	if fallback != nil && h.zhipuStickyActive(zhipuStickyKey(apiKey, sessionHash)) && tryStickyFallback() {
+		reqLog.Info("openai.zhipu_fallback_sticky_reused", zap.Int64("api_key_id", apiKey.ID))
+	}
 
 	for {
 		if failoverClientGone(c) {
@@ -196,6 +223,16 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			if failoverClientGone(c) {
 				reqLog.Info("openai_chat_completions.account_select_aborted_client_disconnected", zap.Error(err))
 				return
+			}
+			if errors.Is(err, service.ErrNoAvailableAccounts) {
+				if tryModelFallback(lastFailoverErr) {
+					continue
+				}
+				if len(failedAccountIDs) == 0 &&
+					h.zhipuPoolExhaustedTransient(c.Request.Context(), apiKey, forwardModel) &&
+					tryModelFallback(&service.UpstreamFailoverError{StatusCode: http.StatusServiceUnavailable}) {
+					continue
+				}
 			}
 			reqLog.Warn("openai_chat_completions.account_select_failed",
 				zap.Error(openAICompatibleSelectionErrorForLog(err, requestPlatform)),
@@ -351,7 +388,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 						return
 					}
 					// Pool mode: retry on the same account
-					if failoverErr.RetryableOnSameAccount {
+					if !fallback.switched() && failoverErr.RetryableOnSameAccount {
 						retryLimit := effectiveSameAccountRetryLimit(failoverErr, account)
 						if sameAccountRetryAllowed(failoverErr, sameAccountRetryCount[account.ID], retryLimit) {
 							sameAccountRetryCount[account.ID]++
@@ -375,6 +412,12 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 					failedAccountIDs[account.ID] = struct{}{}
 					lastFailoverErr = failoverErr
 					if switchCount >= maxAccountSwitches {
+						if fallback.switched() && account.Platform == service.PlatformDeepseek {
+							reqLog.Warn("openai.zhipu_fallback_target_failed", zap.Int("upstream_status", failoverErr.StatusCode))
+						}
+						if tryModelFallback(failoverErr) {
+							continue
+						}
 						h.handleFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}

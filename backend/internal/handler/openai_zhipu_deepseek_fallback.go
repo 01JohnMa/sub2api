@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -72,11 +73,11 @@ type zhipuFallbackStickyStore struct {
 	until map[string]time.Time
 }
 
-func zhipuStickyKey(apiKey *service.APIKey, sessionHash string) string {
-	if apiKey == nil || apiKey.GroupID == nil || sessionHash == "" {
+func zhipuStickyKey(groupID, keyID int64, sessionHash string) string {
+	if groupID <= 0 || keyID <= 0 || sessionHash == "" {
 		return ""
 	}
-	return fmt.Sprintf("%d:%s", *apiKey.GroupID, sessionHash)
+	return fmt.Sprintf("%d:%d:%s", groupID, keyID, sessionHash)
 }
 
 // zhipuStickyActive reports whether this conversation already failed over.
@@ -116,6 +117,25 @@ func (h *OpenAIGatewayHandler) markZhipuSticky(key string) {
 		}
 	}
 	h.zhipuSticky.until[key] = now.Add(zhipuFallbackStickyTTL)
+}
+
+func (h *OpenAIGatewayHandler) clearZhipuSticky(key string) {
+	if h == nil || key == "" {
+		return
+	}
+	h.zhipuStickyOnce.Do(func() {
+		h.zhipuSticky = &zhipuFallbackStickyStore{until: make(map[string]time.Time)}
+	})
+	h.zhipuSticky.mu.Lock()
+	defer h.zhipuSticky.mu.Unlock()
+	delete(h.zhipuSticky.until, key)
+}
+
+// isZhipuFirstOutputTimeout identifies the guarded path's own deadline error so
+// Chat/Messages can fall back instead of cycling through more Zhipu accounts.
+func isZhipuFirstOutputTimeout(err *service.UpstreamFailoverError) bool {
+	return err != nil && err.StatusCode == http.StatusGatewayTimeout &&
+		bytes.Contains(err.ResponseBody, []byte("first_output_timeout"))
 }
 
 func zhipuFallbackUpstreamFailure(err *service.UpstreamFailoverError) bool {
@@ -194,7 +214,6 @@ func (h *OpenAIGatewayHandler) tryZhipuFallback(c *gin.Context, f *zhipuDeepSeek
 	}
 	c.Request = c.Request.WithContext(ctx)
 	f.used = true
-	h.markZhipuSticky(zhipuStickyKey(apiKey, sessionHash))
 	status := 0
 	if err != nil {
 		status = err.StatusCode

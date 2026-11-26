@@ -255,3 +255,14 @@ func (s *OpenAIGatewayService) zhipuFallbackFirstOutputTimeout() time.Duration {
 	}
 	return time.Duration(s.cfg.Gateway.ZhipuFallbackFirstOutputTimeoutSeconds) * time.Second
 }
+
+// zhipuFallbackRequestedModel returns the client-visible model for ops
+// attribution; the guarded path must not hardcode one Zhipu model name.
+func zhipuFallbackRequestedModel(ctx context.Context) string {
+	if model, ok := RequestedPublicModelFromContext(ctx); ok {
+		if trimmed := strings.TrimSpace(model); trimmed != "" {
+			return trimmed
+		}
+	}
+	return "zhipu"
+}

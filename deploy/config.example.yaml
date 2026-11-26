@@ -500,7 +500,7 @@ gateway:
     free_quota_stats_cache_seconds: 60
   # Local Zhipu -> DeepSeek model routing (single-key gray rollout). Disabled by default;
   # the zero value is a full opt-out.
-  # 智谱 -> DeepSeek 本地模型路由（单 Key 灰度）。默认关闭，零值即不启用。
+  # 智谱 -> DeepSeek 本地模型路由（source_key_id=0 时整组生效）。默认关闭，零值即不启用。
   # When enabled, startup validation requires distinct positive source/target group IDs,
   # a positive source key ID, and a non-empty deepseek- model name with no leading or
   # trailing spaces.

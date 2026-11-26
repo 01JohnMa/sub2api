@@ -715,7 +715,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		switchCount = maxAccountSwitches
 		return true
 	}
-	if fallback != nil && h.zhipuStickyActive(zhipuStickyKey(apiKey, sessionHash)) && tryStickyFallback() {
+	if fallback != nil && h.zhipuStickyActive(zhipuStickyKey(*apiKey.GroupID, apiKey.ID, sessionHash)) && tryStickyFallback() {
 		reqLog.Info("openai.zhipu_fallback_sticky_reused", zap.Int64("api_key_id", apiKey.ID))
 	}
 
@@ -1020,6 +1020,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 						if fallback.switched() && account.Platform == service.PlatformDeepseek {
 							reqLog.Warn("openai.zhipu_fallback_target_failed", zap.Int("upstream_status", failoverErr.StatusCode))
 						}
+						if fallback.switched() && account.Platform == service.PlatformDeepseek {
+							h.clearZhipuSticky(zhipuStickyKey(fallback.rule.SourceGroupID, apiKey.ID, sessionHash))
+						}
 						if tryModelFallback(failoverErr) {
 							continue
 						}
@@ -1062,6 +1065,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					zap.Bool("upstream_error_response_already_written", upstreamErrorAlreadyCommunicated),
 					zap.Error(err),
 				}
+				if fallback.switched() && account.Platform == service.PlatformDeepseek {
+					h.clearZhipuSticky(zhipuStickyKey(fallback.rule.SourceGroupID, apiKey.ID, sessionHash))
+				}
 				submitResponsesUsage(result)
 				if shouldLogOpenAIForwardFailureAsWarn(c, wroteFallback) {
 					reqLog.Warn("openai.forward_failed", fields...)
@@ -1082,6 +1088,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		}
 
 		// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
+		if fallback.switched() && account.Platform == service.PlatformDeepseek {
+			h.markZhipuSticky(zhipuStickyKey(fallback.rule.SourceGroupID, apiKey.ID, sessionHash))
+		}
 		submitResponsesUsage(result)
 		reqLog.Debug("openai.request_completed",
 			zap.Int64("account_id", account.ID),
@@ -1411,7 +1420,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		switchCount = maxAccountSwitches
 		return true
 	}
-	if fallback != nil && h.zhipuStickyActive(zhipuStickyKey(apiKey, sessionHash)) && tryStickyFallback() {
+	if fallback != nil && h.zhipuStickyActive(zhipuStickyKey(*apiKey.GroupID, apiKey.ID, sessionHash)) && tryStickyFallback() {
 		reqLog.Info("openai.zhipu_fallback_sticky_reused", zap.Int64("api_key_id", apiKey.ID))
 	}
 
@@ -1602,6 +1611,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 						h.handleAnthropicFailoverExhausted(c, failoverErr, true)
 						return
 					}
+					if isZhipuFirstOutputTimeout(failoverErr) && tryModelFallback(failoverErr) {
+						continue
+					}
 					// Only keepalive bytes were written, so failover may continue, but
 					// every later error must be written as an SSE event.
 					if c.Writer.Written() {
@@ -1642,6 +1654,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 						if fallback.switched() && account.Platform == service.PlatformDeepseek {
 							reqLog.Warn("openai.zhipu_fallback_target_failed", zap.Int("upstream_status", failoverErr.StatusCode))
 						}
+						if fallback.switched() && account.Platform == service.PlatformDeepseek {
+							h.clearZhipuSticky(zhipuStickyKey(fallback.rule.SourceGroupID, apiKey.ID, sessionHash))
+						}
 						if tryModelFallback(failoverErr) {
 							continue
 						}
@@ -1678,6 +1693,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					zap.Bool("fallback_error_response_written", wroteFallback),
 					zap.Error(err),
 				)
+				if fallback.switched() && account.Platform == service.PlatformDeepseek {
+					h.clearZhipuSticky(zhipuStickyKey(fallback.rule.SourceGroupID, apiKey.ID, sessionHash))
+				}
 				submitMessagesUsage(result)
 				return
 			}
@@ -1688,6 +1706,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account, openAIAccountScheduleModel(c, account, currentRoutingModel, false, result), true, nil)
 		}
 
+		if fallback.switched() && account.Platform == service.PlatformDeepseek {
+			h.markZhipuSticky(zhipuStickyKey(fallback.rule.SourceGroupID, apiKey.ID, sessionHash))
+		}
 		submitMessagesUsage(result)
 		reqLog.Debug("openai_messages.request_completed",
 			zap.Int64("account_id", account.ID),

@@ -120,12 +120,13 @@ func (s *OpenAIGatewayService) handleOpenAIUpstreamTransportError(ctx context.Co
 	}
 	var prelude *zhipuFallbackPreludeError
 	if errors.As(err, &prelude) {
+		model := zhipuFallbackRequestedModel(ctx)
 		if prelude.timeout > 0 {
 			return s.newOpenAIFirstOutputTimeoutError(ctx, c, account, opsUpstreamProxyID(account), opsUpstreamProxyName(account),
-				prelude.started, "glm-5.3", "", prelude.timeout, prelude.phase, prelude.headers)
+				prelude.started, model, "", prelude.timeout, prelude.phase, prelude.headers)
 		}
 		return s.newOpenAIStreamFailoverErrorWithModel(c, account, passthrough, prelude.headers.Get("x-request-id"),
-			prelude.payload, extractOpenAISSEErrorMessage(prelude.payload), "glm-5.3", prelude.headers)
+			prelude.payload, extractOpenAISSEErrorMessage(prelude.payload), model, prelude.headers)
 	}
 	safeErr := sanitizeUpstreamErrorMessage(err.Error())
 	setOpsUpstreamError(c, 0, safeErr, "")

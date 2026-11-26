@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -69,4 +71,48 @@ func (s *OpenAIGatewayService) DiagnoseModelAvailabilityForPlatform(
 		}
 	}
 	return diag
+}
+
+// ErrModelAvailabilityIndeterminate reports that pool composition could not be
+// established. Callers that must fail closed (cross-provider fallback) treat it
+// as "not eligible" instead of assuming the model is supported.
+var ErrModelAvailabilityIndeterminate = errors.New("model availability is indeterminate")
+
+// DiagnoseModelAvailabilityForPlatformStrict mirrors
+// DiagnoseModelAvailabilityForPlatform but returns an error for every
+// indeterminate input instead of the legacy optimistic {true,true} result.
+// The lenient version keeps its existing behaviour for 404/503 classification.
+func (s *OpenAIGatewayService) DiagnoseModelAvailabilityForPlatformStrict(
+	ctx context.Context,
+	groupID *int64,
+	requestedModel string,
+	platform string,
+) (ModelAvailabilityDiagnosis, error) {
+	if s == nil || s.accountRepo == nil {
+		return ModelAvailabilityDiagnosis{}, ErrModelAvailabilityIndeterminate
+	}
+	requestedModel = strings.TrimSpace(requestedModel)
+	if requestedModel == "" {
+		return ModelAvailabilityDiagnosis{}, ErrModelAvailabilityIndeterminate
+	}
+	platform = NormalizeOpenAICompatiblePlatform(platform)
+	queryGroupID := groupID
+	includeGrouped := false
+	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
+		queryGroupID = nil
+		includeGrouped = true
+	}
+	accounts, err := s.accountRepo.ListModelAvailabilityCandidates(ctx, queryGroupID, []string{platform}, includeGrouped)
+	if err != nil {
+		return ModelAvailabilityDiagnosis{}, fmt.Errorf("%w: %v", ErrModelAvailabilityIndeterminate, err)
+	}
+	diag := ModelAvailabilityDiagnosis{}
+	for i := range accounts {
+		diag.HasAccountsInPool = true
+		if accounts[i].IsModelSupported(requestedModel) {
+			diag.HasModelSupport = true
+			return diag, nil
+		}
+	}
+	return diag, nil
 }

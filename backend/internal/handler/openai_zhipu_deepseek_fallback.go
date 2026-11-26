@@ -62,7 +62,11 @@ func (h *OpenAIGatewayHandler) zhipuPoolExhaustedTransient(ctx context.Context, 
 		apiKey.Group.Platform != service.PlatformZhipu {
 		return false
 	}
-	result := h.gatewayService.DiagnoseModelAvailabilityForPlatform(ctx, apiKey.GroupID, model, service.PlatformZhipu)
+	result, err := h.gatewayService.DiagnoseModelAvailabilityForPlatformStrict(ctx, apiKey.GroupID, model, service.PlatformZhipu)
+	if err != nil {
+		// Indeterminate pool composition is not evidence of a transient outage.
+		return false
+	}
 	return result.HasAccountsInPool && result.HasModelSupport
 }
 
@@ -97,7 +101,6 @@ func (h *OpenAIGatewayHandler) zhipuStickyActive(key string) bool {
 		delete(h.zhipuSticky.until, key)
 		return false
 	}
-	h.zhipuSticky.until[key] = time.Now().Add(zhipuFallbackStickyTTL)
 	return true
 }
 
@@ -136,6 +139,19 @@ func (h *OpenAIGatewayHandler) clearZhipuSticky(key string) {
 func isZhipuFirstOutputTimeout(err *service.UpstreamFailoverError) bool {
 	return err != nil && err.StatusCode == http.StatusGatewayTimeout &&
 		bytes.Contains(err.ResponseBody, []byte("first_output_timeout"))
+}
+
+// finalizeZhipuFallback clears a session pin whenever the conversation was
+// switched to the target provider but the target did not complete a successful
+// response. It runs from a defer so every failure exit is covered.
+func (h *OpenAIGatewayHandler) finalizeZhipuFallback(f *zhipuDeepSeekFallback, key string, succeeded *bool) {
+	if f == nil || !f.switched() {
+		return
+	}
+	if succeeded != nil && *succeeded {
+		return
+	}
+	h.clearZhipuSticky(key)
 }
 
 func zhipuFallbackUpstreamFailure(err *service.UpstreamFailoverError) bool {

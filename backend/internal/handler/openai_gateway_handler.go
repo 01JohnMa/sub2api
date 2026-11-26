@@ -718,6 +718,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	if fallback != nil && h.zhipuStickyActive(zhipuStickyKey(*apiKey.GroupID, apiKey.ID, sessionHash)) && tryStickyFallback() {
 		reqLog.Info("openai.zhipu_fallback_sticky_reused", zap.Int64("api_key_id", apiKey.ID))
 	}
+	fallbackSucceeded := false
+	if fallback != nil {
+		defer h.finalizeZhipuFallback(fallback, zhipuStickyKey(fallback.rule.SourceGroupID, apiKey.ID, sessionHash), &fallbackSucceeded)
+	}
 
 	for {
 		// Streaming Forward intentionally detaches the upstream request so usage can
@@ -1089,6 +1093,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 
 		// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
 		if fallback.switched() && account.Platform == service.PlatformDeepseek {
+			fallbackSucceeded = true
 			h.markZhipuSticky(zhipuStickyKey(fallback.rule.SourceGroupID, apiKey.ID, sessionHash))
 		}
 		submitResponsesUsage(result)
@@ -1423,6 +1428,10 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	if fallback != nil && h.zhipuStickyActive(zhipuStickyKey(*apiKey.GroupID, apiKey.ID, sessionHash)) && tryStickyFallback() {
 		reqLog.Info("openai.zhipu_fallback_sticky_reused", zap.Int64("api_key_id", apiKey.ID))
 	}
+	fallbackSucceeded := false
+	if fallback != nil {
+		defer h.finalizeZhipuFallback(fallback, zhipuStickyKey(fallback.rule.SourceGroupID, apiKey.ID, sessionHash), &fallbackSucceeded)
+	}
 
 	for {
 		if failoverClientGone(c) {
@@ -1707,6 +1716,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		}
 
 		if fallback.switched() && account.Platform == service.PlatformDeepseek {
+			fallbackSucceeded = true
 			h.markZhipuSticky(zhipuStickyKey(fallback.rule.SourceGroupID, apiKey.ID, sessionHash))
 		}
 		submitMessagesUsage(result)

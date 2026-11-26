@@ -521,7 +521,7 @@ func TestZhipuFallbackFirstOutputDeadline(t *testing.T) {
 				resp, body := zhipuFallbackScriptedResponse(t, zhipuFallbackWriteStep{data: preamble, wait: 4 * time.Second})
 				upstream := &httpUpstreamRecorder{resp: resp}
 				svc := zhipuFallbackTestService(upstream, func(cfg *config.Config) {
-					cfg.Gateway.OpenAIFirstOutputTimeoutSeconds = 1
+					cfg.Gateway.ZhipuFallbackFirstOutputTimeoutSeconds = 1
 				})
 				reqBody := []byte(ingress.body)
 				c, rec := zhipuFallbackTestContext(ingress.path, reqBody)
@@ -556,7 +556,7 @@ func TestZhipuFallbackDeadlineIncludesResponseHeaderWait(t *testing.T) {
 			resp, _ := zhipuFallbackScriptedResponse(t, zhipuFallbackWriteStep{data: zhipuFallbackHealthyPreamble, wait: 4 * time.Second})
 			upstream := &zhipuFallbackDelayedUpstream{inner: &httpUpstreamRecorder{resp: resp}, delay: 600 * time.Millisecond}
 			svc := zhipuFallbackTestService(upstream, func(cfg *config.Config) {
-				cfg.Gateway.OpenAIFirstOutputTimeoutSeconds = 1
+				cfg.Gateway.ZhipuFallbackFirstOutputTimeoutSeconds = 1
 			})
 			reqBody := []byte(ingress.body)
 			c, rec := zhipuFallbackTestContext(ingress.path, reqBody)
@@ -580,7 +580,7 @@ func TestZhipuFallbackResponseHeaderDeadline(t *testing.T) {
 		t.Run(ingress.name, func(t *testing.T) {
 			upstream := &blockingOpenAIResponseHeaderUpstream{canceled: make(chan struct{})}
 			svc := zhipuFallbackTestService(upstream, func(cfg *config.Config) {
-				cfg.Gateway.OpenAIFirstOutputTimeoutSeconds = 1
+				cfg.Gateway.ZhipuFallbackFirstOutputTimeoutSeconds = 1
 			})
 			reqBody := []byte(ingress.body)
 			c, rec := zhipuFallbackTestContext(ingress.path, reqBody)
@@ -640,7 +640,7 @@ func TestZhipuFallbackDeadlineDoesNotCancelStreamAfterFirstOutput(t *testing.T) 
 			)
 			upstream := &httpUpstreamRecorder{resp: resp}
 			svc := zhipuFallbackTestService(upstream, func(cfg *config.Config) {
-				cfg.Gateway.OpenAIFirstOutputTimeoutSeconds = 1
+				cfg.Gateway.ZhipuFallbackFirstOutputTimeoutSeconds = 1
 			})
 			reqBody := []byte(ingress.body)
 			c, rec := zhipuFallbackTestContext(ingress.path, reqBody)
@@ -700,7 +700,7 @@ func TestZhipuFallbackKeepsClientCancellationSemantics(t *testing.T) {
 		t.Run(ingress.name+"/stream stays detached", func(t *testing.T) {
 			upstream := &blockingOpenAIResponseHeaderUpstream{canceled: make(chan struct{})}
 			svc := zhipuFallbackTestService(upstream, func(cfg *config.Config) {
-				cfg.Gateway.OpenAIFirstOutputTimeoutSeconds = 1
+				cfg.Gateway.ZhipuFallbackFirstOutputTimeoutSeconds = 1
 			})
 			reqBody := []byte(ingress.body)
 			c, _ := zhipuFallbackTestContext(ingress.path, reqBody)
@@ -734,7 +734,7 @@ func TestZhipuFallbackKeepsClientCancellationSemantics(t *testing.T) {
 	t.Run(ingress.name+"/buffered follows client cancel", func(t *testing.T) {
 		upstream := &blockingOpenAIResponseHeaderUpstream{canceled: make(chan struct{})}
 		svc := zhipuFallbackTestService(upstream, func(cfg *config.Config) {
-			cfg.Gateway.OpenAIFirstOutputTimeoutSeconds = 1
+			cfg.Gateway.ZhipuFallbackFirstOutputTimeoutSeconds = 1
 		})
 		reqBody := []byte(ingress.body)
 		c, _ := zhipuFallbackTestContext(ingress.path, reqBody)

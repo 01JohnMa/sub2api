@@ -117,14 +117,14 @@ func TestValidateZhipuDeepSeekFallback(t *testing.T) {
 			wantErr: "gateway.zhipu_deepseek_fallback.source_group_id and target_group_id must differ",
 		},
 		{
-			name:    "source key id zero",
+			name:    "source key id zero means the whole group",
 			mutate:  func(c *GatewayZhipuDeepSeekFallbackConfig) { c.SourceKeyID = 0 },
-			wantErr: "gateway.zhipu_deepseek_fallback.source_key_id must be positive",
+			wantErr: "",
 		},
 		{
 			name:    "source key id negative",
 			mutate:  func(c *GatewayZhipuDeepSeekFallbackConfig) { c.SourceKeyID = -42 },
-			wantErr: "gateway.zhipu_deepseek_fallback.source_key_id must be positive",
+			wantErr: "gateway.zhipu_deepseek_fallback.source_key_id must be zero or positive",
 		},
 		{
 			name:    "target model empty",

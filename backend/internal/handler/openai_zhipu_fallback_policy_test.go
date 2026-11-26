@@ -40,7 +40,7 @@ func TestZhipuFallbackScope(t *testing.T) {
 		Enabled: true, SourceGroupID: groupID, SourceKeyID: key.ID, TargetGroupID: 11, TargetModel: "deepseek-v4-pro",
 	}
 	require.NotNil(t, h.zhipuFallback(key, nil, "glm-5.3", body))
-	require.Nil(t, h.zhipuFallback(key, nil, "glm-5.3-flash", body))
+	require.NotNil(t, h.zhipuFallback(key, nil, "glm-5.3-flash", body), "all Zhipu models are covered")
 	require.Nil(t, h.zhipuFallback(key, &service.UserSubscription{}, "glm-5.3", body))
 	for _, body := range []string{
 		`{"previous_response_id":"resp_previous"}`,

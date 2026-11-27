@@ -981,6 +981,12 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					if c.Writer.Written() {
 						streamStarted = true
 					}
+					// 首包超时已确认无任何语义输出：智谱回退请求直接改走目标模型，
+					// 不再把第二次 75 秒超时消耗在来源池换号上。
+					if isZhipuFirstOutputTimeout(failoverErr) && tryModelFallback(failoverErr) {
+						lastFailoverErr = failoverErr
+						continue
+					}
 					if failoverErr.ShouldReportAccountScheduleFailure() {
 						h.gatewayService.ReportOpenAIAccountScheduleResult(account, openAIAccountScheduleModel(c, account, forwardModel, requireCompact, nil), false, nil, err)
 					}

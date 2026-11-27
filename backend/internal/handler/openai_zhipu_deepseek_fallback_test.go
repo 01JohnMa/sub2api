@@ -962,6 +962,27 @@ func TestZhipuDeepSeekFallback_RetriesTargetModelOnTransientUpstreamFailure(t *t
 	}
 }
 
+// 首包超时（504 first_output_timeout）必须立即回退到目标模型：不得再把第二次
+// 75 秒超时消耗在来源池换号上（Responses 入口曾因此让客户端等待约 195 秒）。
+func TestZhipuDeepSeekFallback_FirstOutputTimeoutFallsBackImmediately(t *testing.T) {
+	const secondSourceAccountID = int64(9407)
+	for _, endpoint := range zhipuDSFallbackEndpoints {
+		t.Run(endpoint.name, func(t *testing.T) {
+			f := newZhipuDSFallbackFixture(t, endpoint)
+			f.addSourceAccount(secondSourceAccountID)
+			f.upstream.script(zhipuDSFallbackSourceAccountID, zhipuDSFallbackJSONReply(http.StatusGatewayTimeout,
+				`{"error":{"type":"upstream_error","message":"first_output_timeout"}}`))
+			f.upstream.script(secondSourceAccountID, endpoint.sourceSuccess())
+			f.upstream.script(zhipuDSFallbackTargetAccountID, endpoint.targetSuccess())
+
+			recorder := f.serve(t, endpoint.request(false))
+
+			// 只允许一次来源尝试：第二个来源账号不得被调用，直接改用目标模型。
+			f.requireFallsBack(t, recorder, zhipuDSFallbackPrimaryAttempt)
+		})
+	}
+}
+
 // 来源分组有多个智谱账号：必须先按普通换号把来源池用完，才做一次模型回退；目标也失败
 // 时立即终止，不重试目标、不再回到来源池。
 func TestZhipuDeepSeekFallback_ExhaustsPrimaryPoolThenFallsBackOnlyOnce(t *testing.T) {
